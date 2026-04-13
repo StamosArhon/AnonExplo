@@ -98,16 +98,8 @@
           </section>
 
           <section id="workspace-grounding" class="workspace-panel" hidden>
+            <div id="grounding-meta" class="grounding-meta-row"></div>
             <div id="grounding-answer" class="conversation-thread" aria-live="polite"></div>
-            <details id="grounding-details" class="detail-panel" hidden>
-              <summary>Grounding details</summary>
-              <div class="detail-body">
-                <div id="grounding-meta" class="chip-row"></div>
-                <div id="grounding-errors" class="stack"></div>
-                <div id="grounding-summary" class="summary-grid"></div>
-                <div id="grounding-output" class="source-stack"></div>
-              </div>
-            </details>
           </section>
 
           <section id="workspace-fetch" class="workspace-panel" hidden>
@@ -180,6 +172,28 @@
             </div>
           </form>
         </footer>
+
+        <div id="source-drawer-shell" class="source-drawer-shell" hidden>
+          <button
+            id="source-drawer-backdrop"
+            type="button"
+            class="source-drawer-backdrop"
+            aria-label="Close sources"
+          ></button>
+          <aside class="source-drawer" aria-labelledby="source-drawer-title">
+            <div class="source-drawer-head">
+              <div>
+                <p class="eyebrow">Sources</p>
+                <h3 id="source-drawer-title">Current answer sources</h3>
+              </div>
+              <button id="close-source-drawer" type="button" class="ghost-button ghost-button-small">
+                Close
+              </button>
+            </div>
+            <div id="source-drawer-meta" class="chip-row"></div>
+            <div id="source-drawer-list" class="source-drawer-list"></div>
+          </aside>
+        </div>
       </main>
     </div>
 

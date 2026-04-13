@@ -23,6 +23,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Grounded model prompts use bounded source-context limits so fetched page text is not forwarded to the model without size controls.
 - If article fetches fail but search still returns usable snippets, the backend may now use bounded search-result snippets as an explicit fallback grounding mode instead of silently falling back to model prior knowledge.
 - The current fetcher-resilience pass keeps direct HTML fetches only and does not add third-party reader proxies or hidden publisher-specific bypasses, because those would change the privacy and trust model.
+- Any future Wikimedia-specific route should be explicit, documented, and based on an official interface rather than a stealthy robot-policy bypass.
 
 ## Secrets Handling
 
@@ -57,6 +58,7 @@ The fetcher is the most sensitive service because it has egress. Current guardra
 - grounded-answer prompts use only bounded excerpts of fetched source text
 - bounded search-result snippets may be used as a clearly labeled fallback when article fetches fail
 - the deliberate baseline is direct HTML fetch plus explicit snippet fallback, not a secondary reader proxy
+- no stealth Wikipedia or publisher-specific robot-policy bypasses should be introduced without an explicit privacy review and a documented official access path
 
 These controls reduce privacy leakage and resource abuse, but they are not a substitute for host firewall policy.
 

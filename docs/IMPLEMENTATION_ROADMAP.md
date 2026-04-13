@@ -42,8 +42,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Current Phase
 
-- Active phase: `roadmap-complete`
-- Goal: maintain the current baseline, validate regressions, and treat new work as post-roadmap enhancement rather than unfinished core setup
+- Active phase: `post-roadmap-enhancement`
+- Goal: maintain the current baseline, validate regressions, and land tightly scoped improvements without reopening the completed core roadmap
 
 ## Active Branch
 
@@ -104,10 +104,13 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Closed `fetcher-secondary-reader-strategy` by decision: the current baseline will keep direct HTML fetches plus explicit snippet fallback instead of adding a secondary reader path.
 - Tightened browser-local history labeling so the UI now makes direct-chat persistence unmistakably device-local, purgeable, and non-server-side.
 - Completed the initial roadmap baseline so future work can be treated as post-roadmap enhancement rather than unfinished core setup.
+- Reworked grounded answers so cited source IDs render as inline source pills with hover tooltips instead of forcing a large grounding-details block into the main chat surface.
+- Added a retractable right-side source drawer for grounded answers so the full source list, source status, and snippets are available on demand without cluttering the conversation thread.
+- Tightened the sidebar history presentation into compact direct-chat cards with integrated per-entry delete controls instead of a split or awkward row layout.
 
 ## In-Progress Work
 
-- None inside the repo contents. The initial roadmap is now complete.
+- None inside the repo contents. The initial roadmap remains complete, and the current answer-surface refresh is merged follow-on work rather than unfinished baseline setup.
 
 ## Open Questions / Blockers
 
@@ -121,6 +124,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
 - Some publishers, especially Wikipedia and other anti-bot-protected sites, can still reject direct fetches from the containerized fetcher. This branch confirmed that Wikimedia HTML and official API endpoints still return robot-policy `403` responses from inside the fetcher container on this machine.
 - Because of that Wikimedia behavior, the repo still does not include a secondary reader path or publisher-specific bypass. That is now a deliberate baseline decision, and the current fallback remains explicit snippet-grounding.
+- If Wikimedia support is revisited, it should use an explicit and documented official API integration path instead of a hidden robot-policy bypass or a stealthy fetch workaround.
 - Heavier grounded requests now survive the localhost gateway, but the repo still does not record performance baselines for search-plus-fetch-plus-model latency on the target hardware.
 
 ## Decisions Made And Why
@@ -151,6 +155,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Fetch resilience should improve operator clarity first through structured failure classification, thin-content detection, and domain-aware retry behavior before the repo adds any privacy-altering secondary reader strategy.
 - Wikimedia or similarly protected publishers should not receive a hidden special-case bypass until the privacy and maintenance tradeoffs of that path are explicitly reviewed.
 - Browser-local direct chat history is considered sufficiently controlled in the baseline when it is clearly labeled as device-local and purgeable; opt-out or export should be treated as later convenience features, not core privacy fixes.
+- The grounded-answer UI should surface provenance as inline citation pills plus an on-demand source drawer, not as a permanently expanded diagnostics block inside the main conversation area.
+- If a future branch adds a Wikimedia-specific path, it should be explicit, opt-in, and based on an official Wikimedia interface rather than a robot-policy bypass.
 
 ## Security / Privacy Assumptions
 
@@ -170,6 +176,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the `fetcher-resilience` branch
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `roadmap-closeout` branch
 - `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the `roadmap-closeout` branch
+- `scripts/validate.ps1`: passed on 2026-04-14 during the `answer-surface-refresh` branch
 - `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`
@@ -198,8 +205,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 ## Exact Next Steps
 
 1. Keep validating the current baseline against real queries and regressions on the target hardware.
-2. Treat any future secondary reader, export, automation, or benchmark work as a new post-roadmap enhancement with its own scoped branch.
-3. If a future branch revisits blocked publishers, keep any alternate reader path opt-in and document the privacy tradeoff explicitly.
+2. Treat any future Wikimedia-specific support as a new scoped branch and keep it explicit, opt-in, and officially documented rather than implementing a hidden bypass.
+3. Treat any future secondary reader, export, automation, or benchmark work as a new post-roadmap enhancement with its own scoped branch.
 4. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
 
 ## Handoff Notes For A Fresh Codex Thread
@@ -213,6 +220,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The static UI now uses backend-provided runtime and model-catalog state to drive a browser-local model selector for chat and grounded-answer requests.
 - The UI shell now uses workspace navigation plus in-tab conversation-style rendering for direct chat and grounded answers.
 - Direct chat history, the selected model id, and saved direct-chat or grounded-answer instructions are now stored in browser local storage; grounded details and fetch results remain transient.
+- Grounded answers now render source IDs as inline citation pills with hover tooltips and open a dedicated right-side source drawer for deeper inspection instead of using a large grounding-details block in the main thread.
 - Direct Chat does not call SearXNG or the fetcher. Grounded Answer is the explicit search plus fetch plus model workflow and should stay clearly documented in future branches.
 - Grounded Answer now ranks search results, retries later candidates after fetch failures, classifies thin page extractions, skips later URLs from domains that have already returned explicit robot-policy or similar blocking responses, and may fall back to search snippets when publishers block fetches. That fallback is intentional and must stay explicit in both API responses and UI copy.
 - The fetcher, backend, and UI now share structured fetch provenance such as `blocked_by_remote_policy`, `content_too_thin`, `upstream_status`, and retryability hints.
@@ -222,6 +230,6 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
 - The repo now supports two localhost-only browser modes at once: the main AnonExplo UI on port `3000` and the bundled standalone SearXNG UI on port `8085`, both through the same low-privilege host gateway.
 - The localhost gateway now allows longer backend request times so heavier grounded calls do not fail at the proxy first.
-- This branch intentionally did not add a hidden special-case Wikipedia or third-party reader bypass after confirming Wikimedia still returned robot-policy `403` responses from inside the fetcher container.
+- This repo intentionally still does not add a hidden special-case Wikipedia or third-party reader bypass after confirming Wikimedia still returned robot-policy `403` responses from inside the fetcher container. If future work revisits Wikimedia, prefer an explicit official API path.
 - The initial roadmap is now complete on `main`.
 - Future threads should start from `main` and treat new work as post-roadmap enhancement rather than unfinished baseline setup.

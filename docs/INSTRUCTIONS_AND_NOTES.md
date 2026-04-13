@@ -56,6 +56,7 @@
 - Keep the UI explicit that direct-chat history is browser-local and device-local, not synced or server-side state.
 - Grounded-answer transcripts, fetched source details, and fetch-inspector output must stay transient unless a later milestone adds a privacy-reviewed storage design first.
 - Keep `Direct Chat` and `Grounded Answer` semantically explicit in both code and copy. Direct Chat is model only; Grounded Answer is the search plus fetch plus model workflow.
+- Keep grounded-answer provenance discreet in the main thread. Inline citation pills, hover tooltips, and an on-demand source drawer are preferred over a permanently expanded diagnostics block.
 - Grounded Answer now prefers fetched article text but may fall back to bounded search snippets when fetches fail. Treat `grounding.summary.context_mode` as the source of truth for which path was used.
 - The grounding summary's `selected_sources` count is now effectively "selected or attempted" because the backend can try later ranked sources after early fetch failures.
 - The fetcher now exposes structured error details such as `blocked_by_remote_policy`, `upstream_forbidden`, `upstream_rate_limited`, and `content_too_thin`; keep those codes explicit in backend and UI surfaces instead of collapsing them into generic fetch failures.
@@ -67,5 +68,6 @@
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.
 - `scripts/validate.ps1` now enforces the intended Compose hardening model, including localhost-only publication, expected network membership, digest-pinned third-party images, and local-only CORS origins.
 - Some publishers and Wikipedia paths can still block fetches from the container runtime. The current fallback is explicit snippet-grounding, not silent prior-knowledge answering.
+- Do not add stealthy Wikipedia or publisher-specific robot-policy bypasses. If a future branch adds Wikimedia support, use an explicit official API path, document the privacy and maintenance tradeoff, and make it opt-in.
 - The current fetcher-resilience pass does not add third-party reader proxies or special Wikipedia bypasses. If a future branch adds a secondary reader strategy, document the privacy tradeoff and make it opt-in.
 - The current baseline decision is to keep direct HTML fetch plus explicit snippet fallback as the steady-state design rather than adding a secondary reader path.

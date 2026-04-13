@@ -185,14 +185,16 @@ function getHistoryLabel(timestamp) {
   }).format(date);
 }
 
-function createMessage(role, content, tone = "default") {
+function createMessage(role, content, tone = "default", extra = {}) {
   const createdAt = getIsoTimestamp();
   return {
+    id: makeId("msg"),
     role,
     content,
     tone,
     createdAt,
     time: getTimeLabel(createdAt),
+    ...extra,
   };
 }
 
@@ -235,6 +237,7 @@ function normalizeChatSession(candidate) {
     ? candidate.messages
         .filter((item) => item && typeof item === "object")
         .map((item) => ({
+          id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : makeId("msg"),
           role: item.role === "user" ? "user" : "assistant",
           content: String(item.content || ""),
           tone: item.tone === "error" || item.tone === "pending" ? item.tone : "default",
@@ -403,6 +406,77 @@ function buildGroundingErrorMeta(error) {
   return chips.length ? `<div class="chip-row">${chips.join("")}</div>` : "";
 }
 
+function escapeWithBreaks(value) {
+  return escapeHtml(value || "").replaceAll("\n", "<br>");
+}
+
+function getSourceStatus(source, fetched, sourceError, contextMode) {
+  const usesSnippetFallback = contextMode === "search_snippets" && !fetched && Boolean(source?.snippet);
+  if (fetched) {
+    return { label: "Fetched", className: "status-fetched" };
+  }
+  if (usesSnippetFallback) {
+    return { label: "Snippet", className: "status-selected" };
+  }
+  if (sourceError) {
+    return { label: "Issue", className: "status-failed" };
+  }
+  return { label: "Selected", className: "status-selected" };
+}
+
+function buildGroundingSourceBundle(payload) {
+  const grounding = payload?.grounding || payload || {};
+  const summary = grounding.summary || {};
+  const fetchedById = new Map((grounding.fetched_sources || []).map((item) => [item.source_id, item]));
+  const errorsById = new Map((grounding.errors || []).map((item) => [item.source_id, item]));
+  const selectedSources = grounding.selected_sources || [];
+  const sources = selectedSources.map((source) => {
+    const fetched = fetchedById.get(source.source_id);
+    const sourceError = errorsById.get(source.source_id);
+    const status = getSourceStatus(source, fetched, sourceError, summary.context_mode);
+    const previewText =
+      fetched?.excerpt ||
+      source.snippet ||
+      sourceError?.message ||
+      "No source preview is available for this item.";
+    const detailText =
+      fetched?.context_text ||
+      fetched?.excerpt ||
+      source.snippet ||
+      sourceError?.message ||
+      "No additional source detail is available.";
+
+    return {
+      sourceId: source.source_id,
+      title: fetched?.document_title || source.title || source.source_id,
+      url: fetched?.final_url || source.url,
+      domain: source.domain,
+      snippet: previewText,
+      detailText,
+      statusLabel: status.label,
+      statusClass: status.className,
+      retrievalMethod: fetched?.retrieval_method || null,
+      contentQuality: fetched?.content_quality || null,
+      warnings: Array.isArray(fetched?.warnings) ? fetched.warnings : [],
+      errorMessage: sourceError?.message || null,
+      errorCode: sourceError?.code || null,
+      contextCharsUsed: fetched?.context_chars_used || 0,
+      contentCharCount: fetched?.content_char_count || 0,
+      wordCount: fetched?.word_count || 0,
+    };
+  });
+
+  return {
+    query: grounding.query || "",
+    answerStatus: payload?.answer_status || "unknown",
+    contextMode: summary.context_mode || "none",
+    sourceCount: sources.length,
+    fetchedCount: summary.fetched_sources || 0,
+    failedCount: summary.failed_sources || 0,
+    sources,
+  };
+}
+
 function setContextChip(element, label, value, variant = "muted") {
   element.className = `context-chip chip-${variant}`;
   element.textContent = `${label} - ${value}`;
@@ -436,6 +510,9 @@ function renderConversation(target, messages, emptyText) {
             ? "message-card-error"
             : "";
       const userClass = message.role === "user" ? "message-card-user" : "";
+      const messageCopy = message.sourceBundle
+        ? renderGroundedMessageCopy(message)
+        : `<div class="message-copy">${escapeWithBreaks(message.content || "")}</div>`;
 
       return `
         <div class="message-row ${rowClass}">
@@ -444,7 +521,7 @@ function renderConversation(target, messages, emptyText) {
               <span class="message-role">${escapeHtml(roleLabel)}</span>
               <span class="message-time">${escapeHtml(message.time || "")}</span>
             </div>
-            <div class="message-copy">${escapeHtml(message.content || "")}</div>
+            ${messageCopy}
           </article>
         </div>
       `;
@@ -452,25 +529,6 @@ function renderConversation(target, messages, emptyText) {
     .join("");
 
   scrollThreadToBottom(target);
-}
-
-function buildHistoryRows(state) {
-  return state.directChats
-    .map((chat) => {
-      const previewSource = chat.messages[chat.messages.length - 1]?.content || "";
-      const activeClass = chat.id === state.activeChatId ? " active" : "";
-      return `
-        <div class="history-row">
-          <button type="button" class="history-button${activeClass}" data-chat-id="${escapeHtml(chat.id)}">
-            <span class="history-title">${escapeHtml(chat.title)}</span>
-            <span class="history-preview">${escapeHtml(summarizeText(previewSource, 54))}</span>
-            <span class="history-time">${escapeHtml(getHistoryLabel(chat.updatedAt))}</span>
-          </button>
-          <button type="button" class="history-delete" data-delete-chat-id="${escapeHtml(chat.id)}">Delete</button>
-        </div>
-      `;
-    })
-    .join("");
 }
 
 function renderChatHistory(state, elements) {
@@ -638,42 +696,6 @@ function renderChatMeta(state, elements) {
   elements.chatMeta.innerHTML = chips.join("");
 }
 
-function renderGroundingMeta(state, elements) {
-  const searchProvider = state.snapshot?.providers?.search?.provider || "unknown";
-  const chips = [
-    buildChip("Mode", "search + fetch + model", "muted"),
-    buildChip("Search", searchProvider, "muted"),
-    buildChip("Model", state.selectedModel || state.snapshot?.configuredModel || "unknown", "active"),
-  ];
-
-  if (state.groundingStatus.kind === "pending") {
-    chips.push(buildChip("Status", "grounding", "warn"));
-  }
-
-    if (state.groundingStatus.kind === "success") {
-      chips.push(
-        buildChip(
-          "Answer",
-          state.groundingStatus.payload.answer_status || "unknown",
-          getStatusVariant(state.groundingStatus.payload.answer_status || "unknown"),
-        ),
-      );
-      chips.push(
-        buildChip(
-          "Context",
-          state.groundingStatus.payload.grounding?.summary?.context_mode || "none",
-          state.groundingStatus.payload.grounding?.summary?.context_mode === "fetched_text" ? "ok" : "warn",
-        ),
-      );
-    }
-
-  if (state.groundingStatus.kind === "error") {
-    chips.push(buildChip("Status", "request failed", "error"));
-  }
-
-  elements.groundingMeta.innerHTML = chips.join("");
-}
-
 function renderFetchMeta(state, elements) {
   const chips = [buildChip("Mode", "fetch only", "muted")];
 
@@ -707,120 +729,240 @@ function renderFetchMeta(state, elements) {
   elements.fetchMeta.innerHTML = chips.join("");
 }
 
-function renderGroundingDetails(state, elements) {
-  if (state.groundingStatus.kind !== "success") {
-    elements.groundingDetails.hidden = true;
-    elements.groundingErrors.innerHTML = "";
-    elements.groundingSummary.innerHTML = "";
-    elements.groundingOutput.innerHTML = "";
-    return;
+function getGroundingMessageById(state, messageId) {
+  return state.groundingMessages.find((item) => item.id === messageId) || null;
+}
+
+function buildCitationTooltip(source) {
+  return `
+    <span class="source-tooltip" role="tooltip">
+      <p class="source-tooltip-label">${escapeHtml(source.sourceId)} - ${escapeHtml(source.statusLabel)}</p>
+      <a class="source-tooltip-link" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">
+        ${escapeHtml(source.title)}
+      </a>
+      <p class="source-tooltip-copy">${escapeHtml(source.snippet || "No source snippet available.")}</p>
+    </span>
+  `;
+}
+
+function renderGroundedMessageCopy(message) {
+  const bundle = message?.sourceBundle;
+  if (!bundle?.sources?.length) {
+    return `<div class="message-copy">${escapeWithBreaks(message.content || "")}</div>`;
   }
 
-  const payload = state.groundingStatus.payload;
-  const grounding = payload.grounding || payload;
-  const summary = grounding.summary || {};
-  const fetchedById = new Map((grounding.fetched_sources || []).map((item) => [item.source_id, item]));
+  const sourceMap = new Map(bundle.sources.map((item) => [item.sourceId, item]));
+  const content = String(message.content || "");
+  const citationPattern = /\[(S\d+)\]/g;
+  let lastIndex = 0;
+  let rendered = "";
 
-  elements.groundingDetails.hidden = false;
-  elements.groundingDetails.open = true;
-  elements.groundingSummary.innerHTML = [
-    `<div class="status-card"><strong>Search hits</strong><div class="meta">${escapeHtml(summary.search_results || 0)}</div></div>`,
-    `<div class="status-card"><strong>Unique hits</strong><div class="meta">${escapeHtml(summary.unique_search_results || 0)}</div></div>`,
-    `<div class="status-card"><strong>Fetched</strong><div class="meta">${escapeHtml(summary.fetched_sources || 0)}</div></div>`,
-    `<div class="status-card"><strong>Failures</strong><div class="meta">${escapeHtml(summary.failed_sources || 0)}</div></div>`,
-    `<div class="status-card"><strong>Context chars</strong><div class="meta">${escapeHtml(summary.grounding_characters || 0)}</div></div>`,
-    `<div class="status-card"><strong>Context mode</strong><div class="meta">${escapeHtml(summary.context_mode || "none")}</div></div>`,
-    `<div class="status-card"><strong>Selected / attempted</strong><div class="meta">${escapeHtml(summary.selected_sources || 0)}</div></div>`,
-  ].join("");
-
-  const errors = grounding.errors || [];
-  elements.groundingErrors.innerHTML = errors
-    .map((item) =>
-      buildBanner(
-        item.source_id ? `Source ${item.source_id} issue` : "Grounding issue",
-        item.message || "Unknown grounding error.",
-        "warning",
-        [
-          item.url ? `<div class="meta">${escapeHtml(item.url)}</div>` : "",
-          buildGroundingErrorMeta(item),
-        ].join(""),
-      ),
-    )
-    .join("");
-
-  const selectedSources = grounding.selected_sources || [];
-  if (!selectedSources.length) {
-    elements.groundingOutput.innerHTML =
-      '<div class="result-card">No sources were selected from the current search results.</div>';
-    return;
+  for (const match of content.matchAll(citationPattern)) {
+    const sourceId = match[1];
+    const source = sourceMap.get(sourceId);
+    const matchIndex = match.index ?? 0;
+    rendered += `<span class="message-text-fragment">${escapeWithBreaks(content.slice(lastIndex, matchIndex))}</span>`;
+    if (source) {
+      rendered += `
+        <span class="source-chip-wrap">
+          <button
+            type="button"
+            class="source-chip-button"
+            data-open-source-drawer="true"
+            data-message-id="${escapeHtml(message.id)}"
+            data-source-id="${escapeHtml(source.sourceId)}"
+          >
+            ${escapeHtml(source.sourceId)}
+          </button>
+          ${buildCitationTooltip(source)}
+        </span>
+      `;
+    } else {
+      rendered += `<span class="message-text-fragment">${escapeHtml(match[0])}</span>`;
+    }
+    lastIndex = matchIndex + match[0].length;
   }
 
-  elements.groundingOutput.innerHTML = selectedSources
-    .map((source) => {
-      const fetched = fetchedById.get(source.source_id);
-      const sourceError = errors.find((item) => item.source_id === source.source_id);
-      const usesSnippetFallback = summary.context_mode === "search_snippets" && !fetched && Boolean(source.snippet);
-      const statusLabel = fetched ? "Fetched" : usesSnippetFallback ? "Snippet used" : sourceError ? "Failed" : "Selected";
-      const statusClass = fetched
-        ? "status-fetched"
-        : usesSnippetFallback
-          ? "status-selected"
-          : sourceError
-            ? "status-failed"
-            : "status-selected";
+  rendered += `<span class="message-text-fragment">${escapeWithBreaks(content.slice(lastIndex))}</span>`;
 
+  return `
+    <div class="message-copy message-copy-rich">${rendered}</div>
+    <div class="message-source-actions">
+      <button
+        type="button"
+        class="source-message-button"
+        data-open-source-drawer="true"
+        data-message-id="${escapeHtml(message.id)}"
+      >
+        Sources - ${escapeHtml(String(bundle.sourceCount))}
+      </button>
+      <span class="meta">
+        ${escapeHtml(bundle.contextMode === "fetched_text" ? "Fetched source text" : "Snippet-backed context")}
+      </span>
+    </div>
+  `;
+}
+
+function buildHistoryRows(state) {
+  return state.directChats
+    .map((chat) => {
+      const previewSource = summarizeText(chat.messages[chat.messages.length - 1]?.content || "", 54) || "No messages yet.";
+      const activeClass = chat.id === state.activeChatId ? " active" : "";
       return `
-        <div class="result-card">
-          <div class="status-line">
-            <strong>${escapeHtml(source.title)}</strong>
-            <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
-          </div>
-          <div class="meta">
-            Rank ${escapeHtml(source.search_rank)} | ${escapeHtml(source.domain)} |
-            <a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.url)}</a>
-          </div>
-          <div class="source-body">
-            <p>${escapeHtml(source.snippet || "No search snippet available.")}</p>
-            ${
-                fetched
-                  ? `
-                    <div class="chip-row">
-                      ${buildChip("Method", fetched.retrieval_method || "direct_html", "muted")}
-                      ${buildChip(
-                        "Quality",
-                        fetched.content_quality || "unknown",
-                        fetched.content_quality === "usable" ? "ok" : "warn",
-                      )}
-                      ${buildChip("Context", String(fetched.context_chars_used || 0), "muted")}
-                      ${buildChip("Extracted", String(fetched.content_char_count || 0), "muted")}
-                      ${buildChip("Words", String(fetched.word_count || 0), "muted")}
-                    </div>
-                    ${
-                      Array.isArray(fetched.warnings) && fetched.warnings.length
-                        ? `<div class="meta">Warnings: ${escapeHtml(fetched.warnings.join(" | "))}</div>`
-                        : ""
-                    }
-                    <div class="source-text">${escapeHtml(
-                      fetched.context_text || fetched.excerpt || "No grounded source text available.",
-                    )}</div>
-                  `
-                  : usesSnippetFallback
-                    ? `
-                      <div class="meta">Article fetch failed, so the grounded answer used the returned search snippet.</div>
-                      <div class="source-text">${escapeHtml(source.snippet || "No search snippet available.")}</div>
-                    `
-                  : sourceError
-                    ? `
-                      <p class="error">${escapeHtml(sourceError.message)}</p>
-                      ${buildGroundingErrorMeta(sourceError)}
-                    `
-                    : '<p class="meta">Selected for grounding but not fetched.</p>'
-            }
-          </div>
-        </div>
+        <article class="history-card${activeClass}">
+          <button type="button" class="history-open" data-chat-id="${escapeHtml(chat.id)}">
+            <span class="history-title">${escapeHtml(chat.title)}</span>
+            <span class="history-preview">${escapeHtml(previewSource)}</span>
+            <span class="history-time">${escapeHtml(getHistoryLabel(chat.updatedAt))}</span>
+          </button>
+          <button
+            type="button"
+            class="history-delete"
+            data-delete-chat-id="${escapeHtml(chat.id)}"
+            aria-label="Delete ${escapeHtml(chat.title)}"
+          >
+            &times;
+          </button>
+        </article>
       `;
     })
     .join("");
+}
+
+function renderGroundingMeta(state, elements) {
+  const latestMessage = [...state.groundingMessages].reverse().find((item) => item.sourceBundle);
+  const bundle = latestMessage?.sourceBundle || null;
+  const chips = [];
+
+  if (state.groundingStatus.kind === "pending") {
+    chips.push(buildChip("Status", "searching and fetching", "warn"));
+  }
+
+  if (bundle) {
+    chips.push(
+      buildChip(
+        "Context",
+        bundle.contextMode === "fetched_text" ? "fetched text" : bundle.contextMode === "search_snippets" ? "snippets" : "none",
+        bundle.contextMode === "fetched_text" ? "ok" : "warn",
+      ),
+    );
+    chips.push(
+      `<button type="button" class="source-message-button" data-open-source-drawer="true" data-message-id="${escapeHtml(latestMessage.id)}">
+        Sources - ${escapeHtml(String(bundle.sourceCount))}
+      </button>`,
+    );
+  }
+
+  if (state.groundingStatus.kind === "error") {
+    chips.push(buildChip("Status", "request failed", "error"));
+  }
+
+  elements.groundingMeta.hidden = !chips.length;
+  elements.groundingMeta.innerHTML = chips.join("");
+}
+
+function openSourceDrawer(state, messageId, focusSourceId = "") {
+  const message = getGroundingMessageById(state, messageId);
+  const bundle = message?.sourceBundle || null;
+  if (!bundle?.sources?.length) {
+    return false;
+  }
+
+  state.sourceDrawer = {
+    open: true,
+    messageId,
+    focusSourceId: focusSourceId || bundle.sources[0].sourceId,
+  };
+  return true;
+}
+
+function closeSourceDrawer(state) {
+  state.sourceDrawer = {
+    open: false,
+    messageId: "",
+    focusSourceId: "",
+  };
+}
+
+function renderSourceDrawer(state, elements) {
+  const drawerState = state.sourceDrawer || { open: false, messageId: "", focusSourceId: "" };
+  const message = drawerState.messageId ? getGroundingMessageById(state, drawerState.messageId) : null;
+  const bundle = message?.sourceBundle || null;
+  const activeSourceId = drawerState.focusSourceId || bundle?.sources?.[0]?.sourceId || "";
+
+  if (!drawerState.open || !bundle?.sources?.length) {
+    elements.sourceDrawerShell.hidden = true;
+    elements.sourceDrawerMeta.innerHTML = "";
+    elements.sourceDrawerList.innerHTML = "";
+    return;
+  }
+
+  elements.sourceDrawerShell.hidden = false;
+  elements.sourceDrawerTitle.textContent =
+    bundle.contextMode === "fetched_text" ? "Current answer sources" : "Current answer sources (snippet-backed)";
+  elements.sourceDrawerMeta.innerHTML = [
+    buildChip("Sources", String(bundle.sourceCount), "muted"),
+    buildChip(
+      "Context",
+      bundle.contextMode === "fetched_text" ? "fetched text" : bundle.contextMode === "search_snippets" ? "snippets" : "none",
+      bundle.contextMode === "fetched_text" ? "ok" : "warn",
+    ),
+    buildChip("Fetched", String(bundle.fetchedCount), bundle.fetchedCount ? "ok" : "warn"),
+    buildChip("Issues", String(bundle.failedCount), bundle.failedCount ? "warn" : "muted"),
+  ].join("");
+
+  elements.sourceDrawerList.innerHTML = bundle.sources
+    .map((source) => {
+      const activeClass = activeSourceId === source.sourceId ? " active" : "";
+      return `
+        <article class="drawer-source-card${activeClass}" id="drawer-source-${escapeHtml(source.sourceId)}">
+          <div class="status-line">
+            <strong>${escapeHtml(source.sourceId)} - ${escapeHtml(source.title)}</strong>
+            <span class="status-badge ${escapeHtml(source.statusClass)}">${escapeHtml(source.statusLabel)}</span>
+          </div>
+          <a class="drawer-source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">
+            ${escapeHtml(source.title)}
+          </a>
+          <p class="meta">${escapeHtml(source.domain || "unknown domain")}</p>
+          <p class="drawer-source-copy">${escapeHtml(source.snippet || "No source snippet available.")}</p>
+          <div class="chip-row">
+            ${
+              source.retrievalMethod
+                ? buildChip("Method", source.retrievalMethod, "muted")
+                : ""
+            }
+            ${
+              source.contentQuality
+                ? buildChip("Quality", source.contentQuality, source.contentQuality === "usable" ? "ok" : "warn")
+                : ""
+            }
+            ${
+              source.contextCharsUsed
+                ? buildChip("Context", String(source.contextCharsUsed), "muted")
+                : ""
+            }
+          </div>
+          ${
+            source.warnings.length
+              ? `<p class="meta warn">Warnings: ${escapeHtml(source.warnings.join(" | "))}</p>`
+              : ""
+          }
+          ${
+            source.errorMessage
+              ? `<p class="meta error">Issue${source.errorCode ? ` (${escapeHtml(source.errorCode)})` : ""}: ${escapeHtml(source.errorMessage)}</p>`
+              : ""
+          }
+        </article>
+      `;
+    })
+    .join("");
+
+  const activeCard = elements.sourceDrawerList.querySelector(".drawer-source-card.active");
+  if (activeCard) {
+    requestAnimationFrame(() => {
+      activeCard.scrollIntoView({ block: "nearest" });
+    });
+  }
 }
 
 function renderFetchOutput(state, elements) {
@@ -885,7 +1027,6 @@ function renderGroundingWorkspace(state, elements) {
     "No grounded requests yet. Use this workspace when you want SearXNG, fetched page text, and sourced answers.",
   );
   renderGroundingMeta(state, elements);
-  renderGroundingDetails(state, elements);
 }
 
 function renderApp(config, state, elements) {
@@ -896,6 +1037,7 @@ function renderApp(config, state, elements) {
   renderStackModal(state, elements);
   renderDirectChat(state, elements);
   renderGroundingWorkspace(state, elements);
+  renderSourceDrawer(state, elements);
   renderFetchMeta(state, elements);
   renderFetchOutput(state, elements);
 }
@@ -940,6 +1082,11 @@ async function main() {
     groundingStatus: { kind: "idle" },
     fetchStatus: { kind: "idle" },
     groundingMessages: [],
+    sourceDrawer: {
+      open: false,
+      messageId: "",
+      focusSourceId: "",
+    },
   };
 
   const elements = {
@@ -970,13 +1117,15 @@ async function main() {
     chatMeta: document.getElementById("chat-meta"),
     chatOutput: document.getElementById("chat-output"),
     groundingAnswer: document.getElementById("grounding-answer"),
-    groundingDetails: document.getElementById("grounding-details"),
     groundingMeta: document.getElementById("grounding-meta"),
-    groundingErrors: document.getElementById("grounding-errors"),
-    groundingSummary: document.getElementById("grounding-summary"),
-    groundingOutput: document.getElementById("grounding-output"),
     fetchMeta: document.getElementById("fetch-meta"),
     fetchOutput: document.getElementById("fetch-output"),
+    sourceDrawerShell: document.getElementById("source-drawer-shell"),
+    sourceDrawerBackdrop: document.getElementById("source-drawer-backdrop"),
+    closeSourceDrawerButton: document.getElementById("close-source-drawer"),
+    sourceDrawerTitle: document.getElementById("source-drawer-title"),
+    sourceDrawerMeta: document.getElementById("source-drawer-meta"),
+    sourceDrawerList: document.getElementById("source-drawer-list"),
     settingsModal: document.getElementById("settings-modal"),
     stackModal: document.getElementById("stack-modal"),
     settingsForm: document.getElementById("settings-form"),
@@ -1019,6 +1168,9 @@ async function main() {
 
   function activateWorkspace(workspaceId) {
     state.activeWorkspace = workspaceId;
+    if (workspaceId !== "workspace-grounding") {
+      closeSourceDrawer(state);
+    }
     rerender();
     const focusId = WORKSPACES[workspaceId]?.focusId;
     if (focusId) {
@@ -1097,6 +1249,34 @@ async function main() {
     }
   });
 
+  [elements.groundingAnswer, elements.groundingMeta].forEach((container) => {
+    container.addEventListener("click", (event) => {
+      const sourceButton = event.target.closest("[data-open-source-drawer]");
+      if (!sourceButton) {
+        return;
+      }
+
+      const didOpen = openSourceDrawer(
+        state,
+        sourceButton.dataset.messageId,
+        sourceButton.dataset.sourceId || "",
+      );
+      if (didOpen) {
+        rerender();
+      }
+    });
+  });
+
+  elements.closeSourceDrawerButton.addEventListener("click", () => {
+    closeSourceDrawer(state);
+    rerender();
+  });
+
+  elements.sourceDrawerBackdrop.addEventListener("click", () => {
+    closeSourceDrawer(state);
+    rerender();
+  });
+
   elements.openSettingsButtons.forEach((button) => {
     button.addEventListener("click", () => {
       renderSettingsForm(state, elements);
@@ -1127,6 +1307,11 @@ async function main() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") {
+      return;
+    }
+    if (!elements.sourceDrawerShell.hidden) {
+      closeSourceDrawer(state);
+      rerender();
       return;
     }
     [elements.settingsModal, elements.stackModal].forEach((modal) => {
@@ -1225,6 +1410,7 @@ async function main() {
       createMessage("assistant", "Searching, fetching, and assembling grounded source text...", "pending"),
     );
     state.groundingStatus = { kind: "pending" };
+    closeSourceDrawer(state);
     elements.groundingQuery.value = "";
     rerender();
 
@@ -1236,10 +1422,12 @@ async function main() {
         system_prompt: state.settings.groundingSystemPrompt || null,
         selected_model: state.selectedModel || null,
       });
+      const sourceBundle = buildGroundingSourceBundle(payload);
       state.groundingMessages[state.groundingMessages.length - 1] = createMessage(
         "assistant",
         buildGroundingAssistantText(payload),
         payload.answer_status === "model_error" ? "error" : "default",
+        sourceBundle.sources.length ? { sourceBundle } : {},
       );
       state.groundingStatus = { kind: "success", payload };
       rerender();
@@ -1247,6 +1435,7 @@ async function main() {
     } catch (error) {
       state.groundingMessages[state.groundingMessages.length - 1] = createMessage("assistant", error.message, "error");
       state.groundingStatus = { kind: "error", error };
+      closeSourceDrawer(state);
       rerender();
     }
   });

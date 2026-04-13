@@ -7,7 +7,7 @@ AnonExplo uses a local-first, privacy-first service layout:
 - `host-gateway`
   - localhost-only reverse proxy that exposes the UI, backend, and optional standalone SearXNG UI to the host without putting those app services directly on a non-internal Docker network
 - `ui`
-  - local browser interface for prompts, browser-local direct chat history, modal settings, provider status, grounding inspection, and separate direct/grounded/fetch workspaces
+  - local browser interface for prompts, browser-local direct chat history, modal settings, provider status, inline citation pills with hover tooltips, an on-demand source drawer for grounded answers, and separate direct/grounded/fetch workspaces
 - `backend`
   - orchestrator that owns provider routing and exposes a stable local API
 - `model-backend`
@@ -123,13 +123,13 @@ The validation path now treats that network and exposure model as enforceable po
 6. Backend packages bounded fetched source text when available, or bounded search-result snippets when fetches fail but search material still exists.
 7. Backend marks the grounding bundle with an explicit `context_mode` so the UI and future services can distinguish fetched article text from snippet fallback.
 8. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
-9. UI shows the grounded answer, the selected model, the selected or attempted sources, the current grounding mode, and any per-source fetch failures.
+9. UI shows the grounded answer with inline citation pills, a retractable source drawer, the selected or attempted sources, the current grounding mode, and any per-source fetch failures.
 10. Grounded-answer transcripts and source bundles remain transient in the current tab rather than persistent browser storage.
 
 ## Why The Fetcher Is Separate
 
 Search snippets alone are not enough. The fetcher exists so the system can retrieve, parse, and normalize article text without giving the model backend internet access.
-The current fetcher pass also classifies thin extractions so the backend can reject paywall-shell or otherwise low-value pages instead of pretending they are usable grounding context. The deliberate steady-state design remains direct HTML fetches plus explicit snippet fallback; no third-party reader proxy or Wikipedia-specific bypass is bundled at this stage.
+The current fetcher pass also classifies thin extractions so the backend can reject paywall-shell or otherwise low-value pages instead of pretending they are usable grounding context. The deliberate steady-state design remains direct HTML fetches plus explicit snippet fallback; no third-party reader proxy or Wikipedia-specific bypass is bundled at this stage. If a future branch adds Wikimedia support, it should be an explicit official API path rather than a hidden fetch workaround.
 
 ## First Runtime Profile
 
