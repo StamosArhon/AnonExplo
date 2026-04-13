@@ -1,7 +1,7 @@
 import os
 import unittest
 from collections import deque
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 from fastapi.testclient import TestClient
@@ -21,13 +21,22 @@ from app.providers import (
     OpenAICompatibleModelProvider,
     ProviderError,
     SearchHit,
+    UnsupportedModelError,
 )
 
 
 class MockAsyncClient:
-    def __init__(self, *, response: httpx.Response | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        response: httpx.Response | None = None,
+        error: Exception | None = None,
+        post_response: httpx.Response | None = None,
+    ) -> None:
         self.response = response
         self.error = error
+        self.post_response = post_response
+        self.last_post_json: dict | None = None
 
     async def __aenter__(self):
         return self
@@ -39,8 +48,16 @@ class MockAsyncClient:
         if self.error is not None:
             raise self.error
         if self.response is None:
-            raise AssertionError("MockAsyncClient requires either a response or an error.")
+            raise AssertionError("MockAsyncClient requires either a GET response or an error.")
         return self.response
+
+    async def post(self, url: str, json: dict):
+        if self.error is not None:
+            raise self.error
+        self.last_post_json = json
+        if self.post_response is None:
+            raise AssertionError("MockAsyncClient requires a POST response.")
+        return self.post_response
 
 
 class BackendApiTests(unittest.TestCase):
@@ -49,8 +66,8 @@ class BackendApiTests(unittest.TestCase):
 
     @patch("app.main.build_model_provider")
     def test_health_endpoint_exposes_provider_summary(self, build_model_provider: AsyncMock) -> None:
-        provider = AsyncMock()
-        provider.probe_runtime.return_value = ModelRuntimeStatus(
+        provider = Mock()
+        provider.probe_runtime = AsyncMock(return_value=ModelRuntimeStatus(
             ready=True,
             reachable=True,
             status="ready",
@@ -58,7 +75,7 @@ class BackendApiTests(unittest.TestCase):
             checked_url="http://model-backend:8080/v1/models",
             available_models=[ModelDescriptor(id="test-model", owned_by="local")],
             error=None,
-        )
+        ))
         build_model_provider.return_value = provider
 
         response = self.client.get("/api/v1/health")
@@ -71,8 +88,8 @@ class BackendApiTests(unittest.TestCase):
 
     @patch("app.main.build_model_provider")
     def test_health_endpoint_reports_degraded_runtime(self, build_model_provider: AsyncMock) -> None:
-        provider = AsyncMock()
-        provider.probe_runtime.return_value = ModelRuntimeStatus(
+        provider = Mock()
+        provider.probe_runtime = AsyncMock(return_value=ModelRuntimeStatus(
             ready=False,
             reachable=False,
             status="unreachable",
@@ -80,7 +97,7 @@ class BackendApiTests(unittest.TestCase):
             checked_url="http://model-backend:8080/v1/models",
             available_models=[],
             error="Model runtime request failed: connect failed",
-        )
+        ))
         build_model_provider.return_value = provider
 
         response = self.client.get("/api/v1/health")
@@ -98,8 +115,8 @@ class BackendApiTests(unittest.TestCase):
 
     @patch("app.main.build_model_provider")
     def test_model_runtime_endpoint_returns_probe_state(self, build_model_provider: AsyncMock) -> None:
-        provider = AsyncMock()
-        provider.probe_runtime.return_value = ModelRuntimeStatus(
+        provider = Mock()
+        provider.probe_runtime = AsyncMock(return_value=ModelRuntimeStatus(
             ready=False,
             reachable=True,
             status="configured_model_missing",
@@ -107,7 +124,7 @@ class BackendApiTests(unittest.TestCase):
             checked_url="http://model-backend:8080/v1/models",
             available_models=[ModelDescriptor(id="other-model", owned_by="local")],
             error="Configured model 'test-model' is not advertised by the runtime.",
-        )
+        ))
         build_model_provider.return_value = provider
 
         response = self.client.get("/api/v1/model/runtime")
@@ -119,18 +136,120 @@ class BackendApiTests(unittest.TestCase):
 
     @patch("app.main.build_model_provider")
     def test_chat_endpoint_returns_provider_response(self, build_model_provider: AsyncMock) -> None:
-        provider = AsyncMock()
-        provider.chat.return_value = {
+        provider = Mock()
+        provider.probe_runtime = AsyncMock(return_value=ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        ))
+        provider.select_model = Mock(return_value=type(
+            "Selection",
+            (),
+            {
+                "selected_model": "test-model",
+                "requested_model": None,
+                "selection_source": "configured_default",
+                "configured_model": "test-model",
+                "model_dump": lambda self=None: {
+                    "configured_model": "test-model",
+                    "selected_model": "test-model",
+                    "requested_model": None,
+                    "selection_source": "configured_default",
+                },
+            },
+        )())
+        provider.chat = AsyncMock(return_value={
             "model": "test-model",
             "answer": "hello from the model",
             "usage": {"total_tokens": 12},
-        }
+            "selected_model": "test-model",
+        })
         build_model_provider.return_value = provider
 
         response = self.client.post("/api/v1/model/chat", json={"prompt": "hello"})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["answer"], "hello from the model")
+        self.assertEqual(payload["selection"]["selected_model"], "test-model")
+
+    @patch("app.main.build_model_provider")
+    def test_chat_endpoint_allows_request_level_model_override(self, build_model_provider: AsyncMock) -> None:
+        provider = Mock()
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[
+                ModelDescriptor(id="test-model", owned_by="local"),
+                ModelDescriptor(id="alt-model", owned_by="local"),
+            ],
+            error=None,
+        )
+        selection = type(
+            "Selection",
+            (),
+            {
+                "selected_model": "alt-model",
+                "requested_model": "alt-model",
+                "selection_source": "request_override",
+                "configured_model": "test-model",
+                "model_dump": lambda self=None: {
+                    "configured_model": "test-model",
+                    "selected_model": "alt-model",
+                    "requested_model": "alt-model",
+                    "selection_source": "request_override",
+                },
+            },
+        )()
+        provider.probe_runtime = AsyncMock(return_value=runtime)
+        provider.select_model = Mock(return_value=selection)
+        provider.chat = AsyncMock(return_value={
+            "model": "alt-model",
+            "answer": "hello from alt-model",
+            "usage": {"total_tokens": 8},
+            "selected_model": "alt-model",
+        })
+        build_model_provider.return_value = provider
+
+        response = self.client.post("/api/v1/model/chat", json={"prompt": "hello", "selected_model": "alt-model"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["selection"]["selected_model"], "alt-model")
+        self.assertEqual(payload["selection"]["selection_source"], "request_override")
+        self.assertEqual(provider.chat.await_args.kwargs["model_name"], "alt-model")
+
+    @patch("app.main.build_model_provider")
+    def test_chat_endpoint_rejects_unadvertised_model_override(self, build_model_provider: AsyncMock) -> None:
+        provider = Mock()
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+        provider.probe_runtime = AsyncMock(return_value=runtime)
+        provider.select_model = Mock(side_effect=UnsupportedModelError(
+            "Requested model 'missing-model' is not advertised by the runtime."
+        ))
+        build_model_provider.return_value = provider
+
+        response = self.client.post(
+            "/api/v1/model/chat",
+            json={"prompt": "hello", "selected_model": "missing-model"},
+        )
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["detail"]["selection"]["selected_model"], "missing-model")
+        self.assertIn("not advertised", payload["detail"]["message"])
 
     @patch("app.main.build_fetcher_client")
     @patch("app.main.build_search_provider")
@@ -211,12 +330,40 @@ class BackendApiTests(unittest.TestCase):
         )
         build_fetcher_client.return_value = fetcher
 
-        model_provider = AsyncMock()
-        model_provider.chat.return_value = {
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+        selection = type(
+            "Selection",
+            (),
+            {
+                "selected_model": "test-model",
+                "requested_model": None,
+                "selection_source": "configured_default",
+                "configured_model": "test-model",
+                "model_dump": lambda self=None: {
+                    "configured_model": "test-model",
+                    "selected_model": "test-model",
+                    "requested_model": None,
+                    "selection_source": "configured_default",
+                },
+            },
+        )()
+        model_provider = Mock()
+        model_provider.probe_runtime = AsyncMock(return_value=runtime)
+        model_provider.select_model = Mock(return_value=selection)
+        model_provider.chat = AsyncMock(return_value={
             "model": "test-model",
             "answer": "Grounded answer [S1]",
             "usage": {"total_tokens": 42},
-        }
+            "selected_model": "test-model",
+        })
         build_model_provider.return_value = model_provider
 
         response = self.client.post("/api/v1/grounding/answer", json={"query": "What does Alpha say?"})
@@ -224,9 +371,36 @@ class BackendApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["answer_status"], "grounded")
         self.assertEqual(payload["answer"], "Grounded answer [S1]")
+        self.assertEqual(payload["selection"]["selected_model"], "test-model")
         prompt = model_provider.chat.await_args.kwargs["prompt"]
         self.assertIn("[S1]", prompt)
         self.assertIn("Alpha content for the grounding path.", prompt)
+
+    @patch("app.main.build_model_provider")
+    def test_grounding_answer_rejects_unadvertised_model_override(self, build_model_provider: AsyncMock) -> None:
+        provider = Mock()
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+        provider.probe_runtime = AsyncMock(return_value=runtime)
+        provider.select_model = Mock(side_effect=UnsupportedModelError(
+            "Requested model 'missing-model' is not advertised by the runtime."
+        ))
+        build_model_provider.return_value = provider
+
+        response = self.client.post(
+            "/api/v1/grounding/answer",
+            json={"query": "What does Alpha say?", "selected_model": "missing-model"},
+        )
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["detail"]["selection"]["selected_model"], "missing-model")
 
 
 class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
@@ -265,6 +439,50 @@ class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(status.ready)
         self.assertTrue(status.reachable)
         self.assertEqual(status.status, "invalid_response")
+
+    async def test_select_model_allows_request_override_when_runtime_advertises_it(self) -> None:
+        provider = OpenAICompatibleModelProvider(
+            base_url="http://model-backend:8080/v1",
+            model_name="test-model",
+            timeout_seconds=90.0,
+            probe_timeout_seconds=5.0,
+        )
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[
+                ModelDescriptor(id="test-model", owned_by="local"),
+                ModelDescriptor(id="alt-model", owned_by="local"),
+            ],
+            error=None,
+        )
+
+        selection = provider.select_model("alt-model", runtime_status=runtime)
+        self.assertEqual(selection.selected_model, "alt-model")
+        self.assertEqual(selection.selection_source, "request_override")
+
+    async def test_select_model_rejects_unadvertised_override(self) -> None:
+        provider = OpenAICompatibleModelProvider(
+            base_url="http://model-backend:8080/v1",
+            model_name="test-model",
+            timeout_seconds=90.0,
+            probe_timeout_seconds=5.0,
+        )
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+
+        with self.assertRaises(UnsupportedModelError):
+            provider.select_model("missing-model", runtime_status=runtime)
 
 
 if __name__ == "__main__":

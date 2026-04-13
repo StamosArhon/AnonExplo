@@ -33,12 +33,12 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Current Phase
 
-- Active phase: `local-model-integration`
-- Goal: make the first concrete local model runtime path reproducible, observable, and validated end to end on the target workstation class
+- Active phase: `ui-workbench`
+- Goal: improve the local single-user workbench UX for model selection, runtime visibility, grounding inspection, and failure handling
 
 ## Active Branch
 
-- `stamos/local-model-integration`
+- `stamos/ui-workbench`
 
 ## Completed Work
 
@@ -58,6 +58,9 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - Added a Docker healthcheck plus stable runtime aliasing for the `llama.cpp` profile so the backend, runtime, and UI share the same model identifier.
 - Added `scripts/provision-default-model.ps1` to download the default GGUF into `data/models/` and verify its SHA256.
 - Validated the default `QuantFactory/Qwen2.5-7B-Instruct-GGUF` Q4_K_M artifact end to end on the current development machine with the repo-managed validation flow.
+- Added request-level model selection in the backend for direct chat and grounded-answer calls, validated against the runtime-advertised model catalog when available.
+- Reworked the static local UI into a clearer workbench with a global model selector, runtime snapshot, provider summary, better source inspection, and more structured failure cards.
+- Stabilized unsupported model-override failures so the backend returns structured selection and runtime details without falling back to a second selector call.
 
 ## In-Progress Work
 
@@ -69,6 +72,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - Existing local `.env` files created before this branch may need a manual refresh of the model-runtime keys if they still contain placeholder values.
 - The current SearXNG configuration is intentionally conservative and still needs deeper engine and limiter tuning in a later hardening pass.
 - Host firewall guidance has been documented conceptually, but not automated.
+- The current browser-side persistence is intentionally minimal and stores only the selected model id; there is still no prompt history or fetched-content storage policy.
 
 ## Decisions Made And Why
 
@@ -83,6 +87,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - The default local model artifact is pinned by source URL, filename, and SHA256 so provisioning is explicit and repeatable.
 - The backend health surface now distinguishes backend availability from model-runtime readiness so failures are easier to understand locally.
 - The `llama.cpp` runtime command now sets an explicit alias matching `MODEL_NAME` to keep model discovery stable across backend, runtime, and UI.
+- The local workbench can request a runtime-advertised model override per chat or grounded-answer call without changing the global backend configuration.
 
 ## Security / Privacy Assumptions
 
@@ -111,12 +116,13 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
   - a minimal OpenAI-compatible chat-completions probe against the live model runtime
 - `scripts/bootstrap.ps1`: passed on 2026-04-13 and created the expected local `.env` plus data directories
 - `scripts/provision-default-model.ps1`: passed on 2026-04-13 and downloaded the default GGUF to `data/models/`
+- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-13 after adding model-selection and workbench contract coverage
 
 ## Exact Next Steps
 
-1. Push `stamos/local-model-integration` and review the `main...stamos/local-model-integration` diff after confirming the validation output.
-2. Merge `stamos/local-model-integration` after review and cleanup the branch per the repo workflow.
-3. Improve the local workbench UX for model switching, runtime state, grounding inspection, and failure visibility on a dedicated `stamos/ui-workbench` branch.
+1. Push `stamos/ui-workbench` and review the `main...stamos/ui-workbench` diff after confirming validation output.
+2. Merge `stamos/ui-workbench` after review and cleanup the branch per the repo workflow.
+3. Start `stamos/provider-expansion` to add at least one more model adapter or search/anonymizer adapter while preserving the current workbench abstractions.
 4. Decide whether to add lightweight local benchmark reporting in a later branch or keep performance notes purely in docs.
 
 ## Handoff Notes For A Fresh Codex Thread
@@ -126,4 +132,5 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - The repo now includes a real grounded-answer vertical slice plus a validated `llama.cpp` runtime path with a tracked default GGUF source and checksum.
 - The grounding flow is intentionally bounded and transparent: search, source selection, fetch, source packaging, and model synthesis are all visible in the UI and backend responses.
 - The backend and UI now expose model-runtime readiness separately from general backend health, which future branches should preserve.
-- The next implementation thread should begin with `stamos/ui-workbench` after confirming `main` is clean.
+- The static UI now uses backend-provided runtime and model-catalog state to drive a browser-local model selector for chat and grounded-answer requests.
+- The next implementation thread should begin with `stamos/provider-expansion` after confirming `main` is clean.

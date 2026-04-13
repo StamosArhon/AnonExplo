@@ -50,4 +50,6 @@
 - The default validated model path is `QuantFactory/Qwen2.5-7B-Instruct-GGUF` with the file `Qwen2.5-7B-Instruct.Q4_K_M.gguf` stored in `data/models/`.
 - The tracked checksum for that default file is `4e9221217000d0fc8f5ffdbae51a7201fcc3613de18ff1b1cd8c7c01f924437b`.
 - Use `scripts/provision-default-model.ps1` to populate `data/models/` and `scripts/validate.ps1 -RequireModelRuntime` to confirm the full path.
+- The workbench UI may persist only the selected model id in browser local storage; it must not store prompts, fetched page text, or response history by default.
+- Request-level model selection should stay bounded to runtime-advertised models and should not mutate the backend's configured default model.
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.

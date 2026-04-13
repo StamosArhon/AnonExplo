@@ -33,6 +33,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Keep logs operational, not archival.
 - Do not add debug logging that dumps prompts, full fetched article bodies, headers, or provider payloads by default.
 - If deeper logging is ever added for troubleshooting, it must be temporary and documented.
+- The local UI may remember only the selected model id in browser local storage; prompt history and fetched content must remain non-persistent by default.
 
 ## Fetcher Controls
 

@@ -4,7 +4,7 @@ AnonExplo is a privacy-first, self-hosted local-LLM stack for local use on perso
 
 ## Current Status
 
-This repository is currently focused on the `local-model-integration` milestone. The repo now provides:
+This repository is currently focused on the `ui-workbench` milestone. The repo now provides:
 
 - the durable repo protocol for future Codex threads
 - the initial architecture and security documents
@@ -16,6 +16,7 @@ This repository is currently focused on the `local-model-integration` milestone.
 - a repo-managed provisioning script for the default GGUF baseline
 - runtime readiness reporting in the backend and UI
 - end-to-end validation of the default local model path on the current development machine
+- a static local workbench with browser-local model selection and clearer runtime or failure inspection
 
 ## Design Goals
 
@@ -85,6 +86,7 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 7. Open the local UI at `http://127.0.0.1:3000`.
 
 8. Use the local UI's grounded-answer panel to search, fetch, inspect sources, and synthesize an answer from retrieved page text.
+   The workbench keeps the selected model id in browser local storage so chat and grounded-answer requests stay aligned across refreshes.
 
 ## Provider Switching
 
@@ -113,6 +115,15 @@ The repo now supports a practical grounded-answer path:
 5. pass that context into the configured model runtime
 
 The UI also surfaces per-source fetch failures and the exact source text slice used for grounding.
+
+## UI Workbench
+
+The local UI is still static and self-hosted, but it now behaves like a real workbench instead of a demo page:
+
+- it loads provider, runtime, and model-catalog state from the backend
+- it lets you choose the requested model for chat and grounded-answer requests
+- it keeps that selected model id locally in the browser without storing prompts or fetched content
+- it surfaces runtime readiness, configured default vs. request override, and clearer failure cards
 
 ## Llama.cpp Profile
 

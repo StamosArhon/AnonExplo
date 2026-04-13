@@ -12,23 +12,67 @@
         <p class="eyebrow">Local LLM Workbench</p>
         <h1>AnonExplo</h1>
         <p class="intro">
-          A privacy-first local interface for model prompts, provider status, and
-          grounded search-and-fetch inspection.
+          A privacy-first local interface for direct model prompts, grounded source-backed answers,
+          and runtime-aware debugging on a single workstation.
         </p>
-        <div class="hero-meta" id="environment-chip">Loading environment...</div>
+        <div class="hero-strip">
+          <div class="hero-meta" id="environment-chip">Loading environment...</div>
+          <div class="hero-meta hero-meta-secondary" id="runtime-chip">Checking runtime...</div>
+        </div>
       </header>
 
       <main class="grid">
-        <section class="panel panel-highlight">
+        <section class="panel panel-highlight panel-span-2">
           <div class="panel-heading">
-            <h2>System Status</h2>
-            <button id="refresh-status" type="button">Refresh</button>
+            <div class="heading-copy">
+              <h2>Workbench Controls</h2>
+              <p class="panel-copy">
+                Pick the model used for prompt and grounded-answer requests, inspect the live runtime,
+                and refresh the local stack snapshot.
+              </p>
+            </div>
+            <button id="refresh-status" type="button">Refresh Snapshot</button>
           </div>
+
+          <div class="dashboard-grid">
+            <article class="control-card">
+              <h3>Model Routing</h3>
+              <label>
+                Requested model
+                <select id="model-select"></select>
+              </label>
+              <p id="model-selection-note" class="meta">
+                Prompt and grounded-answer requests use this model selection.
+              </p>
+            </article>
+
+            <article class="control-card">
+              <h3>Configured Default</h3>
+              <div id="configured-model" class="stat-value">Loading...</div>
+              <p id="runtime-note" class="meta">Runtime details will appear here.</p>
+            </article>
+
+            <article class="control-card">
+              <h3>Runtime Snapshot</h3>
+              <div id="runtime-summary" class="stack compact"></div>
+            </article>
+
+            <article class="control-card">
+              <h3>Provider Stack</h3>
+              <div id="provider-summary" class="stack compact"></div>
+            </article>
+          </div>
+
           <div id="status-output" class="stack"></div>
         </section>
 
         <section class="panel">
-          <h2>Prompt</h2>
+          <div class="panel-heading">
+            <div class="heading-copy">
+              <h2>Direct Chat</h2>
+              <p class="panel-copy">Send a prompt straight to the selected local model.</p>
+            </div>
+          </div>
           <form id="chat-form" class="stack">
             <label>
               Prompt
@@ -36,15 +80,41 @@
             </label>
             <label>
               Optional system prompt
-              <textarea id="system-input" rows="3" placeholder="Keep answers terse and source-aware."></textarea>
+              <textarea id="system-input" rows="3" placeholder="Keep answers concise, careful, and source-aware."></textarea>
             </label>
             <button type="submit">Send Prompt</button>
           </form>
-          <pre id="chat-output" class="output">Model response will appear here.</pre>
+          <div id="chat-meta" class="chip-row"></div>
+          <div id="chat-output" class="output-block response-block">Model response will appear here.</div>
         </section>
 
         <section class="panel">
-          <h2>Grounded Answer</h2>
+          <div class="panel-heading">
+            <div class="heading-copy">
+              <h2>Direct Fetch</h2>
+              <p class="panel-copy">Fetch and inspect readable page text without using the model.</p>
+            </div>
+          </div>
+          <form id="fetch-form" class="stack">
+            <label>
+              URL
+              <input id="fetch-url" type="url" placeholder="https://example.com/article" />
+            </label>
+            <button type="submit">Fetch Article</button>
+          </form>
+          <div id="fetch-meta" class="chip-row"></div>
+          <div id="fetch-output" class="output-block response-block">Readable article text will appear here.</div>
+        </section>
+
+        <section class="panel panel-span-2">
+          <div class="panel-heading">
+            <div class="heading-copy">
+              <h2>Grounded Answer</h2>
+              <p class="panel-copy">
+                Search, fetch, and synthesize an answer from retrieved page text while keeping source visibility front and center.
+              </p>
+            </div>
+          </div>
           <form id="grounding-form" class="stack">
             <label>
               Question or search query
@@ -62,23 +132,12 @@
             </div>
             <button type="submit">Generate Grounded Answer</button>
           </form>
-          <div class="stack output-block">
-            <div id="grounding-answer" class="answer-card">Grounded answers will appear here.</div>
-            <div id="grounding-summary" class="summary-grid"></div>
-            <div id="grounding-output" class="stack"></div>
-          </div>
-        </section>
 
-        <section class="panel">
-          <h2>Direct Fetch</h2>
-          <form id="fetch-form" class="stack">
-            <label>
-              URL
-              <input id="fetch-url" type="url" placeholder="https://example.com/article" />
-            </label>
-            <button type="submit">Fetch Article</button>
-          </form>
-          <pre id="fetch-output" class="output">Readable article text will appear here.</pre>
+          <div id="grounding-meta" class="chip-row"></div>
+          <div id="grounding-answer" class="answer-card">Grounded answers will appear here.</div>
+          <div id="grounding-errors" class="stack"></div>
+          <div id="grounding-summary" class="summary-grid"></div>
+          <div id="grounding-output" class="stack"></div>
         </section>
       </main>
     </div>

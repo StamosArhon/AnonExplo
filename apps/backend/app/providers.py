@@ -9,6 +9,10 @@ class ProviderError(RuntimeError):
     pass
 
 
+class UnsupportedModelError(ProviderError):
+    pass
+
+
 class ModelDescriptor(BaseModel):
     id: str
     owned_by: str | None = None
@@ -48,6 +52,13 @@ class ModelRuntimeStatus(BaseModel):
     error: str | None = None
 
 
+class ModelSelection(BaseModel):
+    configured_model: str
+    selected_model: str
+    requested_model: str | None = None
+    selection_source: str
+
+
 def _normalize_message_content(content: Any) -> str:
     if isinstance(content, str):
         return content
@@ -60,6 +71,13 @@ def _normalize_message_content(content: Any) -> str:
                     parts.append(text)
         return "\n".join(parts).strip()
     return json.dumps(content, ensure_ascii=True)
+
+
+def _normalize_requested_model(requested_model: str | None) -> str | None:
+    if not isinstance(requested_model, str):
+        return None
+    normalized = requested_model.strip()
+    return normalized or None
 
 
 class OpenAICompatibleModelProvider:
@@ -141,18 +159,48 @@ class OpenAICompatibleModelProvider:
             error=None,
         )
 
+    def select_model(
+        self,
+        requested_model: str | None,
+        runtime_status: ModelRuntimeStatus | None = None,
+    ) -> ModelSelection:
+        normalized_requested_model = _normalize_requested_model(requested_model)
+        selected_model = normalized_requested_model or self.model_name
+        selection_source = "request_override" if normalized_requested_model else "configured_default"
+
+        if runtime_status and runtime_status.available_models:
+            available_model_ids = {item.id for item in runtime_status.available_models}
+            if selected_model not in available_model_ids:
+                raise UnsupportedModelError(
+                    f"Requested model '{selected_model}' is not advertised by the runtime."
+                )
+
+        return ModelSelection(
+            configured_model=self.model_name,
+            selected_model=selected_model,
+            requested_model=normalized_requested_model,
+            selection_source=selection_source,
+        )
+
     async def list_models(self, runtime_status: ModelRuntimeStatus | None = None) -> list[ModelDescriptor]:
         runtime_status = runtime_status or await self.probe_runtime()
         return runtime_status.available_models or [ModelDescriptor(id=self.model_name, owned_by="configured-default")]
 
-    async def chat(self, prompt: str, system_prompt: str | None, temperature: float) -> dict[str, Any]:
+    async def chat(
+        self,
+        prompt: str,
+        system_prompt: str | None,
+        temperature: float,
+        model_name: str | None = None,
+    ) -> dict[str, Any]:
         messages: list[dict[str, Any]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        resolved_model_name = _normalize_requested_model(model_name) or self.model_name
         payload = {
-            "model": self.model_name,
+            "model": resolved_model_name,
             "messages": messages,
             "temperature": temperature,
         }
@@ -169,9 +217,10 @@ class OpenAICompatibleModelProvider:
         message = choice.get("message", {})
         answer = _normalize_message_content(message.get("content", ""))
         return {
-            "model": data.get("model", self.model_name),
+            "model": data.get("model", resolved_model_name),
             "answer": answer,
             "usage": data.get("usage", {}),
+            "selected_model": resolved_model_name,
         }
 
 

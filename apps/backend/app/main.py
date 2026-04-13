@@ -4,14 +4,16 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from app.grounding import build_grounded_model_request, build_grounding_bundle
 from app.config import Settings, get_settings
+from app.grounding import build_grounded_model_request, build_grounding_bundle
 from app.providers import (
     FetcherClient,
     ModelRuntimeStatus,
+    ModelSelection,
     OpenAICompatibleModelProvider,
     ProviderError,
     SearxngSearchProvider,
+    UnsupportedModelError,
 )
 
 
@@ -19,6 +21,7 @@ class ChatRequest(BaseModel):
     prompt: str = Field(min_length=1)
     system_prompt: str | None = None
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    selected_model: str | None = Field(default=None, min_length=1)
 
 
 class SearchRequest(BaseModel):
@@ -34,6 +37,7 @@ class GroundingRequest(BaseModel):
     query: str = Field(min_length=1)
     search_limit: int = Field(default=5, ge=1, le=10)
     fetch_limit: int = Field(default=3, ge=1, le=5)
+    selected_model: str | None = Field(default=None, min_length=1)
 
 
 def build_model_provider(settings: Settings) -> OpenAICompatibleModelProvider:
@@ -56,6 +60,32 @@ def build_fetcher_client(settings: Settings) -> FetcherClient:
     return FetcherClient(
         base_url=settings.fetch_base_url,
         timeout_seconds=settings.fetch_request_timeout_seconds,
+    )
+
+
+def build_model_error_detail(
+    message: str,
+    selection: ModelSelection,
+    runtime: ModelRuntimeStatus,
+) -> dict[str, object]:
+    return {
+        "message": message,
+        "selection": selection.model_dump(),
+        "runtime": runtime.model_dump(),
+    }
+
+
+def build_model_selection_preview(
+    configured_model: str,
+    requested_model: str | None,
+) -> ModelSelection:
+    normalized_requested_model = requested_model.strip() if isinstance(requested_model, str) else ""
+    normalized_requested_model = normalized_requested_model or None
+    return ModelSelection(
+        configured_model=configured_model,
+        selected_model=normalized_requested_model or configured_model,
+        requested_model=normalized_requested_model,
+        selection_source="request_override" if normalized_requested_model else "configured_default",
     )
 
 
@@ -120,6 +150,7 @@ def create_app() -> FastAPI:
         return {
             "models": [item.model_dump() for item in models],
             "runtime": runtime.model_dump(),
+            "configured_model": current_settings.model_name,
         }
 
     @app.get(f"{settings.api_prefix}/model/runtime", response_model=ModelRuntimeStatus)
@@ -133,14 +164,40 @@ def create_app() -> FastAPI:
         current_settings: Annotated[Settings, Depends(get_settings)],
     ) -> dict[str, object]:
         provider = build_model_provider(current_settings)
+        runtime = await provider.probe_runtime()
         try:
-            return await provider.chat(
+            selection = provider.select_model(requested_model=payload.selected_model, runtime_status=runtime)
+        except UnsupportedModelError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=build_model_error_detail(
+                    str(exc),
+                    build_model_selection_preview(current_settings.model_name, payload.selected_model),
+                    runtime,
+                ),
+            ) from exc
+
+        try:
+            answer = await provider.chat(
                 prompt=payload.prompt,
                 system_prompt=payload.system_prompt,
                 temperature=payload.temperature,
+                model_name=selection.selected_model,
             )
         except ProviderError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=502,
+                detail=build_model_error_detail(str(exc), selection, runtime),
+            ) from exc
+
+        return {
+            "model": answer["model"],
+            "answer": answer["answer"],
+            "usage": answer["usage"],
+            "selection": selection.model_dump(),
+            "runtime_status": runtime.status,
+            "runtime_ready": runtime.ready,
+        }
 
     @app.post(f"{settings.api_prefix}/search")
     async def search(
@@ -151,7 +208,7 @@ def create_app() -> FastAPI:
         try:
             results = await provider.search(payload.query, payload.limit)
         except ProviderError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "search"}) from exc
         return {"results": [item.model_dump() for item in results]}
 
     @app.post(f"{settings.api_prefix}/fetch")
@@ -163,7 +220,7 @@ def create_app() -> FastAPI:
         try:
             document = await client.fetch(payload.url)
         except ProviderError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "fetch"}) from exc
         return document.model_dump()
 
     @app.post(f"{settings.api_prefix}/grounding/search-fetch")
@@ -186,7 +243,7 @@ def create_app() -> FastAPI:
                 preview_chars=current_settings.grounding_preview_chars,
             )
         except ProviderError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "grounding"}) from exc
 
         return grounding.model_dump()
 
@@ -198,6 +255,19 @@ def create_app() -> FastAPI:
         search_provider = build_search_provider(current_settings)
         fetch_client = build_fetcher_client(current_settings)
         model_provider = build_model_provider(current_settings)
+        runtime = await model_provider.probe_runtime()
+
+        try:
+            selection = model_provider.select_model(requested_model=payload.selected_model, runtime_status=runtime)
+        except UnsupportedModelError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=build_model_error_detail(
+                    str(exc),
+                    build_model_selection_preview(current_settings.model_name, payload.selected_model),
+                    runtime,
+                ),
+            ) from exc
 
         try:
             grounding, grounding_context = await build_grounding_bundle(
@@ -211,7 +281,7 @@ def create_app() -> FastAPI:
                 preview_chars=current_settings.grounding_preview_chars,
             )
         except ProviderError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "grounding"}) from exc
 
         if not grounding.fetched_sources or not grounding_context.strip():
             return {
@@ -220,6 +290,9 @@ def create_app() -> FastAPI:
                 "model": None,
                 "usage": {},
                 "model_error": None,
+                "selection": selection.model_dump(),
+                "runtime_status": runtime.status,
+                "runtime_ready": runtime.ready,
                 "grounding": grounding.model_dump(),
             }
 
@@ -234,6 +307,7 @@ def create_app() -> FastAPI:
                 prompt=grounded_request.prompt,
                 system_prompt=grounded_request.system_prompt,
                 temperature=grounded_request.temperature,
+                model_name=selection.selected_model,
             )
             return {
                 "answer_status": "grounded",
@@ -241,15 +315,21 @@ def create_app() -> FastAPI:
                 "model": answer["model"],
                 "usage": answer["usage"],
                 "model_error": None,
+                "selection": selection.model_dump(),
+                "runtime_status": runtime.status,
+                "runtime_ready": runtime.ready,
                 "grounding": grounding.model_dump(),
             }
         except ProviderError as exc:
             return {
                 "answer_status": "model_error",
                 "answer": None,
-                "model": current_settings.model_name,
+                "model": selection.selected_model,
                 "usage": {},
                 "model_error": str(exc),
+                "selection": selection.model_dump(),
+                "runtime_status": runtime.status,
+                "runtime_ready": runtime.ready,
                 "grounding": grounding.model_dump(),
             }
 

@@ -5,7 +5,7 @@
 AnonExplo uses a local-first, privacy-first service layout:
 
 - `ui`
-  - local browser interface for prompts, provider status, and grounding inspection
+  - local browser interface for prompts, model selection, provider status, and grounding inspection
 - `backend`
   - orchestrator that owns provider routing and exposes a stable local API
 - `model-backend`
@@ -86,8 +86,9 @@ This keeps future runtime changes small. A new model runtime should usually mean
 ### Plain prompt flow
 
 1. UI sends a prompt to the backend.
-2. Backend forwards the request to the configured model adapter.
-3. Backend returns the model response to the UI.
+2. UI may include a request-level model selection sourced from the runtime-advertised model list.
+3. Backend validates that selection against the runtime when possible and forwards the request to the model adapter.
+4. Backend returns the model response plus selection metadata to the UI.
 
 ### Grounded search flow
 
@@ -96,8 +97,8 @@ This keeps future runtime changes small. A new model runtime should usually mean
 3. Backend selects result URLs to fetch.
 4. Backend calls the fetcher service for readable page text.
 5. Backend deduplicates sources, applies bounded context limits, and packages structured source metadata plus fetch errors.
-6. Backend can return the grounding bundle directly or use it to call the configured model adapter for a grounded answer.
-7. UI shows the grounded answer, the selected sources, and any per-source fetch failures.
+6. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
+7. UI shows the grounded answer, the selected model, the selected sources, and any per-source fetch failures.
 
 ## Why The Fetcher Is Separate
 
