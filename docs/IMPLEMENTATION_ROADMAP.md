@@ -51,7 +51,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## In-Progress Work
 
-- Commit, push, branch comparison, and merge flow for the `foundation-bootstrap` branch.
+- None inside the repo contents. The remaining work is the external Git workflow to land this branch.
 
 ## Open Questions / Blockers
 
@@ -88,16 +88,14 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Exact Next Steps
 
-1. Review the generated diff carefully.
-2. Commit the branch with clear messages.
-3. Push `stamos/foundation-bootstrap`.
-4. Compare against `main`.
-5. Merge to `main` if the diff still looks correct.
-6. Delete the merged feature branch locally and remotely.
+1. Start the next branch from updated `main` as `stamos/grounding-vertical-slice`.
+2. Turn the current search-and-fetch preview into a more robust grounded-context pipeline with better result selection and error reporting.
+3. Finalize one host-validated model runtime profile and documented provisioning flow.
 
 ## Handoff Notes For A Fresh Codex Thread
 
 - Read `AGENTS.md` first.
 - Then read this roadmap and `docs/INSTRUCTIONS_AND_NOTES.md`.
 - The repo currently contains a secure foundation scaffold, not a fully integrated local model stack.
-- The next thread should either finish the branch workflow if it was interrupted, or start the `grounding-vertical-slice` milestone after verifying `main` is clean.
+- The first milestone is intentionally narrow: protocol, docs, Docker boundaries, a minimal UI, a provider-aware backend, and a fetch service.
+- The next implementation thread should begin with `stamos/grounding-vertical-slice` after confirming `main` is clean.
