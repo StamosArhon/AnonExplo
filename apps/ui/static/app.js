@@ -1,5 +1,28 @@
 const STORAGE_KEY = "anonexplo.selectedModel";
 
+const WORKSPACES = {
+  "workspace-chat": {
+    title: "Direct Chat",
+    copy: "Prompt the selected local model while the stack details stay present but quieter.",
+    focusId: "prompt-input",
+  },
+  "workspace-grounding": {
+    title: "Grounded Answer",
+    copy: "Search, fetch, and synthesize from readable source text without losing the sources.",
+    focusId: "grounding-query",
+  },
+  "workspace-fetch": {
+    title: "Fetch Inspector",
+    copy: "Inspect readable article extraction before you hand anything off to the model.",
+    focusId: "fetch-url",
+  },
+  "workspace-stack": {
+    title: "Stack Snapshot",
+    copy: "Review runtime readiness, provider routing, and local entrypoints in one place.",
+    focusId: "refresh-status",
+  },
+};
+
 async function getConfig() {
   const response = await fetch("/config.json");
   if (!response.ok) {
@@ -65,10 +88,10 @@ function buildBanner(title, message, type = "warning", extra = "") {
 }
 
 function getSelectionStatusClass(status) {
-  if (status === "ready") {
+  if (status === "ready" || status === "ok" || status === "grounded") {
     return "ok";
   }
-  if (status === "unreachable" || status === "invalid_response") {
+  if (status === "unreachable" || status === "invalid_response" || status === "model_error") {
     return "error";
   }
   return "warn";
@@ -122,10 +145,62 @@ function setStoredSelectedModel(value) {
   }
 }
 
+function getTimestamp() {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+}
+
+function createMessage(role, content, tone = "default") {
+  return {
+    role,
+    content,
+    tone,
+    time: getTimestamp(),
+  };
+}
+
+function renderConversation(target, messages) {
+  if (!messages.length) {
+    target.innerHTML = '<div class="empty-state">No messages yet.</div>';
+    return;
+  }
+
+  target.innerHTML = messages
+    .map((message) => {
+      const roleLabel = message.role === "user" ? "You" : "Assistant";
+      const rowClass = message.role === "user" ? "message-row-user" : "message-row-assistant";
+      const cardClass = message.role === "user" ? "message-card-user" : "message-card-assistant";
+      const toneClass =
+        message.tone === "pending"
+          ? "message-pending"
+          : message.tone === "error"
+            ? "message-error"
+            : "";
+
+      return `
+        <div class="message-row ${rowClass}">
+          <article class="message-card ${cardClass} ${toneClass}">
+            <div class="message-meta">
+              <span class="message-role">${escapeHtml(roleLabel)}</span>
+              <span class="message-time">${escapeHtml(message.time || "")}</span>
+            </div>
+            <div class="message-copy">${escapeHtml(message.content || "")}</div>
+          </article>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function renderModelSelector(selectElement, noteElement, snapshot, selectedModel) {
   const options = [];
+
   if (!snapshot.availableModels.length) {
-    options.push(`<option value="${escapeHtml(snapshot.configuredModel)}">${escapeHtml(snapshot.configuredModel)}</option>`);
+    options.push(
+      `<option value="${escapeHtml(snapshot.configuredModel)}">${escapeHtml(snapshot.configuredModel)}</option>`,
+    );
   } else {
     for (const model of snapshot.availableModels) {
       const selected = model.id === selectedModel ? " selected" : "";
@@ -141,6 +216,45 @@ function renderModelSelector(selectElement, noteElement, snapshot, selectedModel
       : "Requests are overriding the configured default model for this browser session.";
 }
 
+function renderSidebarSnapshot(runtimeTarget, glanceTarget, snapshot, selectedModel) {
+  const runtimeStatus = snapshot.runtime.status || "unknown";
+  runtimeTarget.innerHTML = `
+    ${buildChip("Runtime", runtimeStatus, getSelectionStatusClass(runtimeStatus))}
+    ${buildChip("Search", snapshot.providers.search?.provider || "unknown", "muted")}
+  `;
+
+  glanceTarget.innerHTML = `
+    <div class="glance-line"><span>Selected model</span><strong>${escapeHtml(selectedModel || snapshot.configuredModel)}</strong></div>
+    <div class="glance-line"><span>Configured default</span><strong>${escapeHtml(snapshot.configuredModel)}</strong></div>
+    <div class="glance-line"><span>Model provider</span><strong>${escapeHtml(snapshot.providers.model?.provider || "unknown")}</strong></div>
+    <div class="glance-line"><span>Fetch path</span><strong>${escapeHtml(snapshot.providers.fetch?.base_url || "unknown")}</strong></div>
+  `;
+}
+
+function setHeaderChip(element, text, type = "muted") {
+  element.textContent = text;
+  element.className = `context-chip chip-${type}`;
+}
+
+function renderTopbarSnapshot(config, state, elements) {
+  setHeaderChip(elements.environmentChip, `Environment · ${config.environment}`, "muted");
+  setHeaderChip(
+    elements.runtimeChip,
+    `Runtime · ${state.snapshot.runtime.status || "unknown"}`,
+    getSelectionStatusClass(state.snapshot.runtime.status || "unknown"),
+  );
+  setHeaderChip(
+    elements.modelChip,
+    `Model · ${state.selectedModel || state.snapshot.configuredModel}`,
+    "active",
+  );
+  setHeaderChip(
+    elements.searchChip,
+    `Search · ${state.snapshot.providers.search?.provider || "unknown"}`,
+    "muted",
+  );
+}
+
 function renderRuntimeSummary(target, runtime) {
   const availableModels = Array.isArray(runtime.available_models) ? runtime.available_models : [];
   if (!runtime.status) {
@@ -152,6 +266,7 @@ function renderRuntimeSummary(target, runtime) {
     <div>${buildChip("Status", runtime.status, getSelectionStatusClass(runtime.status))}</div>
     <div>${buildChip("Reachable", runtime.reachable ? "yes" : "no", runtime.reachable ? "ok" : "error")}</div>
     <div>${buildChip("Advertised", availableModels.length, availableModels.length ? "ok" : "warn")}</div>
+    <div class="meta">${escapeHtml(runtime.checked_url || "unknown")}</div>
   `;
 }
 
@@ -166,6 +281,12 @@ function renderProviderSummary(target, snapshot) {
 
 function renderStatusPanel(target, snapshot, selectedModel) {
   const runtime = snapshot.runtime;
+  const backendClass =
+    snapshot.health.status === "ok"
+      ? "ok"
+      : snapshot.health.status === "degraded"
+        ? "warn"
+        : "error";
   const advertisedModels = snapshot.availableModels
     .map((item) =>
       buildChip(item.id, item.id === selectedModel ? "selected" : "available", item.id === selectedModel ? "active" : "muted"),
@@ -173,10 +294,9 @@ function renderStatusPanel(target, snapshot, selectedModel) {
     .join("");
 
   const cards = [
-    `<div class="status-card"><strong>Backend status:</strong> <span class="${snapshot.health.status === "ok" ? "ok" : "error"}">${escapeHtml(snapshot.health.status)}</span></div>`,
+    `<div class="status-card"><strong>Backend status:</strong> <span class="${backendClass}">${escapeHtml(snapshot.health.status)}</span></div>`,
     `<div class="status-card"><strong>Configured default:</strong> ${escapeHtml(snapshot.configuredModel)}</div>`,
     `<div class="status-card"><strong>Selected for requests:</strong> ${escapeHtml(selectedModel || snapshot.configuredModel)}</div>`,
-    `<div class="status-card"><strong>Runtime checked at:</strong> ${escapeHtml(runtime.checked_url || "unknown")}</div>`,
   ];
 
   if (runtime.error) {
@@ -190,17 +310,16 @@ function renderStatusPanel(target, snapshot, selectedModel) {
   target.innerHTML = cards.join("");
 }
 
-function renderChatSuccess(target, metaTarget, payload) {
+function renderChatSuccess(metaTarget, payload) {
   metaTarget.innerHTML = `
     ${buildChip("Selected", payload.selection.selected_model, "active")}
     ${buildChip("Configured", payload.selection.configured_model, "muted")}
     ${buildChip("Runtime", payload.runtime_status, getSelectionStatusClass(payload.runtime_status))}
     ${buildChip("Usage", payload.usage.total_tokens || 0, "muted")}
   `;
-  target.textContent = payload.answer || "(empty response)";
 }
 
-function renderChatError(target, metaTarget, error) {
+function renderChatError(metaTarget, error) {
   const detail = error.detail || {};
   const selection = detail.selection || {};
   const runtime = detail.runtime || {};
@@ -209,7 +328,6 @@ function renderChatError(target, metaTarget, error) {
     ${selection.configured_model ? buildChip("Configured", selection.configured_model, "muted") : ""}
     ${runtime.status ? buildChip("Runtime", runtime.status, getSelectionStatusClass(runtime.status)) : ""}
   `;
-  target.innerHTML = buildBanner("Chat request failed", error.message, "error");
 }
 
 function renderFetchSuccess(target, metaTarget, payload) {
@@ -218,6 +336,7 @@ function renderFetchSuccess(target, metaTarget, payload) {
     ${buildChip("Chars", payload.content_char_count || 0, "muted")}
     ${buildChip("Words", payload.word_count || 0, "muted")}
   `;
+
   target.innerHTML = `
     <h3>${escapeHtml(payload.title || "Untitled")}</h3>
     <p class="meta">${escapeHtml(payload.final_url || payload.requested_url || "")}</p>
@@ -231,7 +350,7 @@ function renderFetchError(target, metaTarget, error) {
   target.innerHTML = buildBanner("Fetch request failed", error.message, "error");
 }
 
-function renderGrounding(summaryTarget, metaTarget, answerTarget, errorsTarget, sourcesTarget, payload) {
+function renderGroundingSuccess(metaTarget, summaryTarget, errorsTarget, sourcesTarget, payload) {
   const grounding = payload.grounding || payload;
   const fetchedById = new Map((grounding.fetched_sources || []).map((item) => [item.source_id, item]));
   const groupedErrors = grounding.errors || [];
@@ -240,7 +359,7 @@ function renderGrounding(summaryTarget, metaTarget, answerTarget, errorsTarget, 
     ${payload.selection ? buildChip("Selected", payload.selection.selected_model, "active") : ""}
     ${payload.selection ? buildChip("Configured", payload.selection.configured_model, "muted") : ""}
     ${payload.runtime_status ? buildChip("Runtime", payload.runtime_status, getSelectionStatusClass(payload.runtime_status)) : ""}
-    ${buildChip("Answer state", payload.answer_status || "preview", payload.answer_status === "grounded" ? "ok" : payload.answer_status === "model_error" ? "error" : "warn")}
+    ${buildChip("Answer state", payload.answer_status || "preview", getSelectionStatusClass(payload.answer_status || "preview"))}
   `;
 
   summaryTarget.innerHTML = `
@@ -251,24 +370,6 @@ function renderGrounding(summaryTarget, metaTarget, answerTarget, errorsTarget, 
     <div class="status-card"><strong>Failures:</strong> ${escapeHtml(grounding.summary.failed_sources)}</div>
     <div class="status-card"><strong>Context chars:</strong> ${escapeHtml(grounding.summary.grounding_characters)}</div>
   `;
-
-  if (payload.answer_status === "grounded") {
-    answerTarget.textContent = payload.answer || "(empty grounded answer)";
-  } else if (payload.answer_status === "insufficient_sources") {
-    answerTarget.innerHTML = buildBanner(
-      "No grounded answer yet",
-      "The search completed, but no fetched source text was available for model synthesis.",
-      "warning",
-    );
-  } else if (payload.answer_status === "model_error") {
-    answerTarget.innerHTML = buildBanner(
-      "Model synthesis failed",
-      payload.model_error || "The sources were fetched, but the model request failed.",
-      "error",
-    );
-  } else {
-    answerTarget.textContent = "Grounding preview generated without model synthesis.";
-  }
 
   if (groupedErrors.length) {
     errorsTarget.innerHTML = groupedErrors
@@ -326,7 +427,7 @@ function renderGrounding(summaryTarget, metaTarget, answerTarget, errorsTarget, 
     .join("");
 }
 
-function renderGroundingError(answerTarget, metaTarget, errorsTarget, summaryTarget, sourcesTarget, error) {
+function renderGroundingError(metaTarget, summaryTarget, errorsTarget, sourcesTarget, error) {
   const detail = error.detail || {};
   const selection = detail.selection || {};
   const runtime = detail.runtime || {};
@@ -336,10 +437,49 @@ function renderGroundingError(answerTarget, metaTarget, errorsTarget, summaryTar
     ${selection.configured_model ? buildChip("Configured", selection.configured_model, "muted") : ""}
     ${runtime.status ? buildChip("Runtime", runtime.status, getSelectionStatusClass(runtime.status)) : ""}
   `;
-  answerTarget.innerHTML = buildBanner("Grounded answer failed", error.message, "error");
-  errorsTarget.innerHTML = "";
   summaryTarget.innerHTML = "";
+  errorsTarget.innerHTML = buildBanner("Grounded answer failed", error.message, "error");
   sourcesTarget.innerHTML = "";
+}
+
+function buildGroundingAssistantText(payload) {
+  if (payload.answer_status === "grounded") {
+    return payload.answer || "(empty grounded answer)";
+  }
+  if (payload.answer_status === "insufficient_sources") {
+    return "Search finished, but no fetched source text was available for model synthesis.";
+  }
+  if (payload.answer_status === "model_error") {
+    return payload.model_error || "The sources were fetched, but model synthesis failed.";
+  }
+  return "Grounding preview generated without model synthesis.";
+}
+
+function setActiveWorkspace(state, workspaceId, elements) {
+  state.activeWorkspace = workspaceId;
+
+  for (const [id] of Object.entries(WORKSPACES)) {
+    const section = document.getElementById(id);
+    section.hidden = id !== workspaceId;
+  }
+
+  for (const button of document.querySelectorAll("[data-workspace-target]")) {
+    button.classList.toggle("active", button.dataset.workspaceTarget === workspaceId);
+  }
+
+  elements.workspaceTitle.textContent = WORKSPACES[workspaceId].title;
+  elements.workspaceCopy.textContent = WORKSPACES[workspaceId].copy;
+}
+
+function focusActiveWorkspace(state) {
+  const focusId = WORKSPACES[state.activeWorkspace]?.focusId;
+  if (!focusId) {
+    return;
+  }
+  const focusTarget = document.getElementById(focusId);
+  if (focusTarget) {
+    focusTarget.focus();
+  }
 }
 
 async function main() {
@@ -348,34 +488,65 @@ async function main() {
   const state = {
     snapshot: null,
     selectedModel: getStoredSelectedModel(),
+    activeWorkspace: "workspace-chat",
+    messages: {
+      chat: [
+        createMessage(
+          "assistant",
+          "Prompt the selected local model from here. Switch models from the sidebar and keep the rest of the stack quiet until you need it.",
+        ),
+      ],
+      grounding: [
+        createMessage(
+          "assistant",
+          "Use grounded answers when you want search, readable page fetches, and source inspection to stay attached to the answer.",
+        ),
+      ],
+    },
   };
 
-  const environmentChip = document.getElementById("environment-chip");
-  const runtimeChip = document.getElementById("runtime-chip");
-  const modelSelect = document.getElementById("model-select");
-  const modelSelectionNote = document.getElementById("model-selection-note");
-  const configuredModel = document.getElementById("configured-model");
-  const runtimeNote = document.getElementById("runtime-note");
-  const runtimeSummary = document.getElementById("runtime-summary");
-  const providerSummary = document.getElementById("provider-summary");
-  const statusOutput = document.getElementById("status-output");
+  const elements = {
+    environmentChip: document.getElementById("environment-chip"),
+    runtimeChip: document.getElementById("runtime-chip"),
+    modelChip: document.getElementById("model-chip"),
+    searchChip: document.getElementById("search-chip"),
+    workspaceTitle: document.getElementById("active-workspace-title"),
+    workspaceCopy: document.getElementById("active-workspace-copy"),
+    modelSelect: document.getElementById("model-select"),
+    modelSelectionNote: document.getElementById("model-selection-note"),
+    sidebarRuntimeStatus: document.getElementById("sidebar-runtime-status"),
+    sidebarStackGlance: document.getElementById("sidebar-stack-glance"),
+    configuredModel: document.getElementById("configured-model"),
+    runtimeNote: document.getElementById("runtime-note"),
+    runtimeSummary: document.getElementById("runtime-summary"),
+    providerSummary: document.getElementById("provider-summary"),
+    statusOutput: document.getElementById("status-output"),
+    chatMeta: document.getElementById("chat-meta"),
+    chatOutput: document.getElementById("chat-output"),
+    fetchMeta: document.getElementById("fetch-meta"),
+    fetchOutput: document.getElementById("fetch-output"),
+    groundingMeta: document.getElementById("grounding-meta"),
+    groundingAnswer: document.getElementById("grounding-answer"),
+    groundingErrors: document.getElementById("grounding-errors"),
+    groundingSummary: document.getElementById("grounding-summary"),
+    groundingOutput: document.getElementById("grounding-output"),
+    openSearchLink: document.getElementById("open-search-link"),
+    stackSearchLink: document.getElementById("stack-search-link"),
+  };
 
-  const chatMeta = document.getElementById("chat-meta");
-  const chatOutput = document.getElementById("chat-output");
+  const standaloneSearchUrl =
+    config.standaloneSearchUrl ||
+    `${window.location.protocol}//${window.location.hostname}:8085`;
+  elements.openSearchLink.href = standaloneSearchUrl;
+  elements.stackSearchLink.href = standaloneSearchUrl;
+  elements.environmentChip.textContent = `Environment · ${config.environment}`;
 
-  const fetchMeta = document.getElementById("fetch-meta");
-  const fetchOutput = document.getElementById("fetch-output");
-
-  const groundingMeta = document.getElementById("grounding-meta");
-  const groundingAnswer = document.getElementById("grounding-answer");
-  const groundingErrors = document.getElementById("grounding-errors");
-  const groundingSummary = document.getElementById("grounding-summary");
-  const groundingOutput = document.getElementById("grounding-output");
-
-  environmentChip.textContent = `Environment: ${config.environment}`;
+  renderConversation(elements.chatOutput, state.messages.chat);
+  renderConversation(elements.groundingAnswer, state.messages.grounding);
+  setActiveWorkspace(state, state.activeWorkspace, elements);
 
   async function refreshSnapshot() {
-    statusOutput.innerHTML = '<div class="status-card">Refreshing local workbench snapshot...</div>';
+    elements.statusOutput.innerHTML = '<div class="status-card">Refreshing local workbench snapshot...</div>';
 
     const [health, providers, modelsPayload] = await Promise.all([
       fetchJson(`${apiBaseUrl}/health`),
@@ -387,22 +558,35 @@ async function main() {
     state.selectedModel = chooseSelectedModel(state.snapshot, state.selectedModel);
     setStoredSelectedModel(state.selectedModel);
 
-    renderModelSelector(modelSelect, modelSelectionNote, state.snapshot, state.selectedModel);
-    configuredModel.textContent = state.snapshot.configuredModel;
-    runtimeChip.textContent = `Runtime: ${state.snapshot.runtime.status || "unknown"}`;
-    runtimeChip.className = `hero-meta hero-meta-secondary chip-${getSelectionStatusClass(state.snapshot.runtime.status || "unknown")}`;
-    runtimeNote.textContent = state.snapshot.runtime.error || "Runtime readiness is checked against the live model endpoint.";
-    renderRuntimeSummary(runtimeSummary, state.snapshot.runtime);
-    renderProviderSummary(providerSummary, state.snapshot);
-    renderStatusPanel(statusOutput, state.snapshot, state.selectedModel);
+    renderModelSelector(elements.modelSelect, elements.modelSelectionNote, state.snapshot, state.selectedModel);
+    renderSidebarSnapshot(
+      elements.sidebarRuntimeStatus,
+      elements.sidebarStackGlance,
+      state.snapshot,
+      state.selectedModel,
+    );
+    renderTopbarSnapshot(config, state, elements);
+    elements.configuredModel.textContent = state.snapshot.configuredModel;
+    elements.runtimeNote.textContent =
+      state.snapshot.runtime.error || "Runtime readiness is checked against the live model endpoint.";
+    renderRuntimeSummary(elements.runtimeSummary, state.snapshot.runtime);
+    renderProviderSummary(elements.providerSummary, state.snapshot);
+    renderStatusPanel(elements.statusOutput, state.snapshot, state.selectedModel);
   }
 
-  modelSelect.addEventListener("change", () => {
-    state.selectedModel = modelSelect.value;
+  elements.modelSelect.addEventListener("change", () => {
+    state.selectedModel = elements.modelSelect.value;
     setStoredSelectedModel(state.selectedModel);
     if (state.snapshot) {
-      renderModelSelector(modelSelect, modelSelectionNote, state.snapshot, state.selectedModel);
-      renderStatusPanel(statusOutput, state.snapshot, state.selectedModel);
+      renderModelSelector(elements.modelSelect, elements.modelSelectionNote, state.snapshot, state.selectedModel);
+      renderSidebarSnapshot(
+        elements.sidebarRuntimeStatus,
+        elements.sidebarStackGlance,
+        state.snapshot,
+        state.selectedModel,
+      );
+      renderTopbarSnapshot(config, state, elements);
+      renderStatusPanel(elements.statusOutput, state.snapshot, state.selectedModel);
     }
   });
 
@@ -410,74 +594,143 @@ async function main() {
     try {
       await refreshSnapshot();
     } catch (error) {
-      statusOutput.innerHTML = buildBanner("Snapshot refresh failed", error.message, "error");
-      runtimeChip.textContent = "Runtime: refresh failed";
+      elements.statusOutput.innerHTML = buildBanner("Snapshot refresh failed", error.message, "error");
+      setHeaderChip(elements.runtimeChip, "Runtime · refresh failed", "error");
+      elements.sidebarRuntimeStatus.innerHTML = buildChip("Runtime", "refresh failed", "error");
     }
   });
 
+  document.getElementById("focus-composer").addEventListener("click", () => {
+    focusActiveWorkspace(state);
+  });
+
+  for (const button of document.querySelectorAll("[data-workspace-target]")) {
+    button.addEventListener("click", () => {
+      setActiveWorkspace(state, button.dataset.workspaceTarget, elements);
+      focusActiveWorkspace(state);
+    });
+  }
+
   document.getElementById("chat-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    chatMeta.innerHTML = "";
-    chatOutput.textContent = "Waiting for the local model...";
+    const promptInput = document.getElementById("prompt-input");
+    const prompt = promptInput.value.trim();
+    if (!prompt) {
+      elements.chatMeta.innerHTML = buildChip("Prompt", "required", "warn");
+      return;
+    }
+
+    state.messages.chat.push(createMessage("user", prompt), createMessage("assistant", "Waiting for the local model...", "pending"));
+    renderConversation(elements.chatOutput, state.messages.chat);
+    elements.chatMeta.innerHTML = "";
+    promptInput.value = "";
 
     try {
       const payload = {
-        prompt: document.getElementById("prompt-input").value,
+        prompt,
         system_prompt: document.getElementById("system-input").value || null,
         selected_model: state.selectedModel || null,
       };
       const data = await requestJson(`${apiBaseUrl}/model/chat`, payload);
-      renderChatSuccess(chatOutput, chatMeta, data);
+      state.messages.chat[state.messages.chat.length - 1] = createMessage(
+        "assistant",
+        data.answer || "(empty response)",
+      );
+      renderConversation(elements.chatOutput, state.messages.chat);
+      renderChatSuccess(elements.chatMeta, data);
       await refreshSnapshot();
     } catch (error) {
-      renderChatError(chatOutput, chatMeta, error);
+      state.messages.chat[state.messages.chat.length - 1] = createMessage("assistant", error.message, "error");
+      renderConversation(elements.chatOutput, state.messages.chat);
+      renderChatError(elements.chatMeta, error);
     }
   });
 
   document.getElementById("fetch-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    fetchMeta.innerHTML = "";
-    fetchOutput.textContent = "Fetching and parsing article...";
+    const urlInput = document.getElementById("fetch-url");
+    const url = urlInput.value.trim();
+    if (!url) {
+      elements.fetchMeta.innerHTML = buildChip("URL", "required", "warn");
+      return;
+    }
+
+    elements.fetchMeta.innerHTML = "";
+    elements.fetchOutput.innerHTML = '<div class="empty-state">Fetching and parsing article...</div>';
 
     try {
-      const payload = {
-        url: document.getElementById("fetch-url").value,
-      };
-      const data = await requestJson(`${apiBaseUrl}/fetch`, payload);
-      renderFetchSuccess(fetchOutput, fetchMeta, data);
+      const data = await requestJson(`${apiBaseUrl}/fetch`, { url });
+      renderFetchSuccess(elements.fetchOutput, elements.fetchMeta, data);
     } catch (error) {
-      renderFetchError(fetchOutput, fetchMeta, error);
+      renderFetchError(elements.fetchOutput, elements.fetchMeta, error);
     }
   });
 
   document.getElementById("grounding-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    groundingMeta.innerHTML = "";
-    groundingErrors.innerHTML = "";
-    groundingSummary.innerHTML = "";
-    groundingOutput.innerHTML = "";
-    groundingAnswer.textContent = "Generating grounded answer...";
+    const queryInput = document.getElementById("grounding-query");
+    const query = queryInput.value.trim();
+    if (!query) {
+      elements.groundingMeta.innerHTML = buildChip("Query", "required", "warn");
+      return;
+    }
+
+    state.messages.grounding.push(
+      createMessage("user", query),
+      createMessage("assistant", "Searching, fetching, and assembling readable source context...", "pending"),
+    );
+    renderConversation(elements.groundingAnswer, state.messages.grounding);
+    elements.groundingMeta.innerHTML = "";
+    elements.groundingErrors.innerHTML = "";
+    elements.groundingSummary.innerHTML = "";
+    elements.groundingOutput.innerHTML = "";
+    queryInput.value = "";
 
     try {
       const payload = {
-        query: document.getElementById("grounding-query").value,
+        query,
         search_limit: Number(document.getElementById("search-limit").value),
         fetch_limit: Number(document.getElementById("fetch-limit").value),
         selected_model: state.selectedModel || null,
       };
       const data = await requestJson(`${apiBaseUrl}/grounding/answer`, payload);
-      renderGrounding(groundingSummary, groundingMeta, groundingAnswer, groundingErrors, groundingOutput, data);
+      state.messages.grounding[state.messages.grounding.length - 1] = createMessage(
+        "assistant",
+        buildGroundingAssistantText(data),
+        data.answer_status === "model_error" ? "error" : "default",
+      );
+      renderConversation(elements.groundingAnswer, state.messages.grounding);
+      renderGroundingSuccess(
+        elements.groundingMeta,
+        elements.groundingSummary,
+        elements.groundingErrors,
+        elements.groundingOutput,
+        data,
+      );
       await refreshSnapshot();
     } catch (error) {
-      renderGroundingError(groundingAnswer, groundingMeta, groundingErrors, groundingSummary, groundingOutput, error);
+      state.messages.grounding[state.messages.grounding.length - 1] = createMessage(
+        "assistant",
+        error.message,
+        "error",
+      );
+      renderConversation(elements.groundingAnswer, state.messages.grounding);
+      renderGroundingError(
+        elements.groundingMeta,
+        elements.groundingSummary,
+        elements.groundingErrors,
+        elements.groundingOutput,
+        error,
+      );
     }
   });
 
   try {
     await refreshSnapshot();
   } catch (error) {
-    statusOutput.innerHTML = buildBanner("Initial snapshot failed", error.message, "error");
-    runtimeChip.textContent = "Runtime: unavailable";
+    elements.statusOutput.innerHTML = buildBanner("Initial snapshot failed", error.message, "error");
+    setHeaderChip(elements.runtimeChip, "Runtime · unavailable", "error");
+    elements.sidebarRuntimeStatus.innerHTML = buildChip("Runtime", "unavailable", "error");
   }
 }
 

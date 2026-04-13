@@ -67,6 +67,9 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Added a dedicated localhost gateway service so the UI and backend are reachable from the Windows host while the app services themselves stay on internal Docker networks.
 - Tightened validation to check real host reachability on `127.0.0.1:3000` and `127.0.0.1:8000`, not just Docker's intended port-binding metadata.
 - Added a localhost-only standalone SearXNG browser route through the host gateway so users can switch between direct SearXNG use and the grounded LLM workflow without exposing the search container directly.
+- Refreshed the local UI into a calmer sidebar-and-editorial shell that maps to the real workspaces the repo supports instead of pretending to have persisted chat sessions.
+- Added in-tab conversation-style rendering for direct chat and grounded answers while keeping persistent browser storage limited to the selected model id.
+- Added UI config support for the standalone SearXNG browser URL so the local shell does not hardcode that route.
 
 ## In-Progress Work
 
@@ -80,6 +83,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The standalone SearXNG browser route is intentionally specific to the bundled repo-managed `search-provider` service. If the backend is pointed at YaCy or another search provider, that does not automatically change the standalone browser endpoint.
 - Host firewall guidance has been documented conceptually, but not automated.
 - The current browser-side persistence is intentionally minimal and stores only the selected model id; there is still no prompt history or fetched-content storage policy.
+- The refreshed UI shell has been validated through the repo build and smoke path, but it still does not have browser-automation coverage for interaction regressions.
 - The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
 - The localhost gateway solves the current Docker Desktop host-access bug, but host-firewall and non-egress enforcement for host-facing support services still belong in the next hardening milestone.
 
@@ -100,6 +104,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Provider expansion is being done through adapters plus env-driven factories first, before adding more runtime-specific orchestration profiles, so the backend boundary stays cleaner than the Compose implementation details.
 - Docker Desktop on this machine did not reliably expose published ports for services attached only to `internal: true` bridge networks, so host access now goes through a dedicated localhost gateway instead of direct publishing on the UI and backend containers.
 - Standalone access to the bundled SearXNG web UI should use the same localhost gateway pattern as the UI and backend so the search container itself can stay unpublished on the host.
+- The UI can adopt a conversation-style shell as long as that presentation does not imply or introduce persistent local chat history without a deliberate privacy review.
 
 ## Security / Privacy Assumptions
 
@@ -112,8 +117,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Validation Status
 
-- `scripts/validate.ps1`: passed on 2026-04-13 after the standalone SearXNG gateway changes
-- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13 after the standalone SearXNG gateway changes
+- `scripts/validate.ps1`: passed on 2026-04-13 after the UI shell refresh changes
+- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13 after the UI shell refresh changes
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
@@ -123,6 +128,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
   - base-stack smoke validation for `ui`, `backend`, `fetcher`, and `search-provider`
   - container health and localhost port-binding inspection for the base stack
   - Windows host reachability checks for the standalone SearXNG UI on the localhost gateway
+  - UI image rebuild with the refreshed static shell and updated config payload
   - checksum verification for the default GGUF artifact
   - `llama.cpp` runtime startup with the pinned default GGUF
   - backend runtime-readiness probe against the live model service
@@ -147,6 +153,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The grounding flow is intentionally bounded and transparent: search, source selection, fetch, source packaging, and model synthesis are all visible in the UI and backend responses.
 - The backend and UI now expose model-runtime readiness separately from general backend health, which future branches should preserve.
 - The static UI now uses backend-provided runtime and model-catalog state to drive a browser-local model selector for chat and grounded-answer requests.
+- The UI shell now uses workspace navigation plus in-tab conversation-style rendering for direct chat and grounded answers, but it still does not persist prompt history.
 - The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
 - The repo now supports two localhost-only browser modes at once: the main AnonExplo UI on port `3000` and the bundled standalone SearXNG UI on port `8085`, both through the same low-privilege host gateway.
 - The next implementation thread should resume `stamos/ops-hardening` from a clean `main`.

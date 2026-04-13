@@ -35,6 +35,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Do not add debug logging that dumps prompts, full fetched article bodies, headers, or provider payloads by default.
 - If deeper logging is ever added for troubleshooting, it must be temporary and documented.
 - The local UI may remember only the selected model id in browser local storage; prompt history and fetched content must remain non-persistent by default.
+- The refreshed conversation-style UI shell may keep direct-chat and grounded-answer transcripts in browser memory for the current tab, but that transcript state must not be persisted across refreshes or browser restarts by default.
 - If `MODEL_PROVIDER=ollama` is used, keep `MODEL_BASE_URL` on a local or otherwise trusted private endpoint; do not silently treat a hosted Ollama API as equivalent to a local runtime from a privacy perspective.
 
 ## Fetcher Controls

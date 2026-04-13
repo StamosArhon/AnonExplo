@@ -21,6 +21,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - backend adapters for both SearXNG and YaCy search services
 - a localhost gateway service that makes the UI and backend reachable on Docker Desktop while keeping the app services on internal networks
 - an optional localhost-only SearXNG web UI route for standalone searching when you do not want the LLM workflow
+- a calmer sidebar-and-editorial UI shell that keeps the active model, search provider, and runtime visible without persisting prompt history
 
 ## Design Goals
 
@@ -93,8 +94,8 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 
 8. Optional: open the standalone SearXNG UI at `http://127.0.0.1:8085`.
 
-9. Use the local UI's grounded-answer panel to search, fetch, inspect sources, and synthesize an answer from retrieved page text.
-   The workbench keeps the selected model id in browser local storage so chat and grounded-answer requests stay aligned across refreshes.
+9. Use the local UI's workspaces to switch between direct chat, grounded answers, fetch inspection, and stack status.
+   The workbench keeps only the selected model id in browser local storage so chat and grounded-answer requests stay aligned across refreshes. The conversation-style layout itself remains in-memory only for the current browser tab.
 
 ## Provider Switching
 
@@ -145,8 +146,10 @@ The UI also surfaces per-source fetch failures and the exact source text slice u
 The local UI is still static and self-hosted, but it now behaves like a real workbench instead of a demo page:
 
 - it loads provider, runtime, and model-catalog state from the backend
-- it lets you choose the requested model for chat and grounded-answer requests
+- it uses a calmer sidebar-and-editorial shell inspired by local chat tools without pretending to store long-lived chat sessions
+- it lets you choose the requested model globally for chat and grounded-answer requests
 - it keeps that selected model id locally in the browser without storing prompts or fetched content
+- it keeps direct-chat and grounded-answer transcripts only in the current tab memory, not in persistent browser storage
 - it surfaces runtime readiness, configured default vs. request override, and clearer failure cards
 
 ## Llama.cpp Profile

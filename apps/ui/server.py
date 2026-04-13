@@ -16,6 +16,10 @@ class UIRequestHandler(SimpleHTTPRequestHandler):
             payload = {
                 "apiBaseUrl": os.environ.get("UI_API_BASE_URL", "http://127.0.0.1:8000/api/v1"),
                 "environment": os.environ.get("UI_ENVIRONMENT", "local"),
+                "standaloneSearchUrl": os.environ.get(
+                    "UI_STANDALONE_SEARCH_URL",
+                    "http://127.0.0.1:8085",
+                ),
             }
             body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
             self.send_response(200)

@@ -7,7 +7,7 @@ AnonExplo uses a local-first, privacy-first service layout:
 - `host-gateway`
   - localhost-only reverse proxy that exposes the UI, backend, and optional standalone SearXNG UI to the host without putting those app services directly on a non-internal Docker network
 - `ui`
-  - local browser interface for prompts, model selection, provider status, and grounding inspection
+  - local browser interface for prompts, model selection, provider status, grounding inspection, and in-tab conversation-style workspaces
 - `backend`
   - orchestrator that owns provider routing and exposes a stable local API
 - `model-backend`
@@ -103,6 +103,7 @@ The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` ser
 2. UI may include a request-level model selection sourced from the runtime-advertised model list.
 3. Backend validates that selection against the runtime when possible and forwards the request to the model adapter.
 4. Backend returns the model response plus selection metadata to the UI.
+5. The browser may present that exchange inside a local conversation-style shell, but the transcript remains in tab memory rather than persistent browser storage.
 
 ### Grounded search flow
 

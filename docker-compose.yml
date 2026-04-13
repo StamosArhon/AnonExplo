@@ -45,6 +45,7 @@ services:
       UI_HOST: 0.0.0.0
       UI_PORT: 8080
       UI_API_BASE_URL: http://127.0.0.1:${BACKEND_PORT:-8000}${API_PREFIX:-/api/v1}
+      UI_STANDALONE_SEARCH_URL: http://127.0.0.1:${SEARXNG_UI_PORT:-8085}
       UI_ENVIRONMENT: local
     depends_on:
       - backend
