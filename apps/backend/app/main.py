@@ -30,7 +30,7 @@ class ChatRequest(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1)
-    limit: int = Field(default=5, ge=1, le=10)
+    limit: int = Field(default=8, ge=1, le=10)
 
 
 class FetchRequest(BaseModel):
@@ -39,7 +39,7 @@ class FetchRequest(BaseModel):
 
 class GroundingRequest(BaseModel):
     query: str = Field(min_length=1)
-    search_limit: int = Field(default=5, ge=1, le=10)
+    search_limit: int = Field(default=6, ge=1, le=10)
     fetch_limit: int = Field(default=3, ge=1, le=5)
     system_prompt: str | None = None
     selected_model: str | None = Field(default=None, min_length=1)
@@ -70,6 +70,10 @@ def build_search_provider(settings: Settings) -> SearchProvider:
         return SearxngSearchProvider(
             base_url=settings.search_base_url,
             timeout_seconds=settings.search_request_timeout_seconds,
+            categories=settings.search_categories,
+            language=settings.search_language,
+            time_range=settings.search_time_range,
+            engines=settings.search_engines,
         )
 
     if settings.search_provider == "yacy":
@@ -161,6 +165,10 @@ def create_app() -> FastAPI:
                 "provider": current_settings.search_provider,
                 "base_url": current_settings.search_base_url,
                 "default_limit": current_settings.search_result_limit,
+                "categories": current_settings.search_categories,
+                "language": current_settings.search_language or "instance-default",
+                "time_range": current_settings.search_time_range or "none",
+                "engines": current_settings.search_engines or "instance-default",
             },
             "fetch": {
                 "base_url": current_settings.fetch_base_url,
@@ -308,7 +316,7 @@ def create_app() -> FastAPI:
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "grounding"}) from exc
 
-        if not grounding.fetched_sources or not grounding_context.strip():
+        if grounding.summary.context_mode == "none" or not grounding_context.strip():
             return {
                 "answer_status": "insufficient_sources",
                 "answer": None,
@@ -325,6 +333,7 @@ def create_app() -> FastAPI:
             query=payload.query,
             grounding_context=grounding_context,
             temperature=current_settings.grounding_model_temperature,
+            context_mode=grounding.summary.context_mode,
             additional_system_prompt=payload.system_prompt,
         )
 
@@ -335,8 +344,11 @@ def create_app() -> FastAPI:
                 temperature=grounded_request.temperature,
                 model_name=selection.selected_model,
             )
+            answer_status = "grounded"
+            if grounding.summary.context_mode == "search_snippets":
+                answer_status = "snippet_grounded"
             return {
-                "answer_status": "grounded",
+                "answer_status": answer_status,
                 "answer": answer["answer"],
                 "model": answer["model"],
                 "usage": answer["usage"],

@@ -409,17 +409,37 @@ class OllamaModelProvider:
 
 
 class SearxngSearchProvider:
-    def __init__(self, base_url: str, timeout_seconds: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout_seconds: float,
+        *,
+        categories: str = "general,news",
+        language: str = "all",
+        time_range: str = "",
+        engines: str = "",
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.categories = categories.strip()
+        self.language = language.strip()
+        self.time_range = time_range.strip()
+        self.engines = engines.strip()
 
     async def search(self, query: str, limit: int) -> list[SearchHit]:
         params = {
             "q": query,
             "format": "json",
-            "categories": "general",
-            "language": "auto",
+            "pageno": 1,
         }
+        if self.categories:
+            params["categories"] = self.categories
+        if self.language:
+            params["language"] = self.language
+        if self.time_range:
+            params["time_range"] = self.time_range
+        if self.engines:
+            params["engines"] = self.engines
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 response = await client.get(f"{self.base_url}/search", params=params)

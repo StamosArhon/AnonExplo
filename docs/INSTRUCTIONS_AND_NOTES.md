@@ -55,9 +55,12 @@
 - The current UI now stores browser-local direct chat history, the selected model id, and saved direct-chat or grounded-answer instructions in local storage on the same workstation.
 - Grounded-answer transcripts, fetched source details, and fetch-inspector output must stay transient unless a later milestone adds a privacy-reviewed storage design first.
 - Keep `Direct Chat` and `Grounded Answer` semantically explicit in both code and copy. Direct Chat is model only; Grounded Answer is the search plus fetch plus model workflow.
+- Grounded Answer now prefers fetched article text but may fall back to bounded search snippets when fetches fail. Treat `grounding.summary.context_mode` as the source of truth for which path was used.
+- The grounding summary's `selected_sources` count is now effectively "selected or attempted" because the backend can try later ranked sources after early fetch failures.
 - Request-level model selection should stay bounded to runtime-advertised models and should not mutate the backend's configured default model.
 - Do not reintroduce a backend orchestration dependency on one hard-coded search service name; provider switching should remain env-driven at the backend boundary.
 - Keep the host-facing UI and backend access path behind the dedicated localhost gateway unless there is a documented reason to publish app containers directly.
 - If the bundled SearXNG web UI is exposed for standalone use, route it through the same localhost gateway rather than publishing the search container directly.
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.
 - `scripts/validate.ps1` now enforces the intended Compose hardening model, including localhost-only publication, expected network membership, digest-pinned third-party images, and local-only CORS origins.
+- Some publishers and Wikipedia paths can still block fetches from the container runtime. The current fallback is explicit snippet-grounding, not silent prior-knowledge answering.

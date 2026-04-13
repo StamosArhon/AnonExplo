@@ -6,6 +6,9 @@ general:
 search:
   autocomplete: ""
   safe_search: 0
+  formats:
+    - html
+    - json
 
 server:
   public_instance: false

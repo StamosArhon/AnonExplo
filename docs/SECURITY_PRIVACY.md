@@ -21,6 +21,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Compose validation now checks expected network membership, localhost-only publication, digest-pinned third-party images, and local-only CORS origins before a branch is declared ready.
 - No remote frontend assets, fonts, telemetry, analytics, or CDNs are used.
 - Grounded model prompts use bounded source-context limits so fetched page text is not forwarded to the model without size controls.
+- If article fetches fail but search still returns usable snippets, the backend may now use bounded search-result snippets as an explicit fallback grounding mode instead of silently falling back to model prior knowledge.
 
 ## Secrets Handling
 
@@ -51,6 +52,7 @@ The fetcher is the most sensitive service because it has egress. Current guardra
 - non-HTML responses are rejected
 - extracted text is trimmed to a bounded size
 - grounded-answer prompts use only bounded excerpts of fetched source text
+- bounded search-result snippets may be used as a clearly labeled fallback when article fetches fail
 
 These controls reduce privacy leakage and resource abuse, but they are not a substitute for host firewall policy.
 

@@ -86,7 +86,7 @@ def normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def extract_document(html: str, source_url: str, max_chars: int) -> dict[str, str]:
+def extract_document(html: str, source_url: str, max_chars: int) -> dict[str, str | int]:
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript", "svg", "canvas", "nav", "form"]):
         tag.decompose()
@@ -123,7 +123,7 @@ def extract_document(html: str, source_url: str, max_chars: int) -> dict[str, st
     }
 
 
-async def fetch_html(url: str, settings: Settings) -> dict[str, str]:
+async def fetch_html(url: str, settings: Settings) -> dict[str, str | int]:
     headers = {
         "User-Agent": settings.fetch_user_agent,
         "Accept": "text/html,application/xhtml+xml",
@@ -162,7 +162,7 @@ async def health() -> dict[str, str]:
 async def fetch(
     payload: FetchRequest,
     settings: Annotated[Settings, Depends(get_settings)],
-) -> dict[str, str]:
+) -> dict[str, str | int]:
     try:
         validate_requested_url(payload.url)
         return await fetch_html(payload.url, settings)

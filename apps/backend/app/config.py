@@ -41,7 +41,14 @@ class Settings(BaseSettings):
         default="http://search-provider:8080",
         validation_alias="SEARCH_BASE_URL",
     )
-    search_result_limit: int = Field(default=5, validation_alias="SEARCH_RESULT_LIMIT")
+    search_result_limit: int = Field(default=8, validation_alias="SEARCH_RESULT_LIMIT")
+    search_categories: str = Field(
+        default="general,news",
+        validation_alias="SEARCH_CATEGORIES",
+    )
+    search_language: str = Field(default="all", validation_alias="SEARCH_LANGUAGE")
+    search_time_range: str = Field(default="", validation_alias="SEARCH_TIME_RANGE")
+    search_engines: str = Field(default="", validation_alias="SEARCH_ENGINES")
     search_request_timeout_seconds: float = Field(
         default=20.0,
         validation_alias="SEARCH_REQUEST_TIMEOUT_SECONDS",

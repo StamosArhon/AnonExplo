@@ -34,11 +34,13 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
    - tighten observability, host firewall guidance, backup, update, and maintenance flows
 8. `grounding-quality-tuning`
    - tune SearXNG defaults, grounded-source selection, and answer-citation behavior for better day-to-day grounded responses
+9. `fetcher-resilience`
+   - improve fetch success on hostile publishers, preserve explicit provenance, and add better operator guidance for fetch-path edge cases
 
 ## Current Phase
 
-- Active phase: `grounding-quality-tuning`
-- Goal: improve grounded-answer quality through search tuning, better source selection defaults, and clearer citation-oriented answer behavior
+- Active phase: `fetcher-resilience`
+- Goal: improve fetch success and content extraction quality on publishers that still block or degrade the current bounded fetch pipeline
 
 ## Active Branch
 
@@ -83,22 +85,31 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Added an operations and maintenance guide covering startup, update, recovery, Windows-host firewall guidance, and local backup notes.
 - Suppressed routine access logging in the repo-managed UI, backend, fetcher, and localhost gateway services where practical.
 - Hardened the bundled SearXNG service with a read-only root filesystem and a healthcheck so validation can treat it as a real service dependency rather than a process that merely stays running.
+- Added env-driven SearXNG query tuning for categories, language, optional time range, and optional engine selection so grounded current-events queries are less generic by default.
+- Reworked grounded-source selection to rank results by query relevance, preserve domain diversity where practical, and keep trying later candidates when earlier fetches fail.
+- Strengthened the grounded model prompt so the model cites source IDs, avoids prior-knowledge or knowledge-cutoff language, and reports insufficiency from the supplied material instead of guessing.
+- Added an explicit `context_mode` to grounding summaries so the backend and UI can distinguish fetched article text from search-snippet fallback.
+- Added a bounded search-snippet fallback path so grounded answers can stay source-derived even when article fetches fail, instead of silently drifting to model prior knowledge.
+- Fixed the fetcher's response typing so successful fetches no longer fail FastAPI response validation when integer count fields are returned.
+- Increased the localhost gateway timeout for backend requests so heavier grounded answer calls are less likely to die at the proxy before the backend finishes.
+- Updated the UI to surface grounding context mode and to show when a grounded answer used snippet fallback instead of fetched article text.
 
 ## In-Progress Work
 
-- None inside the repo contents. The next planned work is `grounding-quality-tuning`.
+- None inside the repo contents. The next planned work is `fetcher-resilience`.
 
 ## Open Questions / Blockers
 
 - The repo now validates a real GGUF load and chat probe, but it still does not record benchmark-style throughput numbers or token/sec measurements for the target hardware.
 - Existing local `.env` files created before this branch may need a manual refresh of the model-runtime keys if they still contain placeholder values.
-- The current SearXNG configuration is intentionally conservative and still needs deeper engine and limiter tuning in a later hardening pass.
+- Existing local `.env` files may also still carry the older `SEARCH_RESULT_LIMIT` value and may be missing the newer SearXNG tuning keys if they were created before this branch.
 - The standalone SearXNG browser route is intentionally specific to the bundled repo-managed `search-provider` service. If the backend is pointed at YaCy or another search provider, that does not automatically change the standalone browser endpoint.
 - Windows-host firewall guidance is now documented, but not automated or enforced outside the existing Docker network and localhost-binding model.
 - Direct chat history now lives in browser local storage by design; future work should decide whether that history needs an opt-out or export path without weakening the current privacy defaults.
 - The refreshed UI shell has been validated through the repo build and smoke path, but it still does not have browser-automation coverage for interaction regressions.
 - The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
-- The next quality milestone still needs to tune SearXNG defaults, grounded source selection, and citation behavior against real queries rather than only the current architectural baseline.
+- Some publishers, especially Wikipedia and other anti-bot-protected sites, can still reject direct fetches from the containerized fetcher. The current fallback is explicit snippet-grounding, but a stronger fetch-resilience pass is still needed.
+- Heavier grounded requests now survive the localhost gateway, but the repo still does not record performance baselines for search-plus-fetch-plus-model latency on the target hardware.
 
 ## Decisions Made And Why
 
@@ -122,6 +133,9 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The UI must keep Direct Chat and Grounded Answer explicit because only Grounded Answer uses SearXNG plus fetched source text.
 - The repo's Compose security model is now treated as enforceable policy in validation, not just as a documentation recommendation.
 - Quiet operational logging is preferred by default, so repo-managed services now suppress routine access logs where practical and surface only startup or error information unless an operator opts into deeper inspection.
+- Grounded search quality should be improved first through config-driven provider tuning, ranked source selection, and better prompts before adding heavier architectural changes.
+- Fetched article text remains the preferred grounding source, but explicit bounded search-snippet fallback is acceptable when article fetches fail, as long as the response surface keeps that context mode visible.
+- The localhost gateway should tolerate longer-running grounded-answer calls so the proxy does not fail before the backend has finished search, fetch, and model synthesis.
 
 ## Security / Privacy Assumptions
 
@@ -133,39 +147,41 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Logs should remain minimal and must not become a quiet store of prompts or fetched content.
 - Browser-local direct chat history is an intentional workstation-local privacy tradeoff and must stay purgeable from the UI.
 - The host's primary exposure control is still localhost-only port binding plus Docker network separation; Windows Firewall is a supporting control rather than a replacement for that model.
+- Search-snippet fallback is acceptable only as an explicit, bounded grounded mode; it must not silently become unbounded web-search context or a hidden substitute for fetcher isolation.
 
 ## Validation Status
 
-- `scripts/validate.ps1`: passed on 2026-04-13 after the ops-hardening changes
-- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13 after the ops-hardening changes
-- `scripts/ops-check.ps1`: passed on 2026-04-13 against the running local stack
+- `scripts/validate.ps1`: passed on 2026-04-14 during the grounding-quality-tuning branch
+- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the grounding-quality-tuning branch
+- `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
   - Compose-policy checks for localhost-only publication, expected network membership, healthchecks, read-only root filesystems, dropped capabilities, no-new-privileges, digest-pinned third-party images, and local-only CORS origins
   - Docker builds for `ui`, `backend`, and `fetcher`
-  - backend unit tests in the backend container
-  - fetcher unit tests in the fetcher container
+  - backend unit tests in the backend container, including search-tuning, ranked-source retry, and snippet-fallback coverage
+  - fetcher unit tests in the fetcher container, including typed integer field coverage for the fetch API response
   - `python -m py_compile apps/ui/server.py`
   - `node --check apps/ui/static/app.js`
   - base-stack smoke validation for `ui`, `backend`, `fetcher`, and `search-provider`
   - container health and localhost port-binding inspection for the base stack
   - Windows host reachability checks for the standalone SearXNG UI on the localhost gateway
-  - UI image rebuild with the refreshed static shell and updated config payload
+  - UI image rebuild with the refreshed static shell, context-mode status, and updated config payload
   - checksum verification for the default GGUF artifact
   - `llama.cpp` runtime startup with the pinned default GGUF
   - backend runtime-readiness probe against the live model service
   - a minimal OpenAI-compatible chat-completions probe against the live model runtime
+  - a manual live grounded-answer check on 2026-04-14 that returned a sourced answer for the query `When did the first israel-usa attack on Iran take place in 2026?` using the local SearXNG plus fetch pipeline
 - `scripts/bootstrap.ps1`: passed on 2026-04-13 and created the expected local `.env` plus data directories
 - `scripts/provision-default-model.ps1`: passed on 2026-04-13 and downloaded the default GGUF to `data/models/`
-- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-13 with provider-expansion coverage for `openai_compatible`, `ollama`, `searxng`, and `yacy`
-- `docker compose up -d --build host-gateway ui backend fetcher search-provider`: reached the UI on `http://127.0.0.1:3000`, the backend health endpoint on `http://127.0.0.1:8000/api/v1/health`, and the standalone SearXNG UI on `http://127.0.0.1:8085` from the Windows host on 2026-04-13
+- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 with coverage for `openai_compatible`, `ollama`, `searxng`, `yacy`, ranked-source retries, and snippet-grounded fallback
+- `docker compose up -d --build host-gateway ui backend fetcher search-provider`: reached the UI on `http://127.0.0.1:3000`, the backend health endpoint on `http://127.0.0.1:8000/api/v1/health`, and the standalone SearXNG UI on `http://127.0.0.1:8085` from the Windows host on 2026-04-14 before the validation script's cleanup step
 
 ## Exact Next Steps
 
-1. Start `stamos/grounding-quality-tuning` from a clean `main`.
-2. Tune the bundled SearXNG defaults and source-selection heuristics against real grounded-answer queries.
-3. Improve answer-citation behavior so grounded answers are more consistently source-forward and less likely to drift into generic model phrasing.
+1. Start `stamos/fetcher-resilience` from a clean `main`.
+2. Improve fetch success and extract quality on publishers that currently return thin pages, blocked responses, or anti-bot failures from the containerized fetcher.
+3. Decide whether the current fetcher needs a secondary reader strategy for blocked pages without weakening the privacy or least-privilege model.
 4. Decide whether the current browser-local direct chat history model needs an opt-out, export path, or stronger session labeling.
 
 ## Handoff Notes For A Fresh Codex Thread
@@ -174,14 +190,17 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Then read this roadmap and `docs/INSTRUCTIONS_AND_NOTES.md`.
 - The repo now includes a real grounded-answer vertical slice plus a validated `llama.cpp` runtime path with a tracked default GGUF source and checksum.
 - The grounding flow is intentionally bounded and transparent: search, source selection, fetch, source packaging, and model synthesis are all visible in the UI and backend responses.
+- Grounding summaries now expose `context_mode`, and the UI uses it to distinguish fetched article text from explicit snippet-fallback grounding.
 - The backend and UI now expose model-runtime readiness separately from general backend health, which future branches should preserve.
 - The static UI now uses backend-provided runtime and model-catalog state to drive a browser-local model selector for chat and grounded-answer requests.
 - The UI shell now uses workspace navigation plus in-tab conversation-style rendering for direct chat and grounded answers.
 - Direct chat history, the selected model id, and saved direct-chat or grounded-answer instructions are now stored in browser local storage; grounded details and fetch results remain transient.
 - Direct Chat does not call SearXNG or the fetcher. Grounded Answer is the explicit search plus fetch plus model workflow and should stay clearly documented in future branches.
+- Grounded Answer now ranks search results, retries later candidates after fetch failures, and may fall back to search snippets when publishers block fetches. That fallback is intentional and must stay explicit in both API responses and UI copy.
 - The repo now includes `docs/OPERATIONS_AND_MAINTENANCE.md` plus `scripts/ops-check.ps1` for local maintenance and recovery work.
 - `scripts/validate.ps1` now enforces the intended Compose security model instead of treating it as documentation only.
 - Repo-managed services keep routine access logging quiet by default, so operators should use targeted `docker compose logs --tail=...` calls when they need deeper inspection.
 - The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
 - The repo now supports two localhost-only browser modes at once: the main AnonExplo UI on port `3000` and the bundled standalone SearXNG UI on port `8085`, both through the same low-privilege host gateway.
-- The next implementation thread should resume `stamos/grounding-quality-tuning` from a clean `main`.
+- The localhost gateway now allows longer backend request times so heavier grounded calls do not fail at the proxy first.
+- The next implementation thread should resume `stamos/fetcher-resilience` from a clean `main`.

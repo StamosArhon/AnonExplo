@@ -77,6 +77,10 @@ The backend uses environment-driven provider selection:
 - search:
   - `SEARCH_PROVIDER`
   - `SEARCH_BASE_URL`
+  - `SEARCH_CATEGORIES`
+  - `SEARCH_LANGUAGE`
+  - `SEARCH_TIME_RANGE`
+  - `SEARCH_ENGINES`
 - fetch:
   - `FETCH_BASE_URL`
 
@@ -94,7 +98,7 @@ The current code includes:
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
 The backend also no longer hard-depends on a Compose service literally named `search-provider`, so `SEARCH_BASE_URL` can point at any reachable internal or local search service that matches one of the supported adapters.
 The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` service rather than from direct publishing on internal-only app containers, because Docker Desktop did not reliably expose those ports when the services were attached only to `internal: true` networks. That same gateway also provides an optional browser path to the bundled SearXNG service, so standalone search and LLM-grounded search can coexist without changing the internal network shape.
-The validation path now treats that network and exposure model as enforceable policy: only the gateway may publish host ports, third-party runtime images stay digest-pinned by default, and the expected service-to-network memberships are checked before a branch is declared ready.
+The validation path now treats that network and exposure model as enforceable policy: only the gateway may publish host ports, third-party runtime images stay digest-pinned by default, and the expected service-to-network memberships are checked before a branch is declared ready. The backend route on the localhost gateway also now allows longer-lived grounded requests so search-plus-fetch-plus-model calls do not get cut off at the proxy first.
 
 ## Data Flow
 
@@ -112,13 +116,14 @@ The validation path now treats that network and exposure model as enforceable po
 
 1. UI submits a grounding query to the backend.
 2. UI may include grounded-answer-specific saved instructions plus default search and fetch limits from the browser-local settings modal.
-3. Backend calls the configured search provider.
-4. Backend selects result URLs to fetch.
-5. Backend calls the fetcher service for readable page text.
-6. Backend deduplicates sources, applies bounded context limits, and packages structured source metadata plus fetch errors.
-7. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
-8. UI shows the grounded answer, the selected model, the selected sources, and any per-source fetch failures.
-9. Grounded-answer transcripts and source bundles remain transient in the current tab rather than persistent browser storage.
+3. Backend calls the configured search provider with env-driven search tuning such as categories, language, and optional time-range or engine filters.
+4. Backend deduplicates results, ranks unique candidates by query relevance while preserving domain diversity, and selects an initial fetch batch.
+5. Backend calls the fetcher service for readable page text and keeps trying later-ranked sources when earlier fetches fail.
+6. Backend packages bounded fetched source text when available, or bounded search-result snippets when fetches fail but search material still exists.
+7. Backend marks the grounding bundle with an explicit `context_mode` so the UI and future services can distinguish fetched article text from snippet fallback.
+8. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
+9. UI shows the grounded answer, the selected model, the selected or attempted sources, the current grounding mode, and any per-source fetch failures.
+10. Grounded-answer transcripts and source bundles remain transient in the current tab rather than persistent browser storage.
 
 ## Why The Fetcher Is Separate
 

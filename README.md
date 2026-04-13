@@ -24,6 +24,9 @@ This repository is currently focused on turning the secure local stack into a pr
 - a calmer sidebar-and-editorial UI shell with settings and stack details moved into modals instead of the main chat area
 - browser-local direct chat history with per-entry delete and full purge controls
 - explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
+- config-driven SearXNG tuning defaults for broader current-events coverage, including categories, language, and optional engine or time-range controls
+- ranked grounded-source selection with retry behavior so later sources can still be fetched when early candidates fail
+- an explicit snippet-fallback grounding mode for cases where search works but article fetches are blocked, with the UI showing whether an answer came from fetched text or search snippets
 - quieter default logging across the repo-managed UI, backend, fetcher, and localhost gateway services
 - an operations guide plus a lightweight stack health-check script for daily local maintenance
 
@@ -119,6 +122,10 @@ The repo treats provider choice as configuration:
 - search provider:
   - `SEARCH_PROVIDER`
   - `SEARCH_BASE_URL`
+  - `SEARCH_CATEGORIES`
+  - `SEARCH_LANGUAGE`
+  - `SEARCH_TIME_RANGE`
+  - `SEARCH_ENGINES`
 - fetch service:
   - `FETCH_BASE_URL`
 
@@ -145,12 +152,12 @@ For privacy-first deployments, keep Ollama pointed at a local or otherwise trust
 The repo now supports a practical grounded-answer path:
 
 1. search through the configured search provider
-2. dedupe and select candidate sources
-3. fetch and parse readable page text through the fetcher
-4. construct a bounded grounding context from fetched sources
-5. pass that context into the configured model runtime
+2. rank and dedupe candidate sources with domain diversity and query-relevance heuristics
+3. fetch and parse readable page text through the fetcher, retrying later candidates when earlier fetches fail
+4. construct a bounded grounding context from fetched sources, or fall back to bounded search snippets when article fetches are unavailable
+5. pass that context into the configured model runtime with explicit citation-only instructions
 
-The UI also surfaces per-source fetch failures and the exact source text slice used for grounding. If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
+The UI also surfaces per-source fetch failures, the exact source text slice used for grounding, and the current grounding mode (`fetched_text` or `search_snippets`). If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
 
 ## UI Workbench
 
@@ -164,6 +171,7 @@ The local UI is still static and self-hosted, but it now behaves like a real wor
 - it keeps grounded-answer transcripts, fetched source details, and fetch-inspector output transient in the current tab by default
 - it makes the mode boundary explicit: direct chat is model only, grounded answer is search plus fetch plus model
 - it surfaces runtime readiness, configured default vs. request override, and clearer failure cards without leaving stack diagnostics in the middle of the main chat surface
+- it keeps grounded-answer context-mode visibility explicit so you can tell whether an answer used fetched article text or search-snippet fallback
 
 ## Llama.cpp Profile
 

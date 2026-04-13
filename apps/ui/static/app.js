@@ -8,7 +8,7 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS = {
   chatSystemPrompt: "",
   groundingSystemPrompt: "",
-  groundingSearchLimit: 5,
+  groundingSearchLimit: 6,
   groundingFetchLimit: 3,
 };
 
@@ -342,6 +342,9 @@ function getStatusVariant(status) {
   if (["ok", "ready", "grounded"].includes(status)) {
     return "ok";
   }
+  if (status === "snippet_grounded") {
+    return "warn";
+  }
   if (["unreachable", "invalid_response", "model_error", "error"].includes(status)) {
     return "error";
   }
@@ -609,15 +612,22 @@ function renderGroundingMeta(state, elements) {
     chips.push(buildChip("Status", "grounding", "warn"));
   }
 
-  if (state.groundingStatus.kind === "success") {
-    chips.push(
-      buildChip(
-        "Answer",
-        state.groundingStatus.payload.answer_status || "unknown",
-        getStatusVariant(state.groundingStatus.payload.answer_status || "unknown"),
-      ),
-    );
-  }
+    if (state.groundingStatus.kind === "success") {
+      chips.push(
+        buildChip(
+          "Answer",
+          state.groundingStatus.payload.answer_status || "unknown",
+          getStatusVariant(state.groundingStatus.payload.answer_status || "unknown"),
+        ),
+      );
+      chips.push(
+        buildChip(
+          "Context",
+          state.groundingStatus.payload.grounding?.summary?.context_mode || "none",
+          state.groundingStatus.payload.grounding?.summary?.context_mode === "fetched_text" ? "ok" : "warn",
+        ),
+      );
+    }
 
   if (state.groundingStatus.kind === "error") {
     chips.push(buildChip("Status", "request failed", "error"));
@@ -667,7 +677,8 @@ function renderGroundingDetails(state, elements) {
     `<div class="status-card"><strong>Fetched</strong><div class="meta">${escapeHtml(summary.fetched_sources || 0)}</div></div>`,
     `<div class="status-card"><strong>Failures</strong><div class="meta">${escapeHtml(summary.failed_sources || 0)}</div></div>`,
     `<div class="status-card"><strong>Context chars</strong><div class="meta">${escapeHtml(summary.grounding_characters || 0)}</div></div>`,
-    `<div class="status-card"><strong>Selected</strong><div class="meta">${escapeHtml(summary.selected_sources || 0)}</div></div>`,
+    `<div class="status-card"><strong>Context mode</strong><div class="meta">${escapeHtml(summary.context_mode || "none")}</div></div>`,
+    `<div class="status-card"><strong>Selected / attempted</strong><div class="meta">${escapeHtml(summary.selected_sources || 0)}</div></div>`,
   ].join("");
 
   const errors = grounding.errors || [];
@@ -693,8 +704,15 @@ function renderGroundingDetails(state, elements) {
     .map((source) => {
       const fetched = fetchedById.get(source.source_id);
       const sourceError = errors.find((item) => item.source_id === source.source_id);
-      const statusLabel = fetched ? "Fetched" : sourceError ? "Failed" : "Selected";
-      const statusClass = fetched ? "status-fetched" : sourceError ? "status-failed" : "status-selected";
+      const usesSnippetFallback = summary.context_mode === "search_snippets" && !fetched && Boolean(source.snippet);
+      const statusLabel = fetched ? "Fetched" : usesSnippetFallback ? "Snippet used" : sourceError ? "Failed" : "Selected";
+      const statusClass = fetched
+        ? "status-fetched"
+        : usesSnippetFallback
+          ? "status-selected"
+          : sourceError
+            ? "status-failed"
+            : "status-selected";
 
       return `
         <div class="result-card">
@@ -709,20 +727,25 @@ function renderGroundingDetails(state, elements) {
           <div class="source-body">
             <p>${escapeHtml(source.snippet || "No search snippet available.")}</p>
             ${
-              fetched
-                ? `
-                  <div class="meta">
-                    Context used ${escapeHtml(fetched.context_chars_used)} chars | Extracted ${escapeHtml(
-                      fetched.content_char_count,
-                    )} chars | ${escapeHtml(fetched.word_count)} words
-                  </div>
-                  <div class="source-text">${escapeHtml(
-                    fetched.context_text || fetched.excerpt || "No grounded source text available.",
-                  )}</div>
-                `
-                : sourceError
-                  ? `<p class="error">${escapeHtml(sourceError.message)}</p>`
-                  : '<p class="meta">Selected for grounding but not fetched.</p>'
+                fetched
+                  ? `
+                    <div class="meta">
+                      Context used ${escapeHtml(fetched.context_chars_used)} chars | Extracted ${escapeHtml(
+                        fetched.content_char_count,
+                      )} chars | ${escapeHtml(fetched.word_count)} words
+                    </div>
+                    <div class="source-text">${escapeHtml(
+                      fetched.context_text || fetched.excerpt || "No grounded source text available.",
+                    )}</div>
+                  `
+                  : usesSnippetFallback
+                    ? `
+                      <div class="meta">Article fetch failed, so the grounded answer used the returned search snippet.</div>
+                      <div class="source-text">${escapeHtml(source.snippet || "No search snippet available.")}</div>
+                    `
+                  : sourceError
+                    ? `<p class="error">${escapeHtml(sourceError.message)}</p>`
+                    : '<p class="meta">Selected for grounding but not fetched.</p>'
             }
           </div>
         </div>
@@ -801,7 +824,7 @@ function closeModal(modal) {
 }
 
 function buildGroundingAssistantText(payload) {
-  if (payload.answer_status === "grounded") {
+  if (payload.answer_status === "grounded" || payload.answer_status === "snippet_grounded") {
     return payload.answer || "(empty grounded answer)";
   }
   if (payload.answer_status === "insufficient_sources") {

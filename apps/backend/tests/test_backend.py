@@ -15,6 +15,7 @@ os.environ["SEARCH_BASE_URL"] = "http://search-provider:8080"
 os.environ["FETCH_BASE_URL"] = "http://fetcher:8081"
 
 from app.config import Settings
+from app.grounding import build_grounded_model_request, build_grounding_bundle
 from app.main import app, build_model_provider, build_search_provider
 from app.providers import (
     FetchDocument,
@@ -118,6 +119,9 @@ class BackendApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["model"]["model_name"], "test-model")
         self.assertTrue(payload["search"]["base_url"].startswith("http://search-provider"))
+        self.assertEqual(payload["search"]["categories"], "general,news")
+        self.assertEqual(payload["search"]["language"], "all")
+        self.assertEqual(payload["search"]["time_range"], "none")
 
     @patch("app.main.build_model_provider")
     def test_model_runtime_endpoint_returns_probe_state(self, build_model_provider: AsyncMock) -> None:
@@ -458,6 +462,75 @@ class BackendApiTests(unittest.TestCase):
         self.assertIn("Do not guess and always cite sources.", system_prompt)
 
     @patch("app.main.build_model_provider")
+    @patch("app.main.build_fetcher_client")
+    @patch("app.main.build_search_provider")
+    def test_grounding_answer_uses_snippet_fallback_when_fetches_fail(
+        self,
+        build_search_provider: AsyncMock,
+        build_fetcher_client: AsyncMock,
+        build_model_provider: AsyncMock,
+    ) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Timeline",
+                url="https://example.com/timeline",
+                snippet="The first reported strike happened on February 28, 2026.",
+                engine="mock",
+            )
+        ]
+        build_search_provider.return_value = search_provider
+
+        fetcher = AsyncMock()
+        fetcher.fetch.side_effect = ProviderError("Fetch request failed: blocked")
+        build_fetcher_client.return_value = fetcher
+
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+        selection = type(
+            "Selection",
+            (),
+            {
+                "selected_model": "test-model",
+                "requested_model": None,
+                "selection_source": "configured_default",
+                "configured_model": "test-model",
+                "model_dump": lambda self=None: {
+                    "configured_model": "test-model",
+                    "selected_model": "test-model",
+                    "requested_model": None,
+                    "selection_source": "configured_default",
+                },
+            },
+        )()
+        model_provider = Mock()
+        model_provider.probe_runtime = AsyncMock(return_value=runtime)
+        model_provider.select_model = Mock(return_value=selection)
+        model_provider.chat = AsyncMock(return_value={
+            "model": "test-model",
+            "answer": "The first reported strike was on February 28, 2026. [S1]",
+            "usage": {"total_tokens": 24},
+            "selected_model": "test-model",
+        })
+        build_model_provider.return_value = model_provider
+
+        response = self.client.post("/api/v1/grounding/answer", json={"query": "When was the first strike?"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["answer_status"], "snippet_grounded")
+        self.assertEqual(payload["grounding"]["summary"]["context_mode"], "search_snippets")
+        prompt = model_provider.chat.await_args.kwargs["prompt"]
+        self.assertIn("Search result snippets:", prompt)
+        self.assertIn("February 28, 2026", prompt)
+
+    @patch("app.main.build_model_provider")
     def test_grounding_answer_rejects_unadvertised_model_override(self, build_model_provider: AsyncMock) -> None:
         provider = Mock()
         runtime = ModelRuntimeStatus(
@@ -650,7 +723,196 @@ class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.last_post_json["options"]["temperature"], 0.3)
 
 
+class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
+    async def test_grounding_bundle_ranks_sources_and_retries_after_fetch_failures(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(title="Market Wrap", url="https://alpha.example/news", snippet="Stocks and commodities", engine="mock"),
+            SearchHit(
+                title="Iran attack timeline 2026",
+                url="https://bravo.example/timeline",
+                snippet="Israel and U.S. strike timeline coverage",
+                engine="mock",
+            ),
+            SearchHit(
+                title="US and Israel strike Iran: first reported date",
+                url="https://charlie.example/report",
+                snippet="First reported attack date and sequence",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Reuters live updates on Iran strike",
+                url="https://delta.example/live",
+                snippet="Israel U.S. operation date and live updates",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+
+        async def fetch_side_effect(url: str):
+            if url == "https://bravo.example/timeline":
+                raise ProviderError("Fetch request failed: source blocked")
+            if url == "https://charlie.example/report":
+                return FetchDocument(
+                    requested_url=url,
+                    final_url=url,
+                    title="First reported date",
+                    excerpt="Coverage of the first reported date.",
+                    content_text="The first reported date was described in the article.",
+                    content_char_count=54,
+                    word_count=10,
+                    content_type="text/html",
+                )
+            if url == "https://delta.example/live":
+                return FetchDocument(
+                    requested_url=url,
+                    final_url=url,
+                    title="Live updates",
+                    excerpt="Live updates on the operation date.",
+                    content_text="Live coverage repeated the reported date and cited officials.",
+                    content_char_count=63,
+                    word_count=10,
+                    content_type="text/html",
+                )
+            return FetchDocument(
+                requested_url=url,
+                final_url=url,
+                title="Fallback article",
+                excerpt="Fallback",
+                content_text="Unrelated fallback text.",
+                content_char_count=23,
+                word_count=3,
+                content_type="text/html",
+            )
+
+        fetcher.fetch.side_effect = fetch_side_effect
+
+        bundle, context = await build_grounding_bundle(
+            query="When did the first Israel USA attack on Iran take place in 2026?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=4,
+            fetch_limit=2,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+        )
+
+        self.assertEqual([item.source_id for item in bundle.selected_sources], ["S3", "S2", "S4"])
+        self.assertEqual([item.source_id for item in bundle.fetched_sources], ["S3", "S4"])
+        self.assertEqual(bundle.summary.selected_sources, 3)
+        self.assertEqual(bundle.summary.fetched_sources, 2)
+        self.assertEqual(bundle.summary.failed_sources, 1)
+        self.assertEqual(bundle.summary.context_mode, "fetched_text")
+        self.assertEqual(bundle.search_results[0].status, "unselected")
+        self.assertEqual(bundle.search_results[1].status, "selected")
+        self.assertIn("[S3]", context)
+        self.assertIn("[S4]", context)
+
+    async def test_grounding_bundle_falls_back_to_search_snippets(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Timeline",
+                url="https://example.com/timeline",
+                snippet="The first reported strike happened on February 28, 2026.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Background",
+                url="https://example.org/background",
+                snippet="Israel and the United States launched attacks on Iran.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+        fetcher.fetch.side_effect = ProviderError("Fetch request failed: blocked")
+
+        bundle, context = await build_grounding_bundle(
+            query="When did the first strike happen?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=2,
+            fetch_limit=2,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+        )
+
+        self.assertEqual(bundle.summary.context_mode, "search_snippets")
+        self.assertEqual(bundle.summary.fetched_sources, 0)
+        self.assertEqual(bundle.summary.failed_sources, 2)
+        self.assertIn("Search snippet:", context)
+        self.assertIn("February 28, 2026", context)
+
+    def test_grounded_request_discourages_prior_knowledge_language(self) -> None:
+        grounded_request = build_grounded_model_request(
+            query="What happened?",
+            grounding_context="[S1] Example source text.",
+            temperature=0.1,
+            additional_system_prompt="Always cite sources.",
+        )
+
+        self.assertIn("Every substantive factual claim must cite", grounded_request.prompt)
+        self.assertIn("sourced material is insufficient", grounded_request.prompt)
+        self.assertIn("Do not mention your training data, knowledge cutoff, or prior knowledge", grounded_request.system_prompt)
+        self.assertIn("Always cite sources.", grounded_request.system_prompt)
+
+    def test_grounded_request_handles_snippet_context_mode(self) -> None:
+        grounded_request = build_grounded_model_request(
+            query="What happened?",
+            grounding_context="[S1] Example snippet.",
+            temperature=0.1,
+            context_mode="search_snippets",
+        )
+
+        self.assertIn("supporting search-result snippets", grounded_request.prompt)
+        self.assertIn("Search result snippets:", grounded_request.prompt)
+        self.assertIn("article fetches were unavailable", grounded_request.system_prompt)
+
+
 class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_searxng_search_passes_tuned_query_parameters(self) -> None:
+        provider = build_search_provider(
+            Settings(
+                SEARCH_PROVIDER="searxng",
+                SEARCH_BASE_URL="http://search-provider:8080",
+                SEARCH_CATEGORIES="general,news",
+                SEARCH_LANGUAGE="all",
+                SEARCH_TIME_RANGE="month",
+                SEARCH_ENGINES="duckduckgo,wikipedia",
+            )
+        )
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "http://search-provider:8080/search"),
+            content=json.dumps(
+                {
+                    "results": [
+                        {
+                            "title": "Alpha",
+                            "url": "https://example.com/article",
+                            "content": "Alpha snippet",
+                            "engine": "duckduckgo",
+                        }
+                    ]
+                }
+            ).encode("utf-8"),
+        )
+        client = MockAsyncClient(response=response)
+        with patch("app.providers.httpx.AsyncClient", return_value=client):
+            results = await provider.search("privacy", 5)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(client.last_get_params["categories"], "general,news")
+        self.assertEqual(client.last_get_params["language"], "all")
+        self.assertEqual(client.last_get_params["time_range"], "month")
+        self.assertEqual(client.last_get_params["engines"], "duckduckgo,wikipedia")
+        self.assertEqual(client.last_get_params["format"], "json")
+        self.assertEqual(client.last_get_params["pageno"], 1)
+
     async def test_yacy_search_normalizes_channel_items(self) -> None:
         provider = YacySearchProvider(
             base_url="http://yacy-search:8090",
