@@ -33,12 +33,12 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Current Phase
 
-- Active phase: `ui-workbench`
-- Goal: improve the local single-user workbench UX for model selection, runtime visibility, grounding inspection, and failure handling
+- Active phase: `provider-expansion`
+- Goal: expand the adapter layer so model and search backends can be swapped through configuration without backend rewrites or Compose service-name coupling
 
 ## Active Branch
 
-- `stamos/ui-workbench`
+- `stamos/provider-expansion`
 
 ## Completed Work
 
@@ -61,6 +61,9 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - Added request-level model selection in the backend for direct chat and grounded-answer calls, validated against the runtime-advertised model catalog when available.
 - Reworked the static local UI into a clearer workbench with a global model selector, runtime snapshot, provider summary, better source inspection, and more structured failure cards.
 - Stabilized unsupported model-override failures so the backend returns structured selection and runtime details without falling back to a second selector call.
+- Added a second model adapter for native Ollama runtimes while keeping the same orchestration contract used by the existing OpenAI-compatible runtime path.
+- Added a second search adapter for YaCy so the backend can query either SearXNG or YaCy through the same grounded-search pipeline.
+- Removed the backend's hard Compose dependency on a fixed `search-provider` service name so search-provider switching stays config-driven.
 
 ## In-Progress Work
 
@@ -73,6 +76,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - The current SearXNG configuration is intentionally conservative and still needs deeper engine and limiter tuning in a later hardening pass.
 - Host firewall guidance has been documented conceptually, but not automated.
 - The current browser-side persistence is intentionally minimal and stores only the selected model id; there is still no prompt history or fetched-content storage policy.
+- The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
 
 ## Decisions Made And Why
 
@@ -88,6 +92,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - The backend health surface now distinguishes backend availability from model-runtime readiness so failures are easier to understand locally.
 - The `llama.cpp` runtime command now sets an explicit alias matching `MODEL_NAME` to keep model discovery stable across backend, runtime, and UI.
 - The local workbench can request a runtime-advertised model override per chat or grounded-answer call without changing the global backend configuration.
+- Provider expansion is being done through adapters plus env-driven factories first, before adding more runtime-specific orchestration profiles, so the backend boundary stays cleaner than the Compose implementation details.
 
 ## Security / Privacy Assumptions
 
@@ -100,8 +105,8 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Validation Status
 
-- `scripts/validate.ps1`: passed on 2026-04-13
-- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13
+- `scripts/validate.ps1`: passed on 2026-04-13 after the provider-expansion changes
+- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13 after the provider-expansion changes
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
@@ -116,14 +121,14 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
   - a minimal OpenAI-compatible chat-completions probe against the live model runtime
 - `scripts/bootstrap.ps1`: passed on 2026-04-13 and created the expected local `.env` plus data directories
 - `scripts/provision-default-model.ps1`: passed on 2026-04-13 and downloaded the default GGUF to `data/models/`
-- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-13 after adding model-selection and workbench contract coverage
+- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-13 with provider-expansion coverage for `openai_compatible`, `ollama`, `searxng`, and `yacy`
 
 ## Exact Next Steps
 
-1. Push `stamos/ui-workbench` and review the `main...stamos/ui-workbench` diff after confirming validation output.
-2. Merge `stamos/ui-workbench` after review and cleanup the branch per the repo workflow.
-3. Start `stamos/provider-expansion` to add at least one more model adapter or search/anonymizer adapter while preserving the current workbench abstractions.
-4. Decide whether to add lightweight local benchmark reporting in a later branch or keep performance notes purely in docs.
+1. Validate `stamos/provider-expansion`, including backend tests and the full runtime probe for the default stack.
+2. Push `stamos/provider-expansion` and review the `main...stamos/provider-expansion` diff after validation passes.
+3. Merge `stamos/provider-expansion` after review and cleanup the branch per the repo workflow.
+4. Start `stamos/ops-hardening` to improve host-firewall guidance, log discipline, service health validation, and maintenance flows.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -133,4 +138,5 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - The grounding flow is intentionally bounded and transparent: search, source selection, fetch, source packaging, and model synthesis are all visible in the UI and backend responses.
 - The backend and UI now expose model-runtime readiness separately from general backend health, which future branches should preserve.
 - The static UI now uses backend-provided runtime and model-catalog state to drive a browser-local model selector for chat and grounded-answer requests.
-- The next implementation thread should begin with `stamos/provider-expansion` after confirming `main` is clean.
+- The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
+- The next implementation thread should begin with `stamos/ops-hardening` after confirming `main` is clean.

@@ -8,12 +8,16 @@ from app.config import Settings, get_settings
 from app.grounding import build_grounded_model_request, build_grounding_bundle
 from app.providers import (
     FetcherClient,
+    ModelProvider,
     ModelRuntimeStatus,
     ModelSelection,
     OpenAICompatibleModelProvider,
+    OllamaModelProvider,
     ProviderError,
+    SearchProvider,
     SearxngSearchProvider,
     UnsupportedModelError,
+    YacySearchProvider,
 )
 
 
@@ -40,20 +44,40 @@ class GroundingRequest(BaseModel):
     selected_model: str | None = Field(default=None, min_length=1)
 
 
-def build_model_provider(settings: Settings) -> OpenAICompatibleModelProvider:
-    return OpenAICompatibleModelProvider(
-        base_url=settings.model_base_url,
-        model_name=settings.model_name,
-        timeout_seconds=settings.model_request_timeout_seconds,
-        probe_timeout_seconds=settings.model_probe_timeout_seconds,
-    )
+def build_model_provider(settings: Settings) -> ModelProvider:
+    if settings.model_provider == "openai_compatible":
+        return OpenAICompatibleModelProvider(
+            base_url=settings.model_base_url,
+            model_name=settings.model_name,
+            timeout_seconds=settings.model_request_timeout_seconds,
+            probe_timeout_seconds=settings.model_probe_timeout_seconds,
+        )
+
+    if settings.model_provider == "ollama":
+        return OllamaModelProvider(
+            base_url=settings.model_base_url,
+            model_name=settings.model_name,
+            timeout_seconds=settings.model_request_timeout_seconds,
+            probe_timeout_seconds=settings.model_probe_timeout_seconds,
+        )
+
+    raise ValueError(f"Unsupported model provider: {settings.model_provider}")
 
 
-def build_search_provider(settings: Settings) -> SearxngSearchProvider:
-    return SearxngSearchProvider(
-        base_url=settings.search_base_url,
-        timeout_seconds=settings.search_request_timeout_seconds,
-    )
+def build_search_provider(settings: Settings) -> SearchProvider:
+    if settings.search_provider == "searxng":
+        return SearxngSearchProvider(
+            base_url=settings.search_base_url,
+            timeout_seconds=settings.search_request_timeout_seconds,
+        )
+
+    if settings.search_provider == "yacy":
+        return YacySearchProvider(
+            base_url=settings.search_base_url,
+            timeout_seconds=settings.search_request_timeout_seconds,
+        )
+
+    raise ValueError(f"Unsupported search provider: {settings.search_provider}")
 
 
 def build_fetcher_client(settings: Settings) -> FetcherClient:

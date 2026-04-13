@@ -1,4 +1,5 @@
 import os
+import json
 import unittest
 from collections import deque
 from unittest.mock import AsyncMock, Mock, patch
@@ -13,15 +14,18 @@ os.environ["SEARCH_PROVIDER"] = "searxng"
 os.environ["SEARCH_BASE_URL"] = "http://search-provider:8080"
 os.environ["FETCH_BASE_URL"] = "http://fetcher:8081"
 
-from app.main import app
+from app.config import Settings
+from app.main import app, build_model_provider, build_search_provider
 from app.providers import (
     FetchDocument,
     ModelDescriptor,
     ModelRuntimeStatus,
     OpenAICompatibleModelProvider,
+    OllamaModelProvider,
     ProviderError,
     SearchHit,
     UnsupportedModelError,
+    YacySearchProvider,
 )
 
 
@@ -36,6 +40,7 @@ class MockAsyncClient:
         self.response = response
         self.error = error
         self.post_response = post_response
+        self.last_get_params: dict | None = None
         self.last_post_json: dict | None = None
 
     async def __aenter__(self):
@@ -44,9 +49,10 @@ class MockAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def get(self, url: str):
+    async def get(self, url: str, params: dict | None = None):
         if self.error is not None:
             raise self.error
+        self.last_get_params = params
         if self.response is None:
             raise AssertionError("MockAsyncClient requires either a GET response or an error.")
         return self.response
@@ -403,6 +409,27 @@ class BackendApiTests(unittest.TestCase):
         self.assertEqual(payload["detail"]["selection"]["selected_model"], "missing-model")
 
 
+class ProviderFactoryTests(unittest.TestCase):
+    def test_build_model_provider_selects_ollama_adapter(self) -> None:
+        settings = Settings(
+            MODEL_PROVIDER="ollama",
+            MODEL_BASE_URL="http://ollama:11434/api",
+            MODEL_NAME="qwen2.5:7b",
+        )
+
+        provider = build_model_provider(settings)
+        self.assertIsInstance(provider, OllamaModelProvider)
+
+    def test_build_search_provider_selects_yacy_adapter(self) -> None:
+        settings = Settings(
+            SEARCH_PROVIDER="yacy",
+            SEARCH_BASE_URL="http://yacy-search:8090",
+        )
+
+        provider = build_search_provider(settings)
+        self.assertIsInstance(provider, YacySearchProvider)
+
+
 class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
     async def test_probe_runtime_reports_unreachable_runtime(self) -> None:
         provider = OpenAICompatibleModelProvider(
@@ -483,6 +510,108 @@ class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(UnsupportedModelError):
             provider.select_model("missing-model", runtime_status=runtime)
+
+    async def test_ollama_probe_runtime_reports_ready_models(self) -> None:
+        provider = OllamaModelProvider(
+            base_url="http://ollama:11434/api",
+            model_name="qwen2.5:7b",
+            timeout_seconds=90.0,
+            probe_timeout_seconds=5.0,
+        )
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "http://ollama:11434/api/tags"),
+            content=json.dumps(
+                {
+                    "models": [
+                        {
+                            "name": "qwen2.5:7b",
+                            "model": "qwen2.5:7b",
+                        }
+                    ]
+                }
+            ).encode("utf-8"),
+        )
+        with patch("app.providers.httpx.AsyncClient", return_value=MockAsyncClient(response=response)):
+            status = await provider.probe_runtime()
+
+        self.assertTrue(status.ready)
+        self.assertEqual(status.available_models[0].id, "qwen2.5:7b")
+
+    async def test_ollama_chat_uses_native_endpoint_and_builds_usage(self) -> None:
+        provider = OllamaModelProvider(
+            base_url="http://ollama:11434/api",
+            model_name="qwen2.5:7b",
+            timeout_seconds=90.0,
+            probe_timeout_seconds=5.0,
+        )
+        response = httpx.Response(
+            200,
+            request=httpx.Request("POST", "http://ollama:11434/api/chat"),
+            content=json.dumps(
+                {
+                    "model": "alt-model:latest",
+                    "message": {"role": "assistant", "content": "hello from ollama"},
+                    "prompt_eval_count": 12,
+                    "eval_count": 8,
+                }
+            ).encode("utf-8"),
+        )
+        client = MockAsyncClient(post_response=response)
+        with patch("app.providers.httpx.AsyncClient", return_value=client):
+            result = await provider.chat(
+                prompt="hello",
+                system_prompt="be concise",
+                temperature=0.3,
+                model_name="alt-model:latest",
+            )
+
+        self.assertEqual(result["answer"], "hello from ollama")
+        self.assertEqual(result["usage"]["prompt_tokens"], 12)
+        self.assertEqual(result["usage"]["completion_tokens"], 8)
+        self.assertEqual(result["usage"]["total_tokens"], 20)
+        self.assertEqual(client.last_post_json["model"], "alt-model:latest")
+        self.assertFalse(client.last_post_json["stream"])
+        self.assertEqual(client.last_post_json["options"]["temperature"], 0.3)
+
+
+class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_yacy_search_normalizes_channel_items(self) -> None:
+        provider = YacySearchProvider(
+            base_url="http://yacy-search:8090",
+            timeout_seconds=20.0,
+        )
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "http://yacy-search:8090/yacysearch.json"),
+            content=json.dumps(
+                {
+                    "channels": [
+                        {
+                            "items": [
+                                {
+                                    "title": "Alpha",
+                                    "link": "https://example.com/article",
+                                    "description": "Alpha snippet",
+                                },
+                                {
+                                    "link": "https://example.org/post",
+                                    "content": "Beta snippet",
+                                },
+                            ]
+                        }
+                    ]
+                }
+            ).encode("utf-8"),
+        )
+        with patch("app.providers.httpx.AsyncClient", return_value=MockAsyncClient(response=response)):
+            results = await provider.search("privacy", 2)
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].title, "Alpha")
+        self.assertEqual(results[0].snippet, "Alpha snippet")
+        self.assertEqual(results[1].title, "https://example.org/post")
+        self.assertEqual(results[1].engine, "yacy")
 
 
 if __name__ == "__main__":

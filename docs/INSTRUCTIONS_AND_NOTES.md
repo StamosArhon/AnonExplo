@@ -52,4 +52,5 @@
 - Use `scripts/provision-default-model.ps1` to populate `data/models/` and `scripts/validate.ps1 -RequireModelRuntime` to confirm the full path.
 - The workbench UI may persist only the selected model id in browser local storage; it must not store prompts, fetched page text, or response history by default.
 - Request-level model selection should stay bounded to runtime-advertised models and should not mutate the backend's configured default model.
+- Do not reintroduce a backend orchestration dependency on one hard-coded search service name; provider switching should remain env-driven at the backend boundary.
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.

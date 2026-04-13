@@ -74,12 +74,15 @@ The backend uses environment-driven provider selection:
 The current code includes:
 
 - an OpenAI-compatible model adapter
+- a native Ollama model adapter
 - a SearXNG search adapter
+- a YaCy search adapter
 - a fetcher client that calls the internal fetch service
 - a grounded-answer path that composes bounded source context before calling the model
 - a runtime-readiness probe that distinguishes configuration from live model availability
 
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
+The backend also no longer hard-depends on a Compose service literally named `search-provider`, so `SEARCH_BASE_URL` can point at any reachable internal or local search service that matches one of the supported adapters.
 
 ## Data Flow
 

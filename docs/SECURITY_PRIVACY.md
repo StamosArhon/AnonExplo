@@ -34,6 +34,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Do not add debug logging that dumps prompts, full fetched article bodies, headers, or provider payloads by default.
 - If deeper logging is ever added for troubleshooting, it must be temporary and documented.
 - The local UI may remember only the selected model id in browser local storage; prompt history and fetched content must remain non-persistent by default.
+- If `MODEL_PROVIDER=ollama` is used, keep `MODEL_BASE_URL` on a local or otherwise trusted private endpoint; do not silently treat a hosted Ollama API as equivalent to a local runtime from a privacy perspective.
 
 ## Fetcher Controls
 
@@ -47,6 +48,8 @@ The fetcher is the most sensitive service because it has egress. Current guardra
 - grounded-answer prompts use only bounded excerpts of fetched source text
 
 These controls reduce privacy leakage and resource abuse, but they are not a substitute for host firewall policy.
+
+If `SEARCH_PROVIDER=yacy` is used, review YaCy's own peer-to-peer or network settings deliberately. It is supported as a replaceable search adapter, but its privacy posture depends on how the YaCy instance itself is configured.
 
 ## Defense In Depth
 

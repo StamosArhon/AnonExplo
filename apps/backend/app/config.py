@@ -15,7 +15,7 @@ class Settings(BaseSettings):
         validation_alias="CORS_ALLOWED_ORIGINS",
     )
 
-    model_provider: Literal["openai_compatible"] = Field(
+    model_provider: Literal["openai_compatible", "ollama"] = Field(
         default="openai_compatible",
         validation_alias="MODEL_PROVIDER",
     )
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
         validation_alias="MODEL_PROBE_TIMEOUT_SECONDS",
     )
 
-    search_provider: Literal["searxng"] = Field(
+    search_provider: Literal["searxng", "yacy"] = Field(
         default="searxng",
         validation_alias="SEARCH_PROVIDER",
     )

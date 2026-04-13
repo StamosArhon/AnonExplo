@@ -4,7 +4,7 @@ AnonExplo is a privacy-first, self-hosted local-LLM stack for local use on perso
 
 ## Current Status
 
-This repository is currently focused on the `ui-workbench` milestone. The repo now provides:
+This repository is currently focused on the `provider-expansion` milestone. The repo now provides:
 
 - the durable repo protocol for future Codex threads
 - the initial architecture and security documents
@@ -17,6 +17,8 @@ This repository is currently focused on the `ui-workbench` milestone. The repo n
 - runtime readiness reporting in the backend and UI
 - end-to-end validation of the default local model path on the current development machine
 - a static local workbench with browser-local model selection and clearer runtime or failure inspection
+- backend adapters for both OpenAI-compatible runtimes and native Ollama APIs
+- backend adapters for both SearXNG and YaCy search services
 
 ## Design Goals
 
@@ -102,7 +104,23 @@ The repo treats provider choice as configuration:
 - fetch service:
   - `FETCH_BASE_URL`
 
-The current implementation targets an OpenAI-compatible local model endpoint plus SearXNG, but the orchestrator is intentionally structured so more adapters can be added in future branches.
+The current implementation supports these provider adapters:
+
+- model runtime:
+  - `openai_compatible`
+  - `ollama`
+- search provider:
+  - `searxng`
+  - `yacy`
+
+Recommended local examples:
+
+- `MODEL_PROVIDER=openai_compatible` with `MODEL_BASE_URL=http://model-backend:8080/v1`
+- `MODEL_PROVIDER=ollama` with `MODEL_BASE_URL=http://host.docker.internal:11434/api` or another local/private Ollama endpoint
+- `SEARCH_PROVIDER=searxng` with `SEARCH_BASE_URL=http://search-provider:8080`
+- `SEARCH_PROVIDER=yacy` with `SEARCH_BASE_URL=http://yacy-search:8090`
+
+For privacy-first deployments, keep Ollama pointed at a local or otherwise trusted private endpoint rather than a hosted cloud API, and review YaCy's own network/peer settings before treating it as equivalent to SearXNG from a privacy standpoint.
 
 ## Grounding Flow
 
