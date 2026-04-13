@@ -745,6 +745,12 @@ function buildCitationTooltip(source) {
   `;
 }
 
+function getSourceReferenceLabel(sourceId) {
+  const normalized = String(sourceId || "").trim();
+  const match = normalized.match(/^S(.+)$/i);
+  return match ? match[1] : normalized;
+}
+
 function renderGroundedMessageCopy(message) {
   const bundle = message?.sourceBundle;
   if (!bundle?.sources?.length) {
@@ -764,18 +770,19 @@ function renderGroundedMessageCopy(message) {
     rendered += `<span class="message-text-fragment">${escapeWithBreaks(content.slice(lastIndex, matchIndex))}</span>`;
     if (source) {
       rendered += `
-        <span class="source-chip-wrap">
+        <sup class="source-chip-wrap">
           <button
             type="button"
             class="source-chip-button"
             data-open-source-drawer="true"
             data-message-id="${escapeHtml(message.id)}"
             data-source-id="${escapeHtml(source.sourceId)}"
+            aria-label="Open source ${escapeHtml(source.sourceId)}"
           >
-            ${escapeHtml(source.sourceId)}
+            ${escapeHtml(getSourceReferenceLabel(source.sourceId))}
           </button>
           ${buildCitationTooltip(source)}
-        </span>
+        </sup>
       `;
     } else {
       rendered += `<span class="message-text-fragment">${escapeHtml(match[0])}</span>`;
@@ -794,7 +801,7 @@ function renderGroundedMessageCopy(message) {
         data-open-source-drawer="true"
         data-message-id="${escapeHtml(message.id)}"
       >
-        Sources - ${escapeHtml(String(bundle.sourceCount))}
+        Open sources (${escapeHtml(String(bundle.sourceCount))})
       </button>
       <span class="meta">
         ${escapeHtml(bundle.contextMode === "fetched_text" ? "Fetched source text" : "Snippet-backed context")}
@@ -806,12 +813,20 @@ function renderGroundedMessageCopy(message) {
 function buildHistoryRows(state) {
   return state.directChats
     .map((chat) => {
-      const previewSource = summarizeText(chat.messages[chat.messages.length - 1]?.content || "", 54) || "No messages yet.";
+      const hasMessages = chat.messages.length > 0;
+      const previewSource = hasMessages
+        ? summarizeText(chat.messages[chat.messages.length - 1]?.content || "", 72)
+        : "Start a direct chat here. Grounded answers stay transient in their own workspace.";
       const activeClass = chat.id === state.activeChatId ? " active" : "";
+      const stateLabel = chat.id === state.activeChatId ? "Current" : hasMessages ? "Saved" : "Empty";
+      const stateClass = chat.id === state.activeChatId ? " history-state-active" : hasMessages ? " history-state-saved" : "";
       return `
         <article class="history-card${activeClass}">
           <button type="button" class="history-open" data-chat-id="${escapeHtml(chat.id)}">
-            <span class="history-title">${escapeHtml(chat.title)}</span>
+            <span class="history-head">
+              <span class="history-title">${escapeHtml(chat.title)}</span>
+              <span class="history-state${stateClass}">${escapeHtml(stateLabel)}</span>
+            </span>
             <span class="history-preview">${escapeHtml(previewSource)}</span>
             <span class="history-time">${escapeHtml(getHistoryLabel(chat.updatedAt))}</span>
           </button>
@@ -848,7 +863,7 @@ function renderGroundingMeta(state, elements) {
     );
     chips.push(
       `<button type="button" class="source-message-button" data-open-source-drawer="true" data-message-id="${escapeHtml(latestMessage.id)}">
-        Sources - ${escapeHtml(String(bundle.sourceCount))}
+        Open sources (${escapeHtml(String(bundle.sourceCount))})
       </button>`,
     );
   }

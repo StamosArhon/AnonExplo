@@ -107,6 +107,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Reworked grounded answers so cited source IDs render as inline source pills with hover tooltips instead of forcing a large grounding-details block into the main chat surface.
 - Added a retractable right-side source drawer for grounded answers so the full source list, source status, and snippets are available on demand without cluttering the conversation thread.
 - Tightened the sidebar history presentation into compact direct-chat cards with integrated per-entry delete controls instead of a split or awkward row layout.
+- Refined the grounded citation treatment into discreet superscript-style source references and restyled the active history card so the sidebar no longer uses an ambiguous bright highlight block.
 
 ## In-Progress Work
 
@@ -156,6 +157,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Wikimedia or similarly protected publishers should not receive a hidden special-case bypass until the privacy and maintenance tradeoffs of that path are explicitly reviewed.
 - Browser-local direct chat history is considered sufficiently controlled in the baseline when it is clearly labeled as device-local and purgeable; opt-out or export should be treated as later convenience features, not core privacy fixes.
 - The grounded-answer UI should surface provenance as inline citation pills plus an on-demand source drawer, not as a permanently expanded diagnostics block inside the main conversation area.
+- Those inline citations should stay discreet and superscript-like rather than appearing as large in-line buttons that interrupt reading flow.
 - If a future branch adds a Wikimedia-specific path, it should be explicit, opt-in, and based on an official Wikimedia interface rather than a robot-policy bypass.
 
 ## Security / Privacy Assumptions

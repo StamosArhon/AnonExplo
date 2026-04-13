@@ -26,7 +26,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - compact direct-chat history cards with integrated delete actions instead of a split or awkward sidebar row layout
 - stronger browser-local history labeling so it is clear that direct chat history is device-local, purgeable, and not synced or stored server-side
 - explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
-- inline grounded-answer source pills with hover tooltips plus a retractable source drawer so provenance stays available without overwhelming the main answer surface
+- superscript-style grounded source references with hover tooltips plus a retractable source drawer so provenance stays available without overwhelming the main answer surface
 - config-driven SearXNG tuning defaults for broader current-events coverage, including categories, language, and optional engine or time-range controls
 - ranked grounded-source selection with retry behavior so later sources can still be fetched when early candidates fail
 - structured fetcher failure codes, thin-content detection, and domain-aware retry behavior so blocked publishers are easier to understand without silently degrading into generic errors
@@ -164,7 +164,7 @@ The repo now supports a practical grounded-answer path:
 4. construct a bounded grounding context from fetched sources, or fall back to bounded search snippets when article fetches are unavailable
 5. pass that context into the configured model runtime with explicit citation-only instructions
 
-The UI now surfaces grounded provenance through inline source pills, hover tooltips, and an on-demand source drawer rather than a permanently expanded diagnostics block. It still keeps the current grounding mode (`fetched_text` or `search_snippets`) explicit. The current baseline deliberately uses direct HTML fetches plus explicit snippet fallback; it does not bundle a secondary reader proxy or hidden publisher-specific bypass. If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
+The UI now surfaces grounded provenance through superscript-style source references, hover tooltips, and an on-demand source drawer rather than a permanently expanded diagnostics block. It still keeps the current grounding mode (`fetched_text` or `search_snippets`) explicit. The current baseline deliberately uses direct HTML fetches plus explicit snippet fallback; it does not bundle a secondary reader proxy or hidden publisher-specific bypass. If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
 
 ## UI Workbench
 
@@ -179,7 +179,7 @@ The local UI is still static and self-hosted, but it now behaves like a real wor
 - it keeps grounded-answer transcripts, fetched source details, and fetch-inspector output transient in the current tab by default
 - it makes the mode boundary explicit: direct chat is model only, grounded answer is search plus fetch plus model
 - it surfaces runtime readiness, configured default vs. request override, and clearer failure cards without leaving stack diagnostics in the middle of the main chat surface
-- it embeds grounded citations as source pills with hover tooltips and opens a dedicated right-side source drawer when you want the fuller per-answer source list
+- it embeds grounded citations as superscript-style source references with hover tooltips and opens a dedicated right-side source drawer when you want the fuller per-answer source list
 - it keeps grounded-answer context-mode visibility explicit so you can tell whether an answer used fetched article text or search-snippet fallback
 
 ## Llama.cpp Profile
