@@ -21,6 +21,8 @@ class FetcherTests(unittest.TestCase):
         self.assertEqual(document["title"], "Example Article")
         self.assertIn("First paragraph.", document["content_text"])
         self.assertIn("Second paragraph.", document["content_text"])
+        self.assertGreater(document["content_char_count"], 0)
+        self.assertGreater(document["word_count"], 0)
 
     def test_validate_requested_url_blocks_localhost(self) -> None:
         with self.assertRaises(FetcherError):

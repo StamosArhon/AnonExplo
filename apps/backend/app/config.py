@@ -48,6 +48,26 @@ class Settings(BaseSettings):
         default=20.0,
         validation_alias="FETCH_REQUEST_TIMEOUT_SECONDS",
     )
+    grounding_source_char_limit: int = Field(
+        default=3000,
+        validation_alias="GROUNDING_SOURCE_CHAR_LIMIT",
+    )
+    grounding_total_context_chars: int = Field(
+        default=9000,
+        validation_alias="GROUNDING_TOTAL_CONTEXT_CHARS",
+    )
+    grounding_preview_chars: int = Field(
+        default=1200,
+        validation_alias="GROUNDING_PREVIEW_CHARS",
+    )
+    grounding_model_temperature: float = Field(
+        default=0.1,
+        validation_alias="GROUNDING_MODEL_TEMPERATURE",
+    )
+    model_runtime_profile: str = Field(
+        default="llama.cpp-cuda",
+        validation_alias="MODEL_RUNTIME_PROFILE",
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

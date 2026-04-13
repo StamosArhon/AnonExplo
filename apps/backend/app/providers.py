@@ -27,7 +27,15 @@ class FetchDocument(BaseModel):
     title: str | None = None
     excerpt: str
     content_text: str
+    content_char_count: int = 0
+    word_count: int = 0
     content_type: str | None = None
+
+
+class GroundedModelRequest(BaseModel):
+    prompt: str
+    system_prompt: str
+    temperature: float
 
 
 def _normalize_message_content(content: Any) -> str:
@@ -142,3 +150,6 @@ class FetcherClient:
             raise ProviderError(f"Fetch request failed: {exc}") from exc
 
         return FetchDocument.model_validate(data)
+
+
+SearchProvider = SearxngSearchProvider

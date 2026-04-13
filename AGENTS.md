@@ -12,6 +12,8 @@ Every new Codex thread must read these files in order before making changes:
 4. `docs/ARCHITECTURE.md`
 5. `docs/SECURITY_PRIVACY.md`
 
+If the task touches local model provisioning or runtime settings, also read `docs/LLAMA_CPP_RUNTIME_PROFILE.md`.
+
 ## Branching Rules
 
 - Every implementation step, milestone, or tightly scoped change must use a fresh branch named exactly `stamos/<branch-name>`.
@@ -73,4 +75,4 @@ If a remote is missing or remote operations fail, record that explicitly in the 
 - Bootstrap local files: `powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1`
 - Validate the branch: `powershell -ExecutionPolicy Bypass -File scripts/validate.ps1`
 - Start the base stack: `docker compose up --build ui backend fetcher search-provider`
-- Start the base stack plus example llama.cpp profile: `docker compose --profile llamacpp up --build`
+- Start the pinned llama.cpp model profile: `docker compose --profile llamacpp up -d model-backend`

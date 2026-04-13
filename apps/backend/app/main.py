@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from app.grounding import build_grounded_model_request, build_grounding_bundle
 from app.config import Settings, get_settings
 from app.providers import (
     FetcherClient,
@@ -80,6 +81,8 @@ def create_app() -> FastAPI:
             "app": current_settings.app_name,
             "providers": {
                 "model": current_settings.model_provider,
+                "model_name": current_settings.model_name,
+                "model_runtime_profile": current_settings.model_runtime_profile,
                 "search": current_settings.search_provider,
                 "fetch": "internal-fetcher",
             },
@@ -92,6 +95,7 @@ def create_app() -> FastAPI:
                 "provider": current_settings.model_provider,
                 "base_url": current_settings.model_base_url,
                 "model_name": current_settings.model_name,
+                "runtime_profile": current_settings.model_runtime_profile,
             },
             "search": {
                 "provider": current_settings.search_provider,
@@ -157,23 +161,83 @@ def create_app() -> FastAPI:
         fetch_client = build_fetcher_client(current_settings)
 
         try:
-            hits = await search_provider.search(payload.query, payload.search_limit)
+            grounding, _ = await build_grounding_bundle(
+                query=payload.query,
+                search_provider=search_provider,
+                fetcher_client=fetch_client,
+                search_limit=payload.search_limit,
+                fetch_limit=payload.fetch_limit,
+                source_char_limit=current_settings.grounding_source_char_limit,
+                total_context_chars=current_settings.grounding_total_context_chars,
+                preview_chars=current_settings.grounding_preview_chars,
+            )
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-        documents: list[dict[str, object]] = []
-        for hit in hits[: payload.fetch_limit]:
-            try:
-                document = await fetch_client.fetch(hit.url)
-                documents.append({"search_hit": hit.model_dump(), "document": document.model_dump()})
-            except ProviderError as exc:
-                documents.append({"search_hit": hit.model_dump(), "fetch_error": str(exc)})
+        return grounding.model_dump()
 
-        return {
-            "query": payload.query,
-            "search_results": [item.model_dump() for item in hits],
-            "documents": documents,
-        }
+    @app.post(f"{settings.api_prefix}/grounding/answer")
+    async def grounded_answer(
+        payload: GroundingRequest,
+        current_settings: Annotated[Settings, Depends(get_settings)],
+    ) -> dict[str, object]:
+        search_provider = build_search_provider(current_settings)
+        fetch_client = build_fetcher_client(current_settings)
+        model_provider = build_model_provider(current_settings)
+
+        try:
+            grounding, grounding_context = await build_grounding_bundle(
+                query=payload.query,
+                search_provider=search_provider,
+                fetcher_client=fetch_client,
+                search_limit=payload.search_limit,
+                fetch_limit=payload.fetch_limit,
+                source_char_limit=current_settings.grounding_source_char_limit,
+                total_context_chars=current_settings.grounding_total_context_chars,
+                preview_chars=current_settings.grounding_preview_chars,
+            )
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        if not grounding.fetched_sources or not grounding_context.strip():
+            return {
+                "answer_status": "insufficient_sources",
+                "answer": None,
+                "model": None,
+                "usage": {},
+                "model_error": None,
+                "grounding": grounding.model_dump(),
+            }
+
+        grounded_request = build_grounded_model_request(
+            query=payload.query,
+            grounding_context=grounding_context,
+            temperature=current_settings.grounding_model_temperature,
+        )
+
+        try:
+            answer = await model_provider.chat(
+                prompt=grounded_request.prompt,
+                system_prompt=grounded_request.system_prompt,
+                temperature=grounded_request.temperature,
+            )
+            return {
+                "answer_status": "grounded",
+                "answer": answer["answer"],
+                "model": answer["model"],
+                "usage": answer["usage"],
+                "model_error": None,
+                "grounding": grounding.model_dump(),
+            }
+        except ProviderError as exc:
+            return {
+                "answer_status": "model_error",
+                "answer": None,
+                "model": current_settings.model_name,
+                "usage": {},
+                "model_error": str(exc),
+                "grounding": grounding.model_dump(),
+            }
 
     return app
 

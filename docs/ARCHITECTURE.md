@@ -76,6 +76,7 @@ The current code includes:
 - an OpenAI-compatible model adapter
 - a SearXNG search adapter
 - a fetcher client that calls the internal fetch service
+- a grounded-answer path that composes bounded source context before calling the model
 
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
 
@@ -93,9 +94,14 @@ This keeps future runtime changes small. A new model runtime should usually mean
 2. Backend calls the configured search provider.
 3. Backend selects result URLs to fetch.
 4. Backend calls the fetcher service for readable page text.
-5. Backend returns search metadata plus extracted article text to the UI.
-6. A later milestone will combine this with model prompting in a more structured grounded-answer flow.
+5. Backend deduplicates sources, applies bounded context limits, and packages structured source metadata plus fetch errors.
+6. Backend can return the grounding bundle directly or use it to call the configured model adapter for a grounded answer.
+7. UI shows the grounded answer, the selected sources, and any per-source fetch failures.
 
 ## Why The Fetcher Is Separate
 
 Search snippets alone are not enough. The fetcher exists so the system can retrieve, parse, and normalize article text without giving the model backend internet access.
+
+## First Runtime Profile
+
+The first concrete local runtime profile is `llama.cpp` in CUDA server mode, exposed as an OpenAI-compatible endpoint. See `docs/LLAMA_CPP_RUNTIME_PROFILE.md` for the pinned image, default settings, and provisioning flow.

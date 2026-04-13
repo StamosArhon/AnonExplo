@@ -108,6 +108,8 @@ def extract_document(html: str, source_url: str, max_chars: int) -> dict[str, st
             text_blocks.append(fallback)
 
     content_text = "\n\n".join(text_blocks)[:max_chars]
+    content_char_count = len(content_text)
+    word_count = len([word for word in content_text.split(" ") if word])
     excerpt = content_text[:400]
     return {
         "requested_url": source_url,
@@ -115,6 +117,8 @@ def extract_document(html: str, source_url: str, max_chars: int) -> dict[str, st
         "title": title or "",
         "excerpt": excerpt,
         "content_text": content_text,
+        "content_char_count": content_char_count,
+        "word_count": word_count,
         "content_type": "text/html",
     }
 

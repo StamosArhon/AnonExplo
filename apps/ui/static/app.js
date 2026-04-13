@@ -22,6 +22,12 @@ function renderStatus(target, payload) {
       <strong>Model provider:</strong> ${escapeHtml(payload.providers.model)}
     </div>
     <div class="status-card">
+      <strong>Model name:</strong> ${escapeHtml(payload.providers.model_name || "unknown")}
+    </div>
+    <div class="status-card">
+      <strong>Runtime profile:</strong> ${escapeHtml(payload.providers.model_runtime_profile || "unknown")}
+    </div>
+    <div class="status-card">
       <strong>Search provider:</strong> ${escapeHtml(payload.providers.search)}
     </div>
     <div class="status-card">
@@ -30,31 +36,65 @@ function renderStatus(target, payload) {
   `;
 }
 
-function renderGrounding(target, payload) {
-  if (!payload.documents.length) {
-    target.innerHTML = '<div class="result-card">No documents were fetched.</div>';
+function renderGrounding(summaryTarget, answerTarget, sourcesTarget, payload) {
+  const grounding = payload.grounding || payload;
+  const fetchedById = new Map((grounding.fetched_sources || []).map((item) => [item.source_id, item]));
+  const errorsById = new Map((grounding.errors || []).map((item) => [item.source_id || item.url || item.stage, item]));
+
+  summaryTarget.innerHTML = `
+    <div class="status-card"><strong>Search hits:</strong> ${escapeHtml(grounding.summary.search_results)}</div>
+    <div class="status-card"><strong>Unique hits:</strong> ${escapeHtml(grounding.summary.unique_search_results)}</div>
+    <div class="status-card"><strong>Selected:</strong> ${escapeHtml(grounding.summary.selected_sources)}</div>
+    <div class="status-card"><strong>Fetched:</strong> ${escapeHtml(grounding.summary.fetched_sources)}</div>
+    <div class="status-card"><strong>Failures:</strong> ${escapeHtml(grounding.summary.failed_sources)}</div>
+    <div class="status-card"><strong>Context chars:</strong> ${escapeHtml(grounding.summary.grounding_characters)}</div>
+  `;
+
+  if (payload.answer_status === "grounded") {
+    answerTarget.textContent = payload.answer || "(empty grounded answer)";
+  } else if (payload.answer_status === "insufficient_sources") {
+    answerTarget.textContent = "No grounded answer was generated because no fetched source text was available.";
+  } else if (payload.answer_status === "model_error") {
+    answerTarget.textContent = `The sources were fetched, but the model request failed.\n\n${payload.model_error || "Unknown model error."}`;
+  } else {
+    answerTarget.textContent = "Grounding preview generated without model synthesis.";
+  }
+
+  if (!(grounding.selected_sources || []).length) {
+    sourcesTarget.innerHTML = '<div class="result-card">No sources were selected from the search results.</div>';
     return;
   }
 
-  target.innerHTML = payload.documents
-    .map((entry) => {
-      const hit = entry.search_hit;
-      if (entry.fetch_error) {
-        return `
-          <div class="result-card">
-            <strong>${escapeHtml(hit.title)}</strong>
-            <div class="meta">${escapeHtml(hit.url)}</div>
-            <p class="error">${escapeHtml(entry.fetch_error)}</p>
-          </div>
-        `;
-      }
+  sourcesTarget.innerHTML = grounding.selected_sources
+    .map((source) => {
+      const fetched = fetchedById.get(source.source_id);
+      const error = errorsById.get(source.source_id);
+      const statusClass = fetched ? "status-fetched" : error ? "status-failed" : "status-selected";
+      const statusLabel = fetched ? "Fetched" : error ? "Failed" : "Selected";
 
-      const document = entry.document;
       return `
         <div class="result-card">
-          <strong>${escapeHtml(document.title || hit.title)}</strong>
-          <div class="meta"><a href="${escapeHtml(hit.url)}" target="_blank" rel="noreferrer">${escapeHtml(hit.url)}</a></div>
-          <p>${escapeHtml(document.excerpt)}</p>
+          <div class="status-line">
+            <strong>${escapeHtml(source.title)}</strong>
+            <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+          </div>
+          <div class="meta">
+            Rank ${escapeHtml(source.search_rank)} · ${escapeHtml(source.domain)} ·
+            <a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.url)}</a>
+          </div>
+          <div class="source-body">
+            <p>${escapeHtml(source.snippet || "No search snippet available.")}</p>
+            ${
+              fetched
+                ? `
+                  <div class="meta">Context used: ${escapeHtml(fetched.context_chars_used)} chars · Extracted: ${escapeHtml(fetched.content_char_count)} chars · ${escapeHtml(fetched.word_count)} words</div>
+                  <div class="source-text">${escapeHtml(fetched.context_text || fetched.excerpt || "No source text available.")}</div>
+                `
+                : error
+                  ? `<p class="error">${escapeHtml(error.message)}</p>`
+                  : `<p class="meta">Selected for grounding but not fetched.</p>`
+            }
+          </div>
         </div>
       `;
     })
@@ -85,6 +125,8 @@ async function main() {
   const statusOutput = document.getElementById("status-output");
   const chatOutput = document.getElementById("chat-output");
   const fetchOutput = document.getElementById("fetch-output");
+  const groundingAnswer = document.getElementById("grounding-answer");
+  const groundingSummary = document.getElementById("grounding-summary");
   const groundingOutput = document.getElementById("grounding-output");
 
   async function refreshStatus() {
@@ -116,17 +158,19 @@ async function main() {
 
   document.getElementById("grounding-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    groundingOutput.textContent = "Searching and fetching...";
+    groundingAnswer.textContent = "Generating grounded answer...";
+    groundingSummary.innerHTML = "";
+    groundingOutput.textContent = "";
     try {
       const payload = {
         query: document.getElementById("grounding-query").value,
         search_limit: Number(document.getElementById("search-limit").value),
         fetch_limit: Number(document.getElementById("fetch-limit").value),
       };
-      const data = await requestJson(`${apiBaseUrl}/grounding/search-fetch`, payload);
-      renderGrounding(groundingOutput, data);
+      const data = await requestJson(`${apiBaseUrl}/grounding/answer`, payload);
+      renderGrounding(groundingSummary, groundingAnswer, groundingOutput, data);
     } catch (error) {
-      groundingOutput.textContent = error.message;
+      groundingAnswer.textContent = error.message;
     }
   });
 

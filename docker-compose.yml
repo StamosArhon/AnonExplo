@@ -49,12 +49,17 @@ services:
       MODEL_BASE_URL: ${MODEL_BASE_URL:-http://model-backend:8080/v1}
       MODEL_NAME: ${MODEL_NAME:-replace-with-local-model}
       MODEL_REQUEST_TIMEOUT_SECONDS: ${MODEL_REQUEST_TIMEOUT_SECONDS:-90}
+      MODEL_RUNTIME_PROFILE: ${MODEL_RUNTIME_PROFILE:-llama.cpp-cuda}
       SEARCH_PROVIDER: ${SEARCH_PROVIDER:-searxng}
       SEARCH_BASE_URL: ${SEARCH_BASE_URL:-http://search-provider:8080}
       SEARCH_RESULT_LIMIT: ${SEARCH_RESULT_LIMIT:-5}
       SEARCH_REQUEST_TIMEOUT_SECONDS: ${SEARCH_REQUEST_TIMEOUT_SECONDS:-20}
       FETCH_BASE_URL: ${FETCH_BASE_URL:-http://fetcher:8081}
       FETCH_REQUEST_TIMEOUT_SECONDS: ${FETCH_REQUEST_TIMEOUT_SECONDS:-20}
+      GROUNDING_SOURCE_CHAR_LIMIT: ${GROUNDING_SOURCE_CHAR_LIMIT:-3000}
+      GROUNDING_TOTAL_CONTEXT_CHARS: ${GROUNDING_TOTAL_CONTEXT_CHARS:-9000}
+      GROUNDING_PREVIEW_CHARS: ${GROUNDING_PREVIEW_CHARS:-1200}
+      GROUNDING_MODEL_TEMPERATURE: ${GROUNDING_MODEL_TEMPERATURE:-0.1}
     ports:
       - 127.0.0.1:${BACKEND_PORT:-8000}:8000
     depends_on:
@@ -118,13 +123,15 @@ services:
   search-provider:
     image: ${SEARXNG_IMAGE:-searxng/searxng:latest}
     restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-replace-with-local-random-secret}
+      FORCE_OWNERSHIP: "false"
     volumes:
       - ./configs/searxng/settings.yml:/etc/searxng/settings.yml:ro
       - ./data/searxng-cache:/var/cache/searxng
     networks:
       - core_internal
       - egress
-    read_only: true
     tmpfs:
       - /tmp
     cap_drop:
@@ -135,8 +142,24 @@ services:
   model-backend:
     profiles:
       - llamacpp
-    image: ${MODEL_RUNTIME_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
-    command: "${MODEL_RUNTIME_COMMAND:-llama-server -m /models/replace-with-model.gguf --host 0.0.0.0 --port 8080 -ngl 99 -c 4096}"
+    image: ${MODEL_RUNTIME_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda@sha256:59c2b6abd3c898e8f3b7beef3e2c871488d9a9783b6c6d766ffb1409e11c8044}
+    command:
+      - llama-server
+      - -m
+      - /models/${MODEL_FILE_NAME:-replace-with-model.gguf}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -c
+      - ${MODEL_CONTEXT_SIZE:-4096}
+      - -ngl
+      - ${MODEL_GPU_LAYERS:-99}
+      - -b
+      - ${MODEL_BATCH_SIZE:-512}
+      - -t
+      - ${MODEL_THREADS:-8}
+    gpus: ${MODEL_RUNTIME_GPUS:-all}
     restart: unless-stopped
     networks:
       - model_internal

@@ -33,6 +33,7 @@
 - `.env` is untracked and machine-specific.
 - Provider selection must be controlled through environment variables first, not code edits.
 - Model files are local assets and must not be committed.
+- The first concrete local model runtime profile is documented in `docs/LLAMA_CPP_RUNTIME_PROFILE.md`.
 
 ## Branch / Merge Workflow
 
@@ -44,5 +45,5 @@
 ## Practical Notes
 
 - The first branch intentionally keeps the UI static and lightweight to avoid introducing a frontend toolchain before the architecture is stable.
-- The default model slot is currently an example OpenAI-compatible runtime profile rather than a hard-wired inference engine choice.
+- The current model slot is a concrete `llama.cpp` CUDA profile, but the backend remains adapter-driven and should not be coupled to that runtime.
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.

@@ -18,12 +18,14 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Repo-managed services run as non-root where practical.
 - Capabilities are dropped and `no-new-privileges` is enabled where practical.
 - No remote frontend assets, fonts, telemetry, analytics, or CDNs are used.
+- Grounded model prompts use bounded source-context limits so fetched page text is not forwarded to the model without size controls.
 
 ## Secrets Handling
 
 - Keep secrets in local untracked files such as `.env`.
 - Never commit tokens, cookies, API keys, or private model access credentials.
 - Model files and fetched content are local assets, not Git assets.
+- The bootstrap flow generates a local `SEARXNG_SECRET` in `.env` for the default search-provider path.
 
 ## Logging Guidance
 
@@ -40,6 +42,7 @@ The fetcher is the most sensitive service because it has egress. Current guardra
 - response size is capped
 - non-HTML responses are rejected
 - extracted text is trimmed to a bounded size
+- grounded-answer prompts use only bounded excerpts of fetched source text
 
 These controls reduce privacy leakage and resource abuse, but they are not a substitute for host firewall policy.
 

@@ -44,11 +44,11 @@
         </section>
 
         <section class="panel">
-          <h2>Grounding Preview</h2>
+          <h2>Grounded Answer</h2>
           <form id="grounding-form" class="stack">
             <label>
-              Query
-              <input id="grounding-query" type="text" placeholder="Search, fetch, and inspect source text." />
+              Question or search query
+              <input id="grounding-query" type="text" placeholder="Ask something that should be answered from fetched source text." />
             </label>
             <div class="split">
               <label>
@@ -60,9 +60,13 @@
                 <input id="fetch-limit" type="number" min="1" max="5" value="3" />
               </label>
             </div>
-            <button type="submit">Run Grounding</button>
+            <button type="submit">Generate Grounded Answer</button>
           </form>
-          <div id="grounding-output" class="stack output-block"></div>
+          <div class="stack output-block">
+            <div id="grounding-answer" class="answer-card">Grounded answers will appear here.</div>
+            <div id="grounding-summary" class="summary-grid"></div>
+            <div id="grounding-output" class="stack"></div>
+          </div>
         </section>
 
         <section class="panel">

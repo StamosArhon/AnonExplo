@@ -21,7 +21,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 1. `foundation-bootstrap`
    - establish repo protocol, continuity docs, architecture, security docs, Docker foundation, and initial provider scaffolding
 2. `grounding-vertical-slice`
-   - add a working search to fetch to grounded-context backend flow with richer error handling
+   - add a working search to fetch to grounded-context backend flow with richer error handling and a grounded-answer path
 3. `local-model-integration`
    - integrate and validate one concrete local model runtime profile end to end on the target hardware
 4. `ui-workbench`
@@ -33,12 +33,12 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Current Phase
 
-- Active phase: `foundation-bootstrap`
-- Goal: create the canonical repo workflow and the first secure, reviewable stack skeleton
+- Active phase: `grounding-vertical-slice`
+- Goal: turn the scaffold into a practical grounded-answer slice with one concrete local model runtime profile
 
 ## Active Branch
 
-- `stamos/foundation-bootstrap`
+- `stamos/grounding-vertical-slice`
 
 ## Completed Work
 
@@ -48,6 +48,11 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - Added an initial Docker Compose skeleton with internal and egress network separation.
 - Added minimal UI, orchestrator, and fetcher code to make the architecture concrete and reviewable.
 - Added bootstrap and validation scripts and confirmed they run on the current development machine.
+- Implemented a structured grounding pipeline that deduplicates search hits, selects sources, fetches article text, and reports per-source failures.
+- Added a grounded-answer backend path that passes bounded fetched source text into the configured local model.
+- Upgraded the local UI to show grounded answers, source status, and the exact source text slices used for grounding.
+- Finalized the first concrete `llama.cpp` CUDA runtime profile and documented its provisioning flow.
+- Tightened the base-stack validation to cover the grounded slice, the llama.cpp profile config, and the local Docker stack wiring.
 
 ## In-Progress Work
 
@@ -55,8 +60,8 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Open Questions / Blockers
 
-- The default model runtime profile is still an example slot. A concrete, host-validated image tag and provisioning workflow for a local model must be finalized in a later branch.
-- SearXNG is scaffolded as the default search provider, but the exact production tuning for engines and cache strategy is deferred until the grounding vertical slice branch.
+- This branch validates the `llama.cpp` runtime profile wiring and provisioning path, but it does not include a committed GGUF model file or a full end-to-end inference benchmark on the target machine.
+- The current SearXNG configuration is intentionally conservative and still needs deeper engine and limiter tuning in a later hardening pass.
 - Host firewall guidance has been documented conceptually, but not automated.
 
 ## Decisions Made And Why
@@ -66,6 +71,9 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - The model runtime is treated as an OpenAI-compatible endpoint by default because that interface keeps future runtime swaps easier.
 - The fetch pipeline is a separate service so search results can be converted into readable source text without giving the model runtime internet access.
 - The initial UI is a static local app with no external assets or CDN dependencies to preserve privacy and keep setup light.
+- Grounded answers are built from bounded fetched source text, with per-source selection and error reporting exposed to the UI.
+- `llama.cpp` CUDA server mode is the first concrete runtime profile because it fits the target hardware and keeps the backend adapter boundary clean.
+- Bootstrap now generates a local SearXNG secret for new environments instead of relying on the insecure default.
 
 ## Security / Privacy Assumptions
 
@@ -81,21 +89,24 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - `scripts/validate.ps1`: passed on 2026-04-13
 - Validation included:
   - `docker compose config`
+  - `docker compose --profile llamacpp config`
   - Docker builds for `ui`, `backend`, and `fetcher`
   - backend unit tests in the backend container
   - fetcher unit tests in the fetcher container
+  - base-stack smoke validation for `ui`, `backend`, `fetcher`, and `search-provider`
+  - container health and localhost port-binding inspection for the base stack
 - `scripts/bootstrap.ps1`: passed on 2026-04-13 and created the expected local `.env` plus data directories
 
 ## Exact Next Steps
 
-1. Start the next branch from updated `main` as `stamos/grounding-vertical-slice`.
-2. Turn the current search-and-fetch preview into a more robust grounded-context pipeline with better result selection and error reporting.
-3. Finalize one host-validated model runtime profile and documented provisioning flow.
+1. Start the next branch from updated `main` as `stamos/local-model-integration`.
+2. Provision and validate one concrete GGUF model on the target hardware through the pinned `llama.cpp` profile.
+3. Measure practical local defaults such as context size, GPU layers, and response quality for the first recommended model.
 
 ## Handoff Notes For A Fresh Codex Thread
 
 - Read `AGENTS.md` first.
 - Then read this roadmap and `docs/INSTRUCTIONS_AND_NOTES.md`.
-- The repo currently contains a secure foundation scaffold, not a fully integrated local model stack.
-- The first milestone is intentionally narrow: protocol, docs, Docker boundaries, a minimal UI, a provider-aware backend, and a fetch service.
-- The next implementation thread should begin with `stamos/grounding-vertical-slice` after confirming `main` is clean.
+- The repo now includes a real grounded-answer vertical slice plus a documented `llama.cpp` runtime profile.
+- The grounding flow is intentionally bounded and transparent: search, source selection, fetch, source packaging, and model synthesis are all visible in the UI and backend responses.
+- The next implementation thread should begin with `stamos/local-model-integration` after confirming `main` is clean.
