@@ -365,6 +365,44 @@ function buildBanner(title, message, variant = "warning", extra = "") {
   `;
 }
 
+function buildErrorDetailMeta(detail) {
+  if (!detail || typeof detail !== "object") {
+    return "";
+  }
+
+  const chips = [];
+  if (detail.code) {
+    chips.push(buildChip("Code", detail.code, "warn"));
+  }
+  if (typeof detail.upstream_status === "number") {
+    chips.push(buildChip("Upstream", String(detail.upstream_status), "warn"));
+  }
+  if (typeof detail.retryable === "boolean") {
+    chips.push(buildChip("Retryable", detail.retryable ? "yes" : "no", detail.retryable ? "warn" : "muted"));
+  }
+
+  return chips.length ? `<div class="chip-row">${chips.join("")}</div>` : "";
+}
+
+function buildGroundingErrorMeta(error) {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+
+  const chips = [];
+  if (error.code) {
+    chips.push(buildChip("Code", error.code, "warn"));
+  }
+  if (typeof error.upstream_status === "number") {
+    chips.push(buildChip("Upstream", String(error.upstream_status), "warn"));
+  }
+  if (typeof error.retryable === "boolean") {
+    chips.push(buildChip("Retryable", error.retryable ? "yes" : "no", error.retryable ? "warn" : "muted"));
+  }
+
+  return chips.length ? `<div class="chip-row">${chips.join("")}</div>` : "";
+}
+
 function setContextChip(element, label, value, variant = "muted") {
   element.className = `context-chip chip-${variant}`;
   element.textContent = `${label} - ${value}`;
@@ -644,6 +682,20 @@ function renderFetchMeta(state, elements) {
   }
 
   if (state.fetchStatus.kind === "success") {
+    chips.push(
+      buildChip(
+        "Method",
+        state.fetchStatus.payload.retrieval_method || "direct_html",
+        "muted",
+      ),
+    );
+    chips.push(
+      buildChip(
+        "Quality",
+        state.fetchStatus.payload.content_quality || "unknown",
+        state.fetchStatus.payload.content_quality === "usable" ? "ok" : "warn",
+      ),
+    );
     chips.push(buildChip("Chars", String(state.fetchStatus.payload.content_char_count || 0), "muted"));
     chips.push(buildChip("Words", String(state.fetchStatus.payload.word_count || 0), "muted"));
   }
@@ -688,7 +740,10 @@ function renderGroundingDetails(state, elements) {
         item.source_id ? `Source ${item.source_id} issue` : "Grounding issue",
         item.message || "Unknown grounding error.",
         "warning",
-        item.url ? `<div class="meta">${escapeHtml(item.url)}</div>` : "",
+        [
+          item.url ? `<div class="meta">${escapeHtml(item.url)}</div>` : "",
+          buildGroundingErrorMeta(item),
+        ].join(""),
       ),
     )
     .join("");
@@ -729,11 +784,22 @@ function renderGroundingDetails(state, elements) {
             ${
                 fetched
                   ? `
-                    <div class="meta">
-                      Context used ${escapeHtml(fetched.context_chars_used)} chars | Extracted ${escapeHtml(
-                        fetched.content_char_count,
-                      )} chars | ${escapeHtml(fetched.word_count)} words
+                    <div class="chip-row">
+                      ${buildChip("Method", fetched.retrieval_method || "direct_html", "muted")}
+                      ${buildChip(
+                        "Quality",
+                        fetched.content_quality || "unknown",
+                        fetched.content_quality === "usable" ? "ok" : "warn",
+                      )}
+                      ${buildChip("Context", String(fetched.context_chars_used || 0), "muted")}
+                      ${buildChip("Extracted", String(fetched.content_char_count || 0), "muted")}
+                      ${buildChip("Words", String(fetched.word_count || 0), "muted")}
                     </div>
+                    ${
+                      Array.isArray(fetched.warnings) && fetched.warnings.length
+                        ? `<div class="meta">Warnings: ${escapeHtml(fetched.warnings.join(" | "))}</div>`
+                        : ""
+                    }
                     <div class="source-text">${escapeHtml(
                       fetched.context_text || fetched.excerpt || "No grounded source text available.",
                     )}</div>
@@ -744,7 +810,10 @@ function renderGroundingDetails(state, elements) {
                       <div class="source-text">${escapeHtml(source.snippet || "No search snippet available.")}</div>
                     `
                   : sourceError
-                    ? `<p class="error">${escapeHtml(sourceError.message)}</p>`
+                    ? `
+                      <p class="error">${escapeHtml(sourceError.message)}</p>
+                      ${buildGroundingErrorMeta(sourceError)}
+                    `
                     : '<p class="meta">Selected for grounding but not fetched.</p>'
             }
           </div>
@@ -760,6 +829,17 @@ function renderFetchOutput(state, elements) {
     elements.fetchOutput.innerHTML = `
       <h3>${escapeHtml(payload.title || "Untitled")}</h3>
       <p class="meta">${escapeHtml(payload.final_url || payload.requested_url || "")}</p>
+      <div class="chip-row">
+        ${buildChip("Method", payload.retrieval_method || "direct_html", "muted")}
+        ${buildChip("Quality", payload.content_quality || "unknown", payload.content_quality === "usable" ? "ok" : "warn")}
+        ${buildChip("Chars", String(payload.content_char_count || 0), "muted")}
+        ${buildChip("Words", String(payload.word_count || 0), "muted")}
+      </div>
+      ${
+        Array.isArray(payload.warnings) && payload.warnings.length
+          ? `<div class="meta">Warnings: ${escapeHtml(payload.warnings.join(" | "))}</div>`
+          : ""
+      }
       <p>${escapeHtml(payload.excerpt || "No excerpt available.")}</p>
       <div class="source-text">${escapeHtml(payload.content_text || "No readable article text returned.")}</div>
     `;
@@ -767,7 +847,12 @@ function renderFetchOutput(state, elements) {
   }
 
   if (state.fetchStatus.kind === "error") {
-    elements.fetchOutput.innerHTML = buildBanner("Fetch request failed", state.fetchStatus.error.message, "error");
+    elements.fetchOutput.innerHTML = buildBanner(
+      "Fetch request failed",
+      state.fetchStatus.error.message,
+      "error",
+      buildErrorDetailMeta(state.fetchStatus.error.detail),
+    );
     return;
   }
 

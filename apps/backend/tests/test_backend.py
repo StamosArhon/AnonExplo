@@ -19,6 +19,8 @@ from app.grounding import build_grounded_model_request, build_grounding_bundle
 from app.main import app, build_model_provider, build_search_provider
 from app.providers import (
     FetchDocument,
+    FetcherClient,
+    FetcherRequestError,
     ModelDescriptor,
     ModelRuntimeStatus,
     OpenAICompatibleModelProvider,
@@ -578,6 +580,34 @@ class ProviderFactoryTests(unittest.TestCase):
         self.assertIsInstance(provider, YacySearchProvider)
 
 
+class ProviderClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetcher_client_raises_structured_fetcher_request_error(self) -> None:
+        client = FetcherClient(base_url="http://fetcher:8081", timeout_seconds=20.0)
+        response = httpx.Response(
+            502,
+            request=httpx.Request("POST", "http://fetcher:8081/api/v1/fetch"),
+            content=json.dumps(
+                {
+                    "detail": {
+                        "message": "Remote site denied automated fetching under its robot policy.",
+                        "code": "blocked_by_remote_policy",
+                        "upstream_status": 403,
+                        "retryable": False,
+                    }
+                }
+            ).encode("utf-8"),
+        )
+
+        with patch("app.providers.httpx.AsyncClient", return_value=MockAsyncClient(post_response=response)):
+            with self.assertRaises(FetcherRequestError) as context:
+                await client.fetch("https://example.com/article")
+
+        self.assertEqual(str(context.exception), "Remote site denied automated fetching under its robot policy.")
+        self.assertEqual(context.exception.code, "blocked_by_remote_policy")
+        self.assertEqual(context.exception.upstream_status, 403)
+        self.assertFalse(context.exception.retryable)
+
+
 class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
     async def test_probe_runtime_reports_unreachable_runtime(self) -> None:
         provider = OpenAICompatibleModelProvider(
@@ -846,6 +876,156 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bundle.summary.failed_sources, 2)
         self.assertIn("Search snippet:", context)
         self.assertIn("February 28, 2026", context)
+
+    async def test_grounding_bundle_retries_after_thin_content(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Primary report",
+                url="https://alpha.example/report",
+                snippet="Primary report with the expected timeline.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Secondary report",
+                url="https://bravo.example/report",
+                snippet="Secondary report confirming the same date.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+
+        async def fetch_side_effect(url: str):
+            if url == "https://alpha.example/report":
+                return FetchDocument(
+                    requested_url=url,
+                    final_url=url,
+                    title="Thin shell",
+                    excerpt="Thin shell.",
+                    content_text="Login required.",
+                    content_char_count=15,
+                    word_count=2,
+                    content_type="text/html",
+                    retrieval_method="direct_html",
+                    content_quality="thin",
+                    warnings=["Extracted page content looks thin and may be a paywall shell."],
+                )
+
+            return FetchDocument(
+                requested_url=url,
+                final_url=url,
+                title="Usable report",
+                excerpt="Usable report excerpt.",
+                content_text="The article text clearly states the first reported strike date and supporting details.",
+                content_char_count=82,
+                word_count=13,
+                content_type="text/html",
+                retrieval_method="direct_html",
+                content_quality="usable",
+                warnings=[],
+            )
+
+        fetcher.fetch.side_effect = fetch_side_effect
+
+        bundle, context = await build_grounding_bundle(
+            query="When was the first reported strike?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=2,
+            fetch_limit=1,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+        )
+
+        self.assertEqual(bundle.summary.fetched_sources, 1)
+        self.assertEqual(bundle.summary.failed_sources, 1)
+        self.assertEqual(bundle.summary.context_mode, "fetched_text")
+        self.assertEqual(bundle.errors[0].code, "content_too_thin")
+        self.assertFalse(bundle.errors[0].retryable)
+        self.assertEqual(bundle.fetched_sources[0].source_id, "S2")
+        self.assertEqual(bundle.fetched_sources[0].retrieval_method, "direct_html")
+        self.assertEqual(bundle.fetched_sources[0].content_quality, "usable")
+        self.assertIn("[S2]", context)
+
+    async def test_grounding_bundle_skips_later_candidates_from_blocked_domain(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Primary timeline",
+                url="https://blocked.example/timeline",
+                snippet="First report from blocked domain.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Confirming report",
+                url="https://usable.example/confirming-report",
+                snippet="Second source with the same date.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Blocked follow-up",
+                url="https://blocked.example/follow-up",
+                snippet="Another blocked result from the same domain.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+        attempted_urls: list[str] = []
+
+        async def fetch_side_effect(url: str):
+            attempted_urls.append(url)
+            if url == "https://blocked.example/timeline":
+                raise FetcherRequestError(
+                    "Remote site denied automated fetching under its robot policy.",
+                    code="blocked_by_remote_policy",
+                    upstream_status=403,
+                    retryable=False,
+                )
+
+            return FetchDocument(
+                requested_url=url,
+                final_url=url,
+                title="Usable report",
+                excerpt="Usable report excerpt.",
+                content_text="The article confirms the date and surrounding context in readable text.",
+                content_char_count=71,
+                word_count=11,
+                content_type="text/html",
+                retrieval_method="direct_html",
+                content_quality="usable",
+                warnings=[],
+            )
+
+        fetcher.fetch.side_effect = fetch_side_effect
+
+        bundle, context = await build_grounding_bundle(
+            query="When was the first reported strike?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=3,
+            fetch_limit=2,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+        )
+
+        self.assertEqual(
+            attempted_urls,
+            [
+                "https://blocked.example/timeline",
+                "https://usable.example/confirming-report",
+            ],
+        )
+        self.assertEqual(bundle.summary.selected_sources, 2)
+        self.assertEqual(bundle.summary.failed_sources, 1)
+        self.assertEqual(bundle.errors[0].code, "blocked_by_remote_policy")
+        self.assertEqual(bundle.errors[0].upstream_status, 403)
+        self.assertFalse(bundle.errors[0].retryable)
+        self.assertEqual(bundle.search_results[2].status, "unselected")
+        self.assertIn("[S2]", context)
 
     def test_grounded_request_discourages_prior_knowledge_language(self) -> None:
         grounded_request = build_grounded_model_request(

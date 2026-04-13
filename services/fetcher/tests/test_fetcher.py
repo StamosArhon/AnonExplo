@@ -3,7 +3,53 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.main import FetcherError, app, extract_document, validate_requested_url
+from app.main import FetcherError, Settings, app, extract_document, fetch_html, validate_requested_url
+
+
+class MockStreamResponse:
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        url: str,
+        headers: dict[str, str] | None = None,
+        body: bytes = b"",
+    ) -> None:
+        self.status_code = status_code
+        self.url = url
+        self.headers = headers or {}
+        self._body = body
+
+    async def aread(self) -> bytes:
+        return self._body
+
+    async def aiter_bytes(self):
+        yield self._body
+
+
+class MockStreamContext:
+    def __init__(self, response: MockStreamResponse) -> None:
+        self.response = response
+
+    async def __aenter__(self) -> MockStreamResponse:
+        return self.response
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class MockStreamingClient:
+    def __init__(self, response: MockStreamResponse) -> None:
+        self.response = response
+
+    async def __aenter__(self) -> "MockStreamingClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    def stream(self, method: str, url: str) -> MockStreamContext:
+        return MockStreamContext(self.response)
 
 
 class FetcherTests(unittest.TestCase):
@@ -11,6 +57,7 @@ class FetcherTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_extract_document_collects_readable_text(self) -> None:
+        settings = Settings(FETCH_MAX_TEXT_CHARS=1000)
         html = """
         <html>
           <head><title>Example Article</title></head>
@@ -23,12 +70,36 @@ class FetcherTests(unittest.TestCase):
           </body>
         </html>
         """
-        document = extract_document(html, "https://example.com/article", 1000)
+        document = extract_document(html, "https://example.com/article", settings)
         self.assertEqual(document["title"], "Example Article")
         self.assertIn("First paragraph.", document["content_text"])
         self.assertIn("Second paragraph.", document["content_text"])
         self.assertGreater(document["content_char_count"], 0)
         self.assertGreater(document["word_count"], 0)
+        self.assertEqual(document["content_quality"], "thin")
+        self.assertTrue(document["warnings"])
+
+    def test_extract_document_marks_usable_content_when_thresholds_are_met(self) -> None:
+        settings = Settings(
+            FETCH_MAX_TEXT_CHARS=5000,
+            FETCH_MIN_CONTENT_CHARS=60,
+            FETCH_MIN_WORD_COUNT=10,
+        )
+        html = """
+        <html>
+          <head><title>Example Article</title></head>
+          <body>
+            <article>
+              <h1>Headline</h1>
+              <p>First paragraph with enough readable words to count for a usable extraction.</p>
+              <p>Second paragraph adds more detail and keeps the content above the threshold.</p>
+            </article>
+          </body>
+        </html>
+        """
+        document = extract_document(html, "https://example.com/article", settings)
+        self.assertEqual(document["content_quality"], "usable")
+        self.assertEqual(document["warnings"], [])
 
     def test_validate_requested_url_blocks_localhost(self) -> None:
         with self.assertRaises(FetcherError):
@@ -53,6 +124,9 @@ class FetcherTests(unittest.TestCase):
             "content_char_count": 12,
             "word_count": 2,
             "content_type": "text/html",
+            "retrieval_method": "direct_html",
+            "content_quality": "usable",
+            "warnings": [],
         }
 
         response = self.client.post("/api/v1/fetch", json={"url": "https://example.com/article"})
@@ -61,7 +135,52 @@ class FetcherTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["content_char_count"], 12)
         self.assertEqual(payload["word_count"], 2)
+        self.assertEqual(payload["retrieval_method"], "direct_html")
+        self.assertEqual(payload["content_quality"], "usable")
         validate_requested_url_mock.assert_called_once()
+
+    @patch("app.main.fetch_html", new_callable=AsyncMock)
+    @patch("app.main.validate_requested_url")
+    def test_fetch_endpoint_returns_structured_fetcher_errors(
+        self,
+        validate_requested_url_mock,
+        fetch_html_mock: AsyncMock,
+    ) -> None:
+        fetch_html_mock.side_effect = FetcherError(
+            "Remote site denied automated fetching under its robot policy.",
+            code="blocked_by_remote_policy",
+            status_code=502,
+            upstream_status=403,
+            retryable=False,
+        )
+
+        response = self.client.post("/api/v1/fetch", json={"url": "https://example.com/article"})
+
+        self.assertEqual(response.status_code, 502)
+        payload = response.json()
+        self.assertEqual(payload["detail"]["code"], "blocked_by_remote_policy")
+        self.assertEqual(payload["detail"]["upstream_status"], 403)
+        self.assertFalse(payload["detail"]["retryable"])
+        validate_requested_url_mock.assert_called_once()
+
+
+class FetcherHttpBehaviorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetch_html_classifies_robot_policy_blocks(self) -> None:
+        response = MockStreamResponse(
+            status_code=403,
+            url="https://example.com/article",
+            headers={"content-type": "text/html"},
+            body=b"<html><body>Access denied by robot policy.</body></html>",
+        )
+
+        with patch("app.main.httpx.AsyncClient", return_value=MockStreamingClient(response)):
+            with self.assertRaises(FetcherError) as context:
+                await fetch_html("https://example.com/article", Settings())
+
+        self.assertEqual(context.exception.code, "blocked_by_remote_policy")
+        self.assertEqual(context.exception.status_code, 502)
+        self.assertEqual(context.exception.upstream_status, 403)
+        self.assertFalse(context.exception.retryable)
 
 
 if __name__ == "__main__":

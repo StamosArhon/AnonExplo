@@ -9,6 +9,21 @@ class ProviderError(RuntimeError):
     pass
 
 
+class FetcherRequestError(ProviderError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        upstream_status: int | None = None,
+        retryable: bool | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.upstream_status = upstream_status
+        self.retryable = retryable
+
+
 class UnsupportedModelError(ProviderError):
     pass
 
@@ -34,6 +49,9 @@ class FetchDocument(BaseModel):
     content_char_count: int = 0
     word_count: int = 0
     content_type: str | None = None
+    retrieval_method: str = "direct_html"
+    content_quality: str = "usable"
+    warnings: list[str] = Field(default_factory=list)
 
 
 class GroundedModelRequest(BaseModel):
@@ -522,6 +540,22 @@ class FetcherClient:
                 response = await client.post(f"{self.base_url}/api/v1/fetch", json=payload)
                 response.raise_for_status()
             data = response.json()
+        except httpx.HTTPStatusError as exc:
+            detail: Any = None
+            try:
+                detail = exc.response.json().get("detail")
+            except ValueError:
+                detail = None
+
+            if isinstance(detail, dict):
+                raise FetcherRequestError(
+                    detail.get("message") or f"Fetch request failed with status {exc.response.status_code}.",
+                    code=detail.get("code"),
+                    upstream_status=detail.get("upstream_status"),
+                    retryable=detail.get("retryable"),
+                ) from exc
+
+            raise ProviderError(f"Fetch request failed: {exc}") from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise ProviderError(f"Fetch request failed: {exc}") from exc
 

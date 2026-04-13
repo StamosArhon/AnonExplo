@@ -36,11 +36,13 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
    - tune SearXNG defaults, grounded-source selection, and answer-citation behavior for better day-to-day grounded responses
 9. `fetcher-resilience`
    - improve fetch success on hostile publishers, preserve explicit provenance, and add better operator guidance for fetch-path edge cases
+10. `fetcher-secondary-reader-strategy`
+   - decide whether to add an opt-in secondary reader path for blocked publishers without weakening the privacy model
 
 ## Current Phase
 
-- Active phase: `fetcher-resilience`
-- Goal: improve fetch success and content extraction quality on publishers that still block or degrade the current bounded fetch pipeline
+- Active phase: `fetcher-secondary-reader-strategy`
+- Goal: decide whether the repo should add an opt-in secondary reader path for blocked publishers, or stay with direct HTML fetches plus explicit snippet fallback
 
 ## Active Branch
 
@@ -93,10 +95,15 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Fixed the fetcher's response typing so successful fetches no longer fail FastAPI response validation when integer count fields are returned.
 - Increased the localhost gateway timeout for backend requests so heavier grounded answer calls are less likely to die at the proxy before the backend finishes.
 - Updated the UI to surface grounding context mode and to show when a grounded answer used snippet fallback instead of fetched article text.
+- Added structured fetcher failure codes and metadata so blocked, rate-limited, and generic upstream failures stay distinguishable across the fetcher, backend, and UI.
+- Added fetcher-side thin-content classification so paywall shells or otherwise low-value extracts can be rejected instead of being treated as usable grounding context.
+- Reworked fetch retries so later candidates are still tried after thin-content or generic fetch failures, while later URLs from the same domain are skipped after explicit robot-policy, forbidden, or rate-limited responses.
+- Added fetch-quality and error provenance to the UI's fetch inspector and grounded-source details so operators can see method, quality, warning, and upstream-status signals without opening container logs.
+- Added tracked fetcher tuning keys for minimum content size, minimum word count, and accept-language so the new behavior is reproducible across machines.
 
 ## In-Progress Work
 
-- None inside the repo contents. The next planned work is `fetcher-resilience`.
+- None inside the repo contents. The next planned work is `fetcher-secondary-reader-strategy`.
 
 ## Open Questions / Blockers
 
@@ -108,7 +115,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Direct chat history now lives in browser local storage by design; future work should decide whether that history needs an opt-out or export path without weakening the current privacy defaults.
 - The refreshed UI shell has been validated through the repo build and smoke path, but it still does not have browser-automation coverage for interaction regressions.
 - The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
-- Some publishers, especially Wikipedia and other anti-bot-protected sites, can still reject direct fetches from the containerized fetcher. The current fallback is explicit snippet-grounding, but a stronger fetch-resilience pass is still needed.
+- Some publishers, especially Wikipedia and other anti-bot-protected sites, can still reject direct fetches from the containerized fetcher. This branch confirmed that Wikimedia HTML and official API endpoints still return robot-policy `403` responses from inside the fetcher container on this machine.
+- Because of that Wikimedia behavior, the repo still does not include a secondary reader path or publisher-specific bypass. The current fallback remains explicit snippet-grounding.
 - Heavier grounded requests now survive the localhost gateway, but the repo still does not record performance baselines for search-plus-fetch-plus-model latency on the target hardware.
 
 ## Decisions Made And Why
@@ -136,6 +144,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Grounded search quality should be improved first through config-driven provider tuning, ranked source selection, and better prompts before adding heavier architectural changes.
 - Fetched article text remains the preferred grounding source, but explicit bounded search-snippet fallback is acceptable when article fetches fail, as long as the response surface keeps that context mode visible.
 - The localhost gateway should tolerate longer-running grounded-answer calls so the proxy does not fail before the backend has finished search, fetch, and model synthesis.
+- Fetch resilience should improve operator clarity first through structured failure classification, thin-content detection, and domain-aware retry behavior before the repo adds any privacy-altering secondary reader strategy.
+- Wikimedia or similarly protected publishers should not receive a hidden special-case bypass until the privacy and maintenance tradeoffs of that path are explicitly reviewed.
 
 ## Security / Privacy Assumptions
 
@@ -151,16 +161,16 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Validation Status
 
-- `scripts/validate.ps1`: passed on 2026-04-14 during the grounding-quality-tuning branch
-- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the grounding-quality-tuning branch
+- `scripts/validate.ps1`: passed on 2026-04-14 during the `fetcher-resilience` branch
+- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the `fetcher-resilience` branch
 - `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
   - Compose-policy checks for localhost-only publication, expected network membership, healthchecks, read-only root filesystems, dropped capabilities, no-new-privileges, digest-pinned third-party images, and local-only CORS origins
   - Docker builds for `ui`, `backend`, and `fetcher`
-  - backend unit tests in the backend container, including search-tuning, ranked-source retry, and snippet-fallback coverage
-  - fetcher unit tests in the fetcher container, including typed integer field coverage for the fetch API response
+  - backend unit tests in the backend container, including search-tuning, ranked-source retry, snippet-fallback coverage, structured fetcher errors, thin-content retries, and blocked-domain skip behavior
+  - fetcher unit tests in the fetcher container, including typed integer field coverage for the fetch API response, thin-content classification, and structured blocked-policy errors
   - `python -m py_compile apps/ui/server.py`
   - `node --check apps/ui/static/app.js`
   - base-stack smoke validation for `ui`, `backend`, `fetcher`, and `search-provider`
@@ -174,14 +184,15 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
   - a manual live grounded-answer check on 2026-04-14 that returned a sourced answer for the query `When did the first israel-usa attack on Iran take place in 2026?` using the local SearXNG plus fetch pipeline
 - `scripts/bootstrap.ps1`: passed on 2026-04-13 and created the expected local `.env` plus data directories
 - `scripts/provision-default-model.ps1`: passed on 2026-04-13 and downloaded the default GGUF to `data/models/`
-- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 with coverage for `openai_compatible`, `ollama`, `searxng`, `yacy`, ranked-source retries, and snippet-grounded fallback
+- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 with coverage for `openai_compatible`, `ollama`, `searxng`, `yacy`, ranked-source retries, structured fetcher errors, blocked-domain skip behavior, and snippet-grounded fallback
+- `docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 with coverage for extraction quality classification, structured blocked-policy errors, and typed fetch response fields
 - `docker compose up -d --build host-gateway ui backend fetcher search-provider`: reached the UI on `http://127.0.0.1:3000`, the backend health endpoint on `http://127.0.0.1:8000/api/v1/health`, and the standalone SearXNG UI on `http://127.0.0.1:8085` from the Windows host on 2026-04-14 before the validation script's cleanup step
 
 ## Exact Next Steps
 
-1. Start `stamos/fetcher-resilience` from a clean `main`.
-2. Improve fetch success and extract quality on publishers that currently return thin pages, blocked responses, or anti-bot failures from the containerized fetcher.
-3. Decide whether the current fetcher needs a secondary reader strategy for blocked pages without weakening the privacy or least-privilege model.
+1. Start `stamos/fetcher-secondary-reader-strategy` from a clean `main`.
+2. Evaluate whether a secondary reader path is acceptable for blocked publishers without weakening the privacy or least-privilege model.
+3. If a secondary reader path is not acceptable, document direct-HTML-plus-snippet-fallback as the deliberate steady-state design and tune the remaining fetcher thresholds against real queries.
 4. Decide whether the current browser-local direct chat history model needs an opt-out, export path, or stronger session labeling.
 
 ## Handoff Notes For A Fresh Codex Thread
@@ -196,11 +207,13 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The UI shell now uses workspace navigation plus in-tab conversation-style rendering for direct chat and grounded answers.
 - Direct chat history, the selected model id, and saved direct-chat or grounded-answer instructions are now stored in browser local storage; grounded details and fetch results remain transient.
 - Direct Chat does not call SearXNG or the fetcher. Grounded Answer is the explicit search plus fetch plus model workflow and should stay clearly documented in future branches.
-- Grounded Answer now ranks search results, retries later candidates after fetch failures, and may fall back to search snippets when publishers block fetches. That fallback is intentional and must stay explicit in both API responses and UI copy.
+- Grounded Answer now ranks search results, retries later candidates after fetch failures, classifies thin page extractions, skips later URLs from domains that have already returned explicit robot-policy or similar blocking responses, and may fall back to search snippets when publishers block fetches. That fallback is intentional and must stay explicit in both API responses and UI copy.
+- The fetcher, backend, and UI now share structured fetch provenance such as `blocked_by_remote_policy`, `content_too_thin`, `upstream_status`, and retryability hints.
 - The repo now includes `docs/OPERATIONS_AND_MAINTENANCE.md` plus `scripts/ops-check.ps1` for local maintenance and recovery work.
 - `scripts/validate.ps1` now enforces the intended Compose security model instead of treating it as documentation only.
 - Repo-managed services keep routine access logging quiet by default, so operators should use targeted `docker compose logs --tail=...` calls when they need deeper inspection.
 - The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
 - The repo now supports two localhost-only browser modes at once: the main AnonExplo UI on port `3000` and the bundled standalone SearXNG UI on port `8085`, both through the same low-privilege host gateway.
 - The localhost gateway now allows longer backend request times so heavier grounded calls do not fail at the proxy first.
-- The next implementation thread should resume `stamos/fetcher-resilience` from a clean `main`.
+- This branch intentionally did not add a hidden special-case Wikipedia or third-party reader bypass after confirming Wikimedia still returned robot-policy `403` responses from inside the fetcher container.
+- The next implementation thread should resume `stamos/fetcher-secondary-reader-strategy` from a clean `main`.

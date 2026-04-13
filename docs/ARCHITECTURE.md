@@ -94,6 +94,7 @@ The current code includes:
 - a fetcher client that calls the internal fetch service
 - a grounded-answer path that composes bounded source context before calling the model
 - a runtime-readiness probe that distinguishes configuration from live model availability
+- structured fetcher error propagation so the backend and UI can distinguish blocked, rate-limited, thin-content, and generic fetch failures
 
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
 The backend also no longer hard-depends on a Compose service literally named `search-provider`, so `SEARCH_BASE_URL` can point at any reachable internal or local search service that matches one of the supported adapters.
@@ -118,7 +119,7 @@ The validation path now treats that network and exposure model as enforceable po
 2. UI may include grounded-answer-specific saved instructions plus default search and fetch limits from the browser-local settings modal.
 3. Backend calls the configured search provider with env-driven search tuning such as categories, language, and optional time-range or engine filters.
 4. Backend deduplicates results, ranks unique candidates by query relevance while preserving domain diversity, and selects an initial fetch batch.
-5. Backend calls the fetcher service for readable page text and keeps trying later-ranked sources when earlier fetches fail.
+5. Backend calls the fetcher service for readable page text, classifies thin or blocked fetch outcomes explicitly, and keeps trying later-ranked sources when earlier fetches fail.
 6. Backend packages bounded fetched source text when available, or bounded search-result snippets when fetches fail but search material still exists.
 7. Backend marks the grounding bundle with an explicit `context_mode` so the UI and future services can distinguish fetched article text from snippet fallback.
 8. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
@@ -128,6 +129,7 @@ The validation path now treats that network and exposure model as enforceable po
 ## Why The Fetcher Is Separate
 
 Search snippets alone are not enough. The fetcher exists so the system can retrieve, parse, and normalize article text without giving the model backend internet access.
+The current fetcher pass also classifies thin extractions so the backend can reject paywall-shell or otherwise low-value pages instead of pretending they are usable grounding context. It still uses direct HTML fetches only; no third-party reader proxy or Wikipedia-specific bypass is bundled at this stage.
 
 ## First Runtime Profile
 

@@ -26,6 +26,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
 - config-driven SearXNG tuning defaults for broader current-events coverage, including categories, language, and optional engine or time-range controls
 - ranked grounded-source selection with retry behavior so later sources can still be fetched when early candidates fail
+- structured fetcher failure codes, thin-content detection, and domain-aware retry behavior so blocked publishers are easier to understand without silently degrading into generic errors
 - an explicit snippet-fallback grounding mode for cases where search works but article fetches are blocked, with the UI showing whether an answer came from fetched text or search snippets
 - quieter default logging across the repo-managed UI, backend, fetcher, and localhost gateway services
 - an operations guide plus a lightweight stack health-check script for daily local maintenance
@@ -128,6 +129,9 @@ The repo treats provider choice as configuration:
   - `SEARCH_ENGINES`
 - fetch service:
   - `FETCH_BASE_URL`
+  - `FETCH_MIN_CONTENT_CHARS`
+  - `FETCH_MIN_WORD_COUNT`
+  - `FETCH_ACCEPT_LANGUAGE`
 
 The current implementation supports these provider adapters:
 
@@ -153,11 +157,11 @@ The repo now supports a practical grounded-answer path:
 
 1. search through the configured search provider
 2. rank and dedupe candidate sources with domain diversity and query-relevance heuristics
-3. fetch and parse readable page text through the fetcher, retrying later candidates when earlier fetches fail
+3. fetch and parse readable page text through the fetcher, classifying blocked or thin pages and retrying later candidates when earlier fetches fail
 4. construct a bounded grounding context from fetched sources, or fall back to bounded search snippets when article fetches are unavailable
 5. pass that context into the configured model runtime with explicit citation-only instructions
 
-The UI also surfaces per-source fetch failures, the exact source text slice used for grounding, and the current grounding mode (`fetched_text` or `search_snippets`). If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
+The UI also surfaces per-source fetch failures, error codes, the exact source text slice used for grounding, and the current grounding mode (`fetched_text` or `search_snippets`). If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
 
 ## UI Workbench
 

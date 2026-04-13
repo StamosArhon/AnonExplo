@@ -1,11 +1,18 @@
-import asyncio
 import re
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.providers import FetchDocument, FetcherClient, GroundedModelRequest, ProviderError, SearchHit, SearchProvider
+from app.providers import (
+    FetchDocument,
+    FetcherClient,
+    FetcherRequestError,
+    GroundedModelRequest,
+    ProviderError,
+    SearchHit,
+    SearchProvider,
+)
 
 
 class GroundingSearchResult(BaseModel):
@@ -47,12 +54,18 @@ class GroundingFetchedSource(BaseModel):
     content_char_count: int = 0
     word_count: int = 0
     content_type: str | None = None
+    retrieval_method: str = "direct_html"
+    content_quality: str = "usable"
+    warnings: list[str] = Field(default_factory=list)
     engine: str | None = None
 
 
 class GroundingError(BaseModel):
     stage: Literal["search", "fetch", "grounding", "model"]
     message: str
+    code: str | None = None
+    upstream_status: int | None = None
+    retryable: bool | None = None
     source_id: str | None = None
     url: str | None = None
 
@@ -268,16 +281,24 @@ async def _fetch_selected_sources(
     attempted_sources: list[GroundingSelectedSource] = []
     fetch_results: list[tuple[GroundingSelectedSource, FetchDocument | None, GroundingError | None]] = []
     successful_fetches = 0
-    candidate_index = 0
+    blocked_domains: set[str] = set()
 
-    while candidate_index < len(ranked_candidates) and successful_fetches < fetch_limit:
-        batch_size = fetch_limit - successful_fetches
-        batch = ranked_candidates[candidate_index : candidate_index + batch_size]
-        candidate_index += batch_size
-        attempted_sources.extend(batch)
-        batch_results = await asyncio.gather(*[_fetch_source(source, fetcher_client) for source in batch])
-        fetch_results.extend(batch_results)
-        successful_fetches += sum(1 for _, document, _ in batch_results if document is not None)
+    for candidate in ranked_candidates:
+        if successful_fetches >= fetch_limit:
+            break
+        if candidate.domain in blocked_domains:
+            continue
+
+        attempted_sources.append(candidate)
+        fetch_result = await _fetch_source(candidate, fetcher_client)
+        fetch_results.append(fetch_result)
+        _, document, error = fetch_result
+        if document is not None:
+            successful_fetches += 1
+            continue
+
+        if error and error.code in {"blocked_by_remote_policy", "upstream_forbidden", "upstream_rate_limited"}:
+            blocked_domains.add(candidate.domain)
 
     return attempted_sources, fetch_results
 
@@ -300,6 +321,32 @@ async def _fetch_source(source: GroundingSelectedSource, fetcher_client: Fetcher
         document = await fetcher_client.fetch(source.url)
         if isinstance(document, dict):
             document = FetchDocument.model_validate(document)
+        if document.content_quality == "thin":
+            warning_message = " ".join(document.warnings).strip()
+            message = (
+                f"Fetch returned only thin page content via {document.retrieval_method} "
+                f"({document.content_char_count} chars, {document.word_count} words)."
+            )
+            if warning_message:
+                message = f"{message} {warning_message}"
+            return source, None, GroundingError(
+                stage="fetch",
+                message=message,
+                code="content_too_thin",
+                retryable=False,
+                source_id=source.source_id,
+                url=source.url,
+            )
+    except FetcherRequestError as exc:
+        return source, None, GroundingError(
+            stage="fetch",
+            message=str(exc),
+            code=exc.code,
+            upstream_status=exc.upstream_status,
+            retryable=exc.retryable,
+            source_id=source.source_id,
+            url=source.url,
+        )
     except ProviderError as exc:
         return source, None, GroundingError(
             stage="fetch",
@@ -351,6 +398,9 @@ def _compose_context(
                 content_char_count=document.content_char_count,
                 word_count=document.word_count,
                 content_type=document.content_type,
+                retrieval_method=document.retrieval_method,
+                content_quality=document.content_quality,
+                warnings=document.warnings,
                 engine=source.engine,
             )
         )
