@@ -2,7 +2,7 @@ import ipaddress
 import re
 from functools import lru_cache
 from typing import Annotated
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -21,6 +21,19 @@ BLOCKED_HOSTNAMES = {
     "model-backend",
     "host.docker.internal",
 }
+
+WIKIMEDIA_HOST_SUFFIXES = (
+    "wikipedia.org",
+    "wiktionary.org",
+    "wikibooks.org",
+    "wikiquote.org",
+    "wikinews.org",
+    "wikisource.org",
+    "wikiversity.org",
+    "wikivoyage.org",
+    "wikimedia.org",
+    "mediawiki.org",
+)
 
 
 class FetcherError(RuntimeError):
@@ -70,6 +83,14 @@ class Settings(BaseSettings):
     fetch_accept_language: str = Field(
         default="en-US,en;q=0.7",
         validation_alias="FETCH_ACCEPT_LANGUAGE",
+    )
+    fetch_wikimedia_api_enabled: bool = Field(
+        default=False,
+        validation_alias="FETCH_WIKIMEDIA_API_ENABLED",
+    )
+    fetch_wikimedia_api_user_agent: str = Field(
+        default="",
+        validation_alias="FETCH_WIKIMEDIA_API_USER_AGENT",
     )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -126,6 +147,67 @@ def validate_requested_url(url: str) -> None:
 
 def normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _is_wikimedia_hostname(hostname: str | None) -> bool:
+    if not hostname:
+        return False
+    normalized = hostname.lower()
+    return any(normalized == suffix or normalized.endswith(f".{suffix}") for suffix in WIKIMEDIA_HOST_SUFFIXES)
+
+
+def extract_wikimedia_page_title(url: str) -> str | None:
+    parsed = urlparse(url)
+    if not _is_wikimedia_hostname(parsed.hostname):
+        return None
+
+    raw_title: str | None = None
+    if parsed.path.startswith("/wiki/"):
+        raw_title = parsed.path.removeprefix("/wiki/")
+    elif parsed.path.endswith("/index.php"):
+        raw_title = parse_qs(parsed.query).get("title", [None])[0]
+
+    if not raw_title:
+        return None
+
+    normalized_title = normalize_text(unquote(raw_title).replace("_", " "))
+    if not normalized_title or normalized_title.lower().startswith("special:"):
+        return None
+    return normalized_title
+
+
+def _build_wikimedia_article_url(source_url: str, page_title: str) -> str:
+    parsed = urlparse(source_url)
+    normalized_title = page_title.replace(" ", "_")
+    encoded_title = quote(normalized_title, safe=":")
+    return f"{parsed.scheme}://{parsed.netloc}/wiki/{encoded_title}"
+
+
+def _normalize_display_title(value: str | None, fallback: str) -> str:
+    if not value:
+        return fallback
+    soup = BeautifulSoup(value, "html.parser")
+    text = normalize_text(soup.get_text(" ", strip=True))
+    return text or fallback
+
+
+def _build_wikimedia_api_user_agent(settings: Settings) -> str:
+    agent = settings.fetch_wikimedia_api_user_agent.strip()
+    if agent:
+        return agent
+
+    raise FetcherError(
+        "Wikimedia API access is enabled, but FETCH_WIKIMEDIA_API_USER_AGENT is not configured.",
+        code="wikimedia_api_user_agent_required",
+        status_code=500,
+        retryable=False,
+    )
+
+
+def should_use_wikimedia_api(url: str, settings: Settings) -> bool:
+    if not settings.fetch_wikimedia_api_enabled:
+        return False
+    return extract_wikimedia_page_title(url) is not None
 
 
 def _classify_content_quality(
@@ -290,6 +372,109 @@ async def fetch_html(url: str, settings: Settings) -> dict[str, str | int | list
     return document
 
 
+async def fetch_wikimedia_api_document(url: str, settings: Settings) -> dict[str, str | int | list[str]]:
+    page_title = extract_wikimedia_page_title(url)
+    if not page_title:
+        raise FetcherError(
+            "Wikimedia API access requires a supported Wikimedia article URL.",
+            code="wikimedia_unsupported_url",
+            status_code=400,
+            retryable=False,
+        )
+
+    parsed = urlparse(url)
+    api_url = f"{parsed.scheme}://{parsed.netloc}/w/api.php"
+    user_agent = _build_wikimedia_api_user_agent(settings)
+    headers = {
+        "User-Agent": user_agent,
+        "Api-User-Agent": user_agent,
+        "Accept": "application/json",
+        "Accept-Language": settings.fetch_accept_language,
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "DNT": "1",
+    }
+    params = {
+        "action": "parse",
+        "page": page_title,
+        "prop": "text|displaytitle",
+        "format": "json",
+        "formatversion": "2",
+        "redirects": "1",
+        "disablelimitreport": "1",
+        "disableeditsection": "1",
+        "disabletoc": "1",
+    }
+    timeout = httpx.Timeout(settings.fetch_request_timeout_seconds)
+
+    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=True) as client:
+        response = await client.get(api_url, params=params)
+        if response.status_code >= 400:
+            await _raise_for_upstream_failure(response)
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise FetcherError(
+            f"Wikimedia API returned invalid JSON: {exc}",
+            code="wikimedia_api_invalid_response",
+            status_code=502,
+            upstream_status=response.status_code,
+            retryable=False,
+        ) from exc
+
+    error_payload = payload.get("error")
+    if isinstance(error_payload, dict):
+        error_message = error_payload.get("info") or error_payload.get("code") or "unknown parse error"
+        raise FetcherError(
+            f"Wikimedia API could not parse the requested page: {error_message}.",
+            code="wikimedia_api_parse_error",
+            status_code=502,
+            upstream_status=response.status_code,
+            retryable=False,
+        )
+
+    parse_payload = payload.get("parse")
+    if not isinstance(parse_payload, dict):
+        raise FetcherError(
+            "Wikimedia API returned an unexpected payload.",
+            code="wikimedia_api_invalid_response",
+            status_code=502,
+            upstream_status=response.status_code,
+            retryable=False,
+        )
+
+    article_html = parse_payload.get("text")
+    if not isinstance(article_html, str) or not article_html.strip():
+        raise FetcherError(
+            "Wikimedia API did not return parsed article HTML.",
+            code="wikimedia_api_missing_content",
+            status_code=502,
+            upstream_status=response.status_code,
+            retryable=False,
+        )
+
+    resolved_title = normalize_text(str(parse_payload.get("title") or page_title))
+    final_url = _build_wikimedia_article_url(url, resolved_title)
+    document = extract_document(
+        article_html,
+        final_url,
+        settings,
+        retrieval_method="wikimedia_parse_api",
+    )
+    document["requested_url"] = url
+    document["final_url"] = final_url
+    document["title"] = _normalize_display_title(parse_payload.get("displaytitle"), resolved_title)
+    document["content_type"] = response.headers.get("content-type", "application/json")
+    return document
+
+
+async def fetch_document(url: str, settings: Settings) -> dict[str, str | int | list[str]]:
+    if should_use_wikimedia_api(url, settings):
+        return await fetch_wikimedia_api_document(url, settings)
+    return await fetch_html(url, settings)
+
+
 app = FastAPI(title="AnonExplo Fetcher", version="0.1.0")
 
 
@@ -305,7 +490,7 @@ async def fetch(
 ) -> FetchResponse:
     try:
         validate_requested_url(payload.url)
-        document = await fetch_html(payload.url, settings)
+        document = await fetch_document(payload.url, settings)
         return FetchResponse.model_validate(document)
     except FetcherError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.to_detail()) from exc

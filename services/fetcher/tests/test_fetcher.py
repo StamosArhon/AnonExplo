@@ -3,7 +3,18 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.main import FetcherError, Settings, app, extract_document, fetch_html, validate_requested_url
+from app.main import (
+    FetcherError,
+    Settings,
+    app,
+    extract_document,
+    extract_wikimedia_page_title,
+    fetch_document,
+    fetch_html,
+    fetch_wikimedia_api_document,
+    should_use_wikimedia_api,
+    validate_requested_url,
+)
 
 
 class MockStreamResponse:
@@ -50,6 +61,45 @@ class MockStreamingClient:
 
     def stream(self, method: str, url: str) -> MockStreamContext:
         return MockStreamContext(self.response)
+
+
+class MockJsonResponse:
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        url: str,
+        headers: dict[str, str] | None = None,
+        payload: dict | None = None,
+        body: bytes = b"",
+    ) -> None:
+        self.status_code = status_code
+        self.url = url
+        self.headers = headers or {}
+        self._payload = payload or {}
+        self._body = body
+
+    async def aread(self) -> bytes:
+        if self._body:
+            return self._body
+        return str(self._payload).encode("utf-8")
+
+    def json(self) -> dict:
+        return self._payload
+
+
+class MockJsonClient:
+    def __init__(self, response: MockJsonResponse) -> None:
+        self.response = response
+
+    async def __aenter__(self) -> "MockJsonClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    async def get(self, url: str, params: dict | None = None) -> MockJsonResponse:
+        return self.response
 
 
 class FetcherTests(unittest.TestCase):
@@ -108,14 +158,45 @@ class FetcherTests(unittest.TestCase):
     def test_validate_requested_url_accepts_public_https(self) -> None:
         validate_requested_url("https://example.com/article")
 
-    @patch("app.main.fetch_html", new_callable=AsyncMock)
+    def test_extract_wikimedia_page_title_from_article_path(self) -> None:
+        self.assertEqual(
+            extract_wikimedia_page_title("https://en.wikipedia.org/wiki/Twelve-Day_War"),
+            "Twelve-Day War",
+        )
+
+    def test_extract_wikimedia_page_title_from_index_query(self) -> None:
+        self.assertEqual(
+            extract_wikimedia_page_title("https://www.mediawiki.org/w/index.php?title=API:Etiquette"),
+            "API:Etiquette",
+        )
+
+    def test_extract_wikimedia_page_title_rejects_special_pages(self) -> None:
+        self.assertIsNone(
+            extract_wikimedia_page_title("https://en.wikipedia.org/wiki/Special:Random"),
+        )
+
+    def test_should_use_wikimedia_api_requires_opt_in_and_supported_url(self) -> None:
+        disabled_settings = Settings(FETCH_WIKIMEDIA_API_ENABLED=False)
+        enabled_settings = Settings(FETCH_WIKIMEDIA_API_ENABLED=True)
+
+        self.assertFalse(
+            should_use_wikimedia_api("https://en.wikipedia.org/wiki/Twelve-Day_War", disabled_settings),
+        )
+        self.assertTrue(
+            should_use_wikimedia_api("https://en.wikipedia.org/wiki/Twelve-Day_War", enabled_settings),
+        )
+        self.assertFalse(
+            should_use_wikimedia_api("https://example.com/article", enabled_settings),
+        )
+
+    @patch("app.main.fetch_document", new_callable=AsyncMock)
     @patch("app.main.validate_requested_url")
     def test_fetch_endpoint_allows_integer_count_fields(
         self,
         validate_requested_url_mock,
-        fetch_html_mock: AsyncMock,
+        fetch_document_mock: AsyncMock,
     ) -> None:
-        fetch_html_mock.return_value = {
+        fetch_document_mock.return_value = {
             "requested_url": "https://example.com/article",
             "final_url": "https://example.com/article",
             "title": "Example",
@@ -139,14 +220,14 @@ class FetcherTests(unittest.TestCase):
         self.assertEqual(payload["content_quality"], "usable")
         validate_requested_url_mock.assert_called_once()
 
-    @patch("app.main.fetch_html", new_callable=AsyncMock)
+    @patch("app.main.fetch_document", new_callable=AsyncMock)
     @patch("app.main.validate_requested_url")
     def test_fetch_endpoint_returns_structured_fetcher_errors(
         self,
         validate_requested_url_mock,
-        fetch_html_mock: AsyncMock,
+        fetch_document_mock: AsyncMock,
     ) -> None:
-        fetch_html_mock.side_effect = FetcherError(
+        fetch_document_mock.side_effect = FetcherError(
             "Remote site denied automated fetching under its robot policy.",
             code="blocked_by_remote_policy",
             status_code=502,
@@ -165,6 +246,36 @@ class FetcherTests(unittest.TestCase):
 
 
 class FetcherHttpBehaviorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetch_document_prefers_wikimedia_api_when_enabled(self) -> None:
+        settings = Settings(
+            FETCH_WIKIMEDIA_API_ENABLED=True,
+            FETCH_WIKIMEDIA_API_USER_AGENT="AnonExploFetcher/0.1 (mailto:test@example.com)",
+        )
+
+        with (
+            patch("app.main.fetch_wikimedia_api_document", new_callable=AsyncMock) as wikimedia_mock,
+            patch("app.main.fetch_html", new_callable=AsyncMock) as fetch_html_mock,
+        ):
+            wikimedia_mock.return_value = {
+                "requested_url": "https://en.wikipedia.org/wiki/Twelve-Day_War",
+                "final_url": "https://en.wikipedia.org/wiki/Twelve-Day_War",
+                "title": "Twelve-Day War",
+                "excerpt": "Excerpt",
+                "content_text": "Body",
+                "content_char_count": 4,
+                "word_count": 1,
+                "content_type": "application/json",
+                "retrieval_method": "wikimedia_parse_api",
+                "content_quality": "thin",
+                "warnings": [],
+            }
+
+            document = await fetch_document("https://en.wikipedia.org/wiki/Twelve-Day_War", settings)
+
+        self.assertEqual(document["retrieval_method"], "wikimedia_parse_api")
+        wikimedia_mock.assert_awaited_once()
+        fetch_html_mock.assert_not_called()
+
     async def test_fetch_html_classifies_robot_policy_blocks(self) -> None:
         response = MockStreamResponse(
             status_code=403,
@@ -181,6 +292,58 @@ class FetcherHttpBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.exception.status_code, 502)
         self.assertEqual(context.exception.upstream_status, 403)
         self.assertFalse(context.exception.retryable)
+
+    async def test_fetch_wikimedia_api_document_returns_structured_article_content(self) -> None:
+        settings = Settings(
+            FETCH_WIKIMEDIA_API_ENABLED=True,
+            FETCH_WIKIMEDIA_API_USER_AGENT="AnonExploFetcher/0.1 (mailto:test@example.com)",
+            FETCH_MIN_CONTENT_CHARS=20,
+            FETCH_MIN_WORD_COUNT=4,
+        )
+        response = MockJsonResponse(
+            status_code=200,
+            url="https://en.wikipedia.org/w/api.php",
+            headers={"content-type": "application/json; charset=utf-8"},
+            payload={
+                "parse": {
+                    "title": "Twelve-Day War",
+                    "displaytitle": "<i>Twelve-Day War</i>",
+                    "text": """
+                        <div class="mw-parser-output">
+                          <p>The Twelve-Day War began in February 2026.</p>
+                          <p>United States and Israeli forces launched the opening strikes.</p>
+                        </div>
+                    """,
+                }
+            },
+        )
+
+        with patch("app.main.httpx.AsyncClient", return_value=MockJsonClient(response)):
+            document = await fetch_wikimedia_api_document(
+                "https://en.wikipedia.org/wiki/Twelve-Day_War",
+                settings,
+            )
+
+        self.assertEqual(document["retrieval_method"], "wikimedia_parse_api")
+        self.assertEqual(document["title"], "Twelve-Day War")
+        self.assertEqual(document["final_url"], "https://en.wikipedia.org/wiki/Twelve-Day_War")
+        self.assertEqual(document["content_type"], "application/json; charset=utf-8")
+        self.assertEqual(document["content_quality"], "usable")
+        self.assertIn("The Twelve-Day War began in February 2026.", document["content_text"])
+
+    async def test_fetch_wikimedia_api_document_requires_contactable_user_agent(self) -> None:
+        settings = Settings(
+            FETCH_WIKIMEDIA_API_ENABLED=True,
+            FETCH_WIKIMEDIA_API_USER_AGENT="",
+        )
+
+        with self.assertRaises(FetcherError) as context:
+            await fetch_wikimedia_api_document(
+                "https://en.wikipedia.org/wiki/Twelve-Day_War",
+                settings,
+            )
+
+        self.assertEqual(context.exception.code, "wikimedia_api_user_agent_required")
 
 
 if __name__ == "__main__":

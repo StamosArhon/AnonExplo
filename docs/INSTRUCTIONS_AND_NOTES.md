@@ -61,6 +61,7 @@
 - The grounding summary's `selected_sources` count is now effectively "selected or attempted" because the backend can try later ranked sources after early fetch failures.
 - The fetcher now exposes structured error details such as `blocked_by_remote_policy`, `upstream_forbidden`, `upstream_rate_limited`, and `content_too_thin`; keep those codes explicit in backend and UI surfaces instead of collapsing them into generic fetch failures.
 - Use the tracked fetcher knobs in `.env.example` when tuning extraction quality: `FETCH_MIN_CONTENT_CHARS`, `FETCH_MIN_WORD_COUNT`, and `FETCH_ACCEPT_LANGUAGE`.
+- If Wikimedia API support is enabled, require a descriptive and contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` instead of relying on the generic fetch user-agent.
 - Request-level model selection should stay bounded to runtime-advertised models and should not mutate the backend's configured default model.
 - Do not reintroduce a backend orchestration dependency on one hard-coded search service name; provider switching should remain env-driven at the backend boundary.
 - Keep the host-facing UI and backend access path behind the dedicated localhost gateway unless there is a documented reason to publish app containers directly.
@@ -68,6 +69,6 @@
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.
 - `scripts/validate.ps1` now enforces the intended Compose hardening model, including localhost-only publication, expected network membership, digest-pinned third-party images, and local-only CORS origins.
 - Some publishers and Wikipedia paths can still block fetches from the container runtime. The current fallback is explicit snippet-grounding, not silent prior-knowledge answering.
-- Do not add stealthy Wikipedia or publisher-specific robot-policy bypasses. If a future branch adds Wikimedia support, use an explicit official API path, document the privacy and maintenance tradeoff, and make it opt-in.
+- Do not add stealthy Wikipedia or publisher-specific robot-policy bypasses. Wikimedia support, when enabled, must use an explicit official API path, document the privacy and maintenance tradeoff, and remain opt-in.
 - The current fetcher-resilience pass does not add third-party reader proxies or special Wikipedia bypasses. If a future branch adds a secondary reader strategy, document the privacy tradeoff and make it opt-in.
 - The current baseline decision is to keep direct HTML fetch plus explicit snippet fallback as the steady-state design rather than adding a secondary reader path.

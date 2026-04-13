@@ -108,6 +108,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Added a retractable right-side source drawer for grounded answers so the full source list, source status, and snippets are available on demand without cluttering the conversation thread.
 - Tightened the sidebar history presentation into compact direct-chat cards with integrated per-entry delete controls instead of a split or awkward row layout.
 - Refined the grounded citation treatment into discreet superscript-style source references and restyled the active history card so the sidebar no longer uses an ambiguous bright highlight block.
+- Added an explicit opt-in Wikimedia fetch path that uses the official MediaWiki Parse API for supported Wikimedia article URLs instead of a hidden scraping workaround.
+- Added fetcher config scaffolding for `FETCH_WIKIMEDIA_API_ENABLED` and `FETCH_WIKIMEDIA_API_USER_AGENT` so Wikimedia support remains operator-controlled and reproducible across machines.
 
 ## In-Progress Work
 
@@ -123,9 +125,10 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Direct chat history now lives in browser local storage by design. The current decision is to keep explicit labeling plus delete and purge controls rather than adding an opt-out or export path to the baseline.
 - The refreshed UI shell has been validated through the repo build and smoke path, but it still does not have browser-automation coverage for interaction regressions.
 - The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
-- Some publishers, especially Wikipedia and other anti-bot-protected sites, can still reject direct fetches from the containerized fetcher. This branch confirmed that Wikimedia HTML and official API endpoints still return robot-policy `403` responses from inside the fetcher container on this machine.
-- Because of that Wikimedia behavior, the repo still does not include a secondary reader path or publisher-specific bypass. That is now a deliberate baseline decision, and the current fallback remains explicit snippet-grounding.
-- If Wikimedia support is revisited, it should use an explicit and documented official API integration path instead of a hidden robot-policy bypass or a stealthy fetch workaround.
+- Some publishers, especially Wikipedia and other anti-bot-protected sites, can still reject direct HTML fetches from the containerized fetcher.
+- The repo still does not include a secondary reader path or publisher-specific bypass. That remains a deliberate baseline decision, and the current fallback stays explicit snippet-grounding whenever direct fetches or official API paths are unavailable.
+- Wikimedia support now exists as an explicit official API integration path, but it remains disabled until the operator sets both `FETCH_WIKIMEDIA_API_ENABLED=true` and a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env`.
+- The current validation path covers the Wikimedia route through containerized unit tests and build validation, but it does not run a live external Wikimedia smoke request with a fake contact string.
 - Heavier grounded requests now survive the localhost gateway, but the repo still does not record performance baselines for search-plus-fetch-plus-model latency on the target hardware.
 
 ## Decisions Made And Why
@@ -158,7 +161,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Browser-local direct chat history is considered sufficiently controlled in the baseline when it is clearly labeled as device-local and purgeable; opt-out or export should be treated as later convenience features, not core privacy fixes.
 - The grounded-answer UI should surface provenance as inline citation pills plus an on-demand source drawer, not as a permanently expanded diagnostics block inside the main conversation area.
 - Those inline citations should stay discreet and superscript-like rather than appearing as large in-line buttons that interrupt reading flow.
-- If a future branch adds a Wikimedia-specific path, it should be explicit, opt-in, and based on an official Wikimedia interface rather than a robot-policy bypass.
+- Wikimedia support should use the official Parse API for supported Wikimedia article URLs and must require an operator-supplied descriptive user-agent before the opt-in path is enabled.
+- Any future changes to the Wikimedia-specific path should keep it explicit, opt-in, and based on an official Wikimedia interface rather than a robot-policy bypass.
 
 ## Security / Privacy Assumptions
 
@@ -179,6 +183,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `roadmap-closeout` branch
 - `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the `roadmap-closeout` branch
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `answer-surface-refresh` branch
+- `scripts/validate.ps1`: passed on 2026-04-14 during the `wikimedia-official-api-path` branch
 - `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`
@@ -202,12 +207,13 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `scripts/provision-default-model.ps1`: passed on 2026-04-13 and downloaded the default GGUF to `data/models/`
 - `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 with coverage for `openai_compatible`, `ollama`, `searxng`, `yacy`, ranked-source retries, structured fetcher errors, blocked-domain skip behavior, and snippet-grounded fallback
 - `docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 with coverage for extraction quality classification, structured blocked-policy errors, and typed fetch response fields
+- `docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 after the Wikimedia branch build with added coverage for Wikimedia title extraction, opt-in route selection, Parse API content parsing, and required user-agent enforcement
 - `docker compose up -d --build host-gateway ui backend fetcher search-provider`: reached the UI on `http://127.0.0.1:3000`, the backend health endpoint on `http://127.0.0.1:8000/api/v1/health`, and the standalone SearXNG UI on `http://127.0.0.1:8085` from the Windows host on 2026-04-14 before the validation script's cleanup step
 
 ## Exact Next Steps
 
 1. Keep validating the current baseline against real queries and regressions on the target hardware.
-2. Treat any future Wikimedia-specific support as a new scoped branch and keep it explicit, opt-in, and officially documented rather than implementing a hidden bypass.
+2. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
 3. Treat any future secondary reader, export, automation, or benchmark work as a new post-roadmap enhancement with its own scoped branch.
 4. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
 
@@ -232,6 +238,6 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
 - The repo now supports two localhost-only browser modes at once: the main AnonExplo UI on port `3000` and the bundled standalone SearXNG UI on port `8085`, both through the same low-privilege host gateway.
 - The localhost gateway now allows longer backend request times so heavier grounded calls do not fail at the proxy first.
-- This repo intentionally still does not add a hidden special-case Wikipedia or third-party reader bypass after confirming Wikimedia still returned robot-policy `403` responses from inside the fetcher container. If future work revisits Wikimedia, prefer an explicit official API path.
+- This repo intentionally still does not add a hidden special-case Wikipedia or third-party reader bypass after earlier direct HTML Wikimedia fetch attempts returned robot-policy `403` responses from inside the fetcher container. Wikimedia support now uses an explicit opt-in Parse API path and requires an operator-supplied contactable user-agent string.
 - The initial roadmap is now complete on `main`.
 - Future threads should start from `main` and treat new work as post-roadmap enhancement rather than unfinished baseline setup.

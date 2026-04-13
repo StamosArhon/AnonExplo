@@ -138,6 +138,8 @@ services:
       FETCH_MIN_WORD_COUNT: ${FETCH_MIN_WORD_COUNT:-40}
       FETCH_ACCEPT_LANGUAGE: ${FETCH_ACCEPT_LANGUAGE:-en-US,en;q=0.7}
       FETCH_USER_AGENT: ${FETCH_USER_AGENT:-AnonExploFetcher/0.1 (local self-hosted use)}
+      FETCH_WIKIMEDIA_API_ENABLED: ${FETCH_WIKIMEDIA_API_ENABLED:-false}
+      FETCH_WIKIMEDIA_API_USER_AGENT: ${FETCH_WIKIMEDIA_API_USER_AGENT:-}
     networks:
       - core_internal
       - egress

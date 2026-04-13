@@ -31,6 +31,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - ranked grounded-source selection with retry behavior so later sources can still be fetched when early candidates fail
 - structured fetcher failure codes, thin-content detection, and domain-aware retry behavior so blocked publishers are easier to understand without silently degrading into generic errors
 - an explicit snippet-fallback grounding mode for cases where search works but article fetches are blocked, with the UI showing whether an answer came from fetched text or search snippets
+- an opt-in official Wikimedia API fetch path for supported Wikimedia article URLs when direct HTML fetching is not the right fit
 - quieter default logging across the repo-managed UI, backend, fetcher, and localhost gateway services
 - an operations guide plus a lightweight stack health-check script for daily local maintenance
 
@@ -135,6 +136,8 @@ The repo treats provider choice as configuration:
   - `FETCH_MIN_CONTENT_CHARS`
   - `FETCH_MIN_WORD_COUNT`
   - `FETCH_ACCEPT_LANGUAGE`
+  - `FETCH_WIKIMEDIA_API_ENABLED`
+  - `FETCH_WIKIMEDIA_API_USER_AGENT`
 
 The current implementation supports these provider adapters:
 
@@ -165,6 +168,8 @@ The repo now supports a practical grounded-answer path:
 5. pass that context into the configured model runtime with explicit citation-only instructions
 
 The UI now surfaces grounded provenance through superscript-style source references, hover tooltips, and an on-demand source drawer rather than a permanently expanded diagnostics block. It still keeps the current grounding mode (`fetched_text` or `search_snippets`) explicit. The current baseline deliberately uses direct HTML fetches plus explicit snippet fallback; it does not bundle a secondary reader proxy or hidden publisher-specific bypass. If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
+
+If you want supported Wikimedia article URLs to use an official Wikimedia interface instead of the default direct HTML path, enable `FETCH_WIKIMEDIA_API_ENABLED=true` and set a descriptive, contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env`. When enabled, supported Wikimedia article pages are fetched through the official Parse API and still flow through the same bounded extraction pipeline.
 
 ## UI Workbench
 
