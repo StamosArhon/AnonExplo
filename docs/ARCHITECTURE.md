@@ -4,6 +4,8 @@
 
 AnonExplo uses a local-first, privacy-first service layout:
 
+- `host-gateway`
+  - localhost-only reverse proxy that exposes the UI and backend to the host without putting those app services directly on a non-internal Docker network
 - `ui`
   - local browser interface for prompts, model selection, provider status, and grounding inspection
 - `backend`
@@ -23,8 +25,9 @@ The UI must only talk to the backend. The backend may talk to the model backend,
 
 ```mermaid
 flowchart LR
-    User["Local Browser"] --> UI["UI (127.0.0.1)"]
-    UI --> Backend["Backend (127.0.0.1)"]
+    User["Local Browser"] --> Gateway["Host Gateway (127.0.0.1)"]
+    Gateway --> UIService["UI Service (internal)"]
+    Gateway --> Backend["Backend (localhost via gateway)"]
     Backend --> Model["Model Backend (internal only)"]
     Backend --> Search["Search Provider"]
     Backend --> Fetcher["Fetcher / Reader"]
@@ -35,7 +38,9 @@ flowchart LR
 ## Docker Networks
 
 - `core_internal`
-  - internal bridge network for UI, backend, fetcher, and search-provider coordination
+  - internal bridge network for host-gateway, UI, backend, fetcher, and search-provider coordination
+- `host_access`
+  - non-internal bridge used only by the localhost reverse proxy so Docker Desktop can publish `127.0.0.1` ports reliably on the host
 - `model_internal`
   - internal bridge network reserved for backend to model-runtime traffic
 - `egress`
@@ -43,6 +48,9 @@ flowchart LR
 
 ### Default network membership
 
+- host-gateway:
+  - `host_access`
+  - `core_internal`
 - UI:
   - `core_internal`
 - backend:
@@ -73,6 +81,7 @@ The backend uses environment-driven provider selection:
 
 The current code includes:
 
+- a localhost-only reverse proxy in front of the UI and backend host ports
 - an OpenAI-compatible model adapter
 - a native Ollama model adapter
 - a SearXNG search adapter
@@ -83,6 +92,7 @@ The current code includes:
 
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
 The backend also no longer hard-depends on a Compose service literally named `search-provider`, so `SEARCH_BASE_URL` can point at any reachable internal or local search service that matches one of the supported adapters.
+The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` service rather than from direct publishing on internal-only app containers, because Docker Desktop did not reliably expose those ports when the services were attached only to `internal: true` networks.
 
 ## Data Flow
 

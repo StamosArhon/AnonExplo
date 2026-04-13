@@ -1,6 +1,40 @@
 name: ${PROJECT_NAME:-anonexplo}
 
 services:
+  host-gateway:
+    image: ${HOST_GATEWAY_IMAGE:-nginx:stable-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236}
+    restart: unless-stopped
+    user: "101:101"
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    depends_on:
+      - ui
+      - backend
+    ports:
+      - 127.0.0.1:${UI_PORT:-3000}:3000
+      - 127.0.0.1:${BACKEND_PORT:-8000}:8000
+    networks:
+      - host_access
+      - core_internal
+    volumes:
+      - ./configs/localhost-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1:3000/ && wget -q -O /dev/null http://127.0.0.1:8000/api/v1/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
   ui:
     build:
       context: ./apps/ui
@@ -10,8 +44,6 @@ services:
       UI_PORT: 8080
       UI_API_BASE_URL: http://127.0.0.1:${BACKEND_PORT:-8000}${API_PREFIX:-/api/v1}
       UI_ENVIRONMENT: local
-    ports:
-      - 127.0.0.1:${UI_PORT:-3000}:8080
     depends_on:
       - backend
     networks:
@@ -61,8 +93,6 @@ services:
       GROUNDING_TOTAL_CONTEXT_CHARS: ${GROUNDING_TOTAL_CONTEXT_CHARS:-9000}
       GROUNDING_PREVIEW_CHARS: ${GROUNDING_PREVIEW_CHARS:-1200}
       GROUNDING_MODEL_TEMPERATURE: ${GROUNDING_MODEL_TEMPERATURE:-0.1}
-    ports:
-      - 127.0.0.1:${BACKEND_PORT:-8000}:8000
     depends_on:
       - fetcher
     networks:
@@ -181,6 +211,8 @@ services:
       start_period: 300s
 
 networks:
+  host_access:
+    driver: bridge
   core_internal:
     driver: bridge
     internal: true

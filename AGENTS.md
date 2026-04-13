@@ -76,5 +76,5 @@ If a remote is missing or remote operations fail, record that explicitly in the 
 - Provision the default GGUF locally: `powershell -ExecutionPolicy Bypass -File scripts/provision-default-model.ps1`
 - Validate the branch: `powershell -ExecutionPolicy Bypass -File scripts/validate.ps1`
 - Validate with the full model-runtime probe: `powershell -ExecutionPolicy Bypass -File scripts/validate.ps1 -RequireModelRuntime`
-- Start the base stack: `docker compose up --build ui backend fetcher search-provider`
+- Start the base stack: `docker compose up --build host-gateway ui backend fetcher search-provider`
 - Start the pinned llama.cpp model profile: `docker compose --profile llamacpp up -d model-backend`

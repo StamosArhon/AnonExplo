@@ -19,6 +19,7 @@ This repository is currently focused on the `provider-expansion` milestone. The 
 - a static local workbench with browser-local model selection and clearer runtime or failure inspection
 - backend adapters for both OpenAI-compatible runtimes and native Ollama APIs
 - backend adapters for both SearXNG and YaCy search services
+- a localhost gateway service that makes the UI and backend reachable on Docker Desktop while keeping the app services on internal networks
 
 ## Design Goals
 
@@ -82,10 +83,12 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 6. Start the base stack:
 
    ```powershell
-   docker compose up --build ui backend fetcher search-provider
+   docker compose up --build host-gateway ui backend fetcher search-provider
    ```
 
 7. Open the local UI at `http://127.0.0.1:3000`.
+
+   The localhost entrypoint is the dedicated `host-gateway` proxy. It exposes the UI on port `3000` and the backend API on port `8000` while the `ui` and `backend` containers themselves remain on internal Docker networks.
 
 8. Use the local UI's grounded-answer panel to search, fetch, inspect sources, and synthesize an answer from retrieved page text.
    The workbench keeps the selected model id in browser local storage so chat and grounded-answer requests stay aligned across refreshes.

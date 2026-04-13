@@ -53,4 +53,5 @@
 - The workbench UI may persist only the selected model id in browser local storage; it must not store prompts, fetched page text, or response history by default.
 - Request-level model selection should stay bounded to runtime-advertised models and should not mutate the backend's configured default model.
 - Do not reintroduce a backend orchestration dependency on one hard-coded search service name; provider switching should remain env-driven at the backend boundary.
+- Keep the host-facing UI and backend access path behind the dedicated localhost gateway unless there is a documented reason to publish app containers directly.
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.

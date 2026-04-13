@@ -74,6 +74,27 @@ function Get-ServicePortBindings {
     return docker inspect $containerId --format "{{json .HostConfig.PortBindings}}"
 }
 
+function Test-HostHttpEndpoint {
+    param(
+        [string]$Url,
+        [int]$Attempts = 15
+    )
+
+    for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 5
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                return $true
+            }
+        } catch {
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    return $false
+}
+
 function Invoke-BackendPython {
     param([string]$Script)
 
@@ -105,11 +126,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Fetcher tests failed." }
 
     Write-Host "Running base stack smoke test..."
-    docker compose up -d ui backend fetcher search-provider
+    docker compose up -d host-gateway ui backend fetcher search-provider
     if ($LASTEXITCODE -ne 0) { throw "Base stack failed to start." }
 
     if (-not (Wait-ForServiceStatus -ServiceName "backend" -ExpectedStatus "healthy")) {
-        docker compose logs backend fetcher search-provider ui
+        docker compose logs host-gateway backend fetcher search-provider ui
         throw "Backend health check failed."
     }
 
@@ -123,19 +144,33 @@ try {
         throw "UI smoke check failed."
     }
 
+    if (-not (Wait-ForServiceStatus -ServiceName "host-gateway" -ExpectedStatus "healthy")) {
+        docker compose logs host-gateway ui backend
+        throw "Host gateway health check failed."
+    }
+
     if (-not (Wait-ForServiceStatus -ServiceName "search-provider" -ExpectedStatus "running")) {
         docker compose logs search-provider
         throw "Search provider failed to stay running."
     }
 
-    $backendPorts = Get-ServicePortBindings -ServiceName "backend"
+    $backendPorts = Get-ServicePortBindings -ServiceName "host-gateway"
     if ($backendPorts -notmatch '"8000/tcp"' -or $backendPorts -notmatch '"HostIp":"127.0.0.1"') {
         throw "Backend localhost port binding is missing."
     }
 
-    $uiPorts = Get-ServicePortBindings -ServiceName "ui"
-    if ($uiPorts -notmatch '"8080/tcp"' -or $uiPorts -notmatch '"HostPort":"3000"') {
+    if ($backendPorts -notmatch '"3000/tcp"' -or $backendPorts -notmatch '"HostPort":"3000"') {
         throw "UI localhost port binding is missing."
+    }
+
+    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:3000/")) {
+        docker compose logs host-gateway ui
+        throw "UI was not reachable on the Windows host at http://127.0.0.1:3000/."
+    }
+
+    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:8000/api/v1/health")) {
+        docker compose logs host-gateway backend
+        throw "Backend was not reachable on the Windows host at http://127.0.0.1:8000/api/v1/health."
     }
 
     $modelFileName = Get-EnvValue -Key "MODEL_FILE_NAME" -DefaultValue "Qwen2.5-7B-Instruct.Q4_K_M.gguf"

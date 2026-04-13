@@ -33,12 +33,12 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Current Phase
 
-- Active phase: `provider-expansion`
-- Goal: expand the adapter layer so model and search backends can be swapped through configuration without backend rewrites or Compose service-name coupling
+- Active phase: `localhost-access-fix`
+- Goal: restore real host-browser access to the local UI and backend on Docker Desktop without collapsing the internal service boundaries
 
 ## Active Branch
 
-- `stamos/provider-expansion`
+- `stamos/localhost-access-fix`
 
 ## Completed Work
 
@@ -64,6 +64,8 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - Added a second model adapter for native Ollama runtimes while keeping the same orchestration contract used by the existing OpenAI-compatible runtime path.
 - Added a second search adapter for YaCy so the backend can query either SearXNG or YaCy through the same grounded-search pipeline.
 - Removed the backend's hard Compose dependency on a fixed `search-provider` service name so search-provider switching stays config-driven.
+- Added a dedicated localhost gateway service so the UI and backend are reachable from the Windows host while the app services themselves stay on internal Docker networks.
+- Tightened validation to check real host reachability on `127.0.0.1:3000` and `127.0.0.1:8000`, not just Docker's intended port-binding metadata.
 
 ## In-Progress Work
 
@@ -77,6 +79,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - Host firewall guidance has been documented conceptually, but not automated.
 - The current browser-side persistence is intentionally minimal and stores only the selected model id; there is still no prompt history or fetched-content storage policy.
 - The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
+- The localhost gateway solves the current Docker Desktop host-access bug, but host-firewall and non-egress enforcement for host-facing support services still belong in the next hardening milestone.
 
 ## Decisions Made And Why
 
@@ -93,6 +96,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - The `llama.cpp` runtime command now sets an explicit alias matching `MODEL_NAME` to keep model discovery stable across backend, runtime, and UI.
 - The local workbench can request a runtime-advertised model override per chat or grounded-answer call without changing the global backend configuration.
 - Provider expansion is being done through adapters plus env-driven factories first, before adding more runtime-specific orchestration profiles, so the backend boundary stays cleaner than the Compose implementation details.
+- Docker Desktop on this machine did not reliably expose published ports for services attached only to `internal: true` bridge networks, so host access now goes through a dedicated localhost gateway instead of direct publishing on the UI and backend containers.
 
 ## Security / Privacy Assumptions
 
@@ -105,8 +109,8 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Validation Status
 
-- `scripts/validate.ps1`: passed on 2026-04-13 after the provider-expansion changes
-- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13 after the provider-expansion changes
+- `scripts/validate.ps1`: passed on 2026-04-13 after the localhost-access fix
+- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13 after the localhost-access fix
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
@@ -122,13 +126,14 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - `scripts/bootstrap.ps1`: passed on 2026-04-13 and created the expected local `.env` plus data directories
 - `scripts/provision-default-model.ps1`: passed on 2026-04-13 and downloaded the default GGUF to `data/models/`
 - `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-13 with provider-expansion coverage for `openai_compatible`, `ollama`, `searxng`, and `yacy`
+- `docker compose up -d --build host-gateway ui backend fetcher search-provider`: reached the UI on `http://127.0.0.1:3000` and the backend health endpoint on `http://127.0.0.1:8000/api/v1/health` from the Windows host on 2026-04-13
 
 ## Exact Next Steps
 
-1. Validate `stamos/provider-expansion`, including backend tests and the full runtime probe for the default stack.
-2. Push `stamos/provider-expansion` and review the `main...stamos/provider-expansion` diff after validation passes.
-3. Merge `stamos/provider-expansion` after review and cleanup the branch per the repo workflow.
-4. Start `stamos/ops-hardening` to improve host-firewall guidance, log discipline, service health validation, and maintenance flows.
+1. Validate `stamos/localhost-access-fix`, including the full host reachability checks on Windows plus the default runtime probe.
+2. Push `stamos/localhost-access-fix` and review the `main...stamos/localhost-access-fix` diff after validation passes.
+3. Merge `stamos/localhost-access-fix` after review and cleanup the branch per the repo workflow.
+4. Resume `stamos/ops-hardening` to improve host-firewall guidance, log discipline, service health validation, and maintenance flows.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -139,4 +144,5 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - The backend and UI now expose model-runtime readiness separately from general backend health, which future branches should preserve.
 - The static UI now uses backend-provided runtime and model-catalog state to drive a browser-local model selector for chat and grounded-answer requests.
 - The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
-- The next implementation thread should begin with `stamos/ops-hardening` after confirming `main` is clean.
+- The current fix branch is focused on making the host UI and backend genuinely reachable on Docker Desktop without directly publishing the internal app containers.
+- The next implementation thread after this fix should resume `stamos/ops-hardening` after confirming `main` is clean.
