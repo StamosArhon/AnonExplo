@@ -7,7 +7,7 @@ AnonExplo uses a local-first, privacy-first service layout:
 - `host-gateway`
   - localhost-only reverse proxy that exposes the UI, backend, and optional standalone SearXNG UI to the host without putting those app services directly on a non-internal Docker network
 - `ui`
-  - local browser interface for prompts, model selection, provider status, grounding inspection, and in-tab conversation-style workspaces
+  - local browser interface for prompts, browser-local direct chat history, modal settings, provider status, grounding inspection, and separate direct/grounded/fetch workspaces
 - `backend`
   - orchestrator that owns provider routing and exposes a stable local API
 - `model-backend`
@@ -100,20 +100,24 @@ The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` ser
 ### Plain prompt flow
 
 1. UI sends a prompt to the backend.
-2. UI may include a request-level model selection sourced from the runtime-advertised model list.
-3. Backend validates that selection against the runtime when possible and forwards the request to the model adapter.
-4. Backend returns the model response plus selection metadata to the UI.
-5. The browser may present that exchange inside a local conversation-style shell, but the transcript remains in tab memory rather than persistent browser storage.
+2. UI may include direct-chat-specific saved instructions from the browser-local settings modal.
+3. UI may include a request-level model selection sourced from the runtime-advertised model list.
+4. Backend validates that selection against the runtime when possible and forwards the request to the model adapter.
+5. Backend returns the model response plus selection metadata to the UI.
+6. The browser may present that exchange inside a local conversation-style shell and persist direct-chat history locally in browser storage.
+7. Direct Chat intentionally does not call the search provider or fetcher.
 
 ### Grounded search flow
 
 1. UI submits a grounding query to the backend.
-2. Backend calls the configured search provider.
-3. Backend selects result URLs to fetch.
-4. Backend calls the fetcher service for readable page text.
-5. Backend deduplicates sources, applies bounded context limits, and packages structured source metadata plus fetch errors.
-6. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
-7. UI shows the grounded answer, the selected model, the selected sources, and any per-source fetch failures.
+2. UI may include grounded-answer-specific saved instructions plus default search and fetch limits from the browser-local settings modal.
+3. Backend calls the configured search provider.
+4. Backend selects result URLs to fetch.
+5. Backend calls the fetcher service for readable page text.
+6. Backend deduplicates sources, applies bounded context limits, and packages structured source metadata plus fetch errors.
+7. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
+8. UI shows the grounded answer, the selected model, the selected sources, and any per-source fetch failures.
+9. Grounded-answer transcripts and source bundles remain transient in the current tab rather than persistent browser storage.
 
 ## Why The Fetcher Is Separate
 

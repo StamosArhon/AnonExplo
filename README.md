@@ -21,7 +21,9 @@ This repository is currently focused on turning the secure local stack into a pr
 - backend adapters for both SearXNG and YaCy search services
 - a localhost gateway service that makes the UI and backend reachable on Docker Desktop while keeping the app services on internal networks
 - an optional localhost-only SearXNG web UI route for standalone searching when you do not want the LLM workflow
-- a calmer sidebar-and-editorial UI shell that keeps the active model, search provider, and runtime visible without persisting prompt history
+- a calmer sidebar-and-editorial UI shell with settings and stack details moved into modals instead of the main chat area
+- browser-local direct chat history with per-entry delete and full purge controls
+- explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
 
 ## Design Goals
 
@@ -94,8 +96,9 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 
 8. Optional: open the standalone SearXNG UI at `http://127.0.0.1:8085`.
 
-9. Use the local UI's workspaces to switch between direct chat, grounded answers, fetch inspection, and stack status.
-   The workbench keeps only the selected model id in browser local storage so chat and grounded-answer requests stay aligned across refreshes. The conversation-style layout itself remains in-memory only for the current browser tab.
+9. Use the local UI's workspaces to switch between direct chat, grounded answers, and fetch inspection.
+   `Direct Chat` is model only. `Grounded Answer` is the mode that uses SearXNG, page fetches, and source-backed synthesis.
+   The workbench stores the selected model, saved local instructions, and direct-chat history in browser local storage. Grounded-answer details and fetch results stay transient in the current tab by default.
 
 ## Provider Switching
 
@@ -139,18 +142,20 @@ The repo now supports a practical grounded-answer path:
 4. construct a bounded grounding context from fetched sources
 5. pass that context into the configured model runtime
 
-The UI also surfaces per-source fetch failures and the exact source text slice used for grounding.
+The UI also surfaces per-source fetch failures and the exact source text slice used for grounding. If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
 
 ## UI Workbench
 
 The local UI is still static and self-hosted, but it now behaves like a real workbench instead of a demo page:
 
 - it loads provider, runtime, and model-catalog state from the backend
-- it uses a calmer sidebar-and-editorial shell inspired by local chat tools without pretending to store long-lived chat sessions
-- it lets you choose the requested model globally for chat and grounded-answer requests
-- it keeps that selected model id locally in the browser without storing prompts or fetched content
-- it keeps direct-chat and grounded-answer transcripts only in the current tab memory, not in persistent browser storage
-- it surfaces runtime readiness, configured default vs. request override, and clearer failure cards
+- it uses a calmer sidebar-and-editorial shell with settings and stack details in dedicated modals
+- it keeps a browser-local direct chat history with a new-chat action, per-entry delete, and full purge
+- it lets you choose the requested model globally for direct-chat and grounded-answer requests
+- it stores the selected model plus saved direct-chat and grounded-answer instructions locally in the browser
+- it keeps grounded-answer transcripts, fetched source details, and fetch-inspector output transient in the current tab by default
+- it makes the mode boundary explicit: direct chat is model only, grounded answer is search plus fetch plus model
+- it surfaces runtime readiness, configured default vs. request override, and clearer failure cards without leaving stack diagnostics in the middle of the main chat surface
 
 ## Llama.cpp Profile
 

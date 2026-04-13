@@ -9,268 +9,286 @@
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="sidebar-head">
+        <div class="brand-row">
           <div>
-            <p class="sidebar-eyebrow">localhost</p>
+            <p class="eyebrow">localhost</p>
             <h1>AnonExplo</h1>
           </div>
-          <button id="focus-composer" type="button" class="ghost-button">New</button>
+          <button id="new-chat" type="button" class="ghost-button">New</button>
         </div>
 
-        <p class="sidebar-intro">
-          Local model chat, grounded answers, and direct search from one quiet workstation shell.
+        <p class="sidebar-copy">
+          Direct chat history stays local to this browser. Grounded answers and fetch inspection stay
+          transient unless you explicitly save something elsewhere.
         </p>
 
-        <section class="sidebar-section">
-          <p class="section-label">Workspaces</p>
-          <div class="workspace-list">
-            <button class="workspace-link active" data-workspace-target="workspace-chat" type="button">
-              <span class="workspace-name">Direct Chat</span>
-              <span class="workspace-meta">Prompt the selected local model</span>
-            </button>
-            <button class="workspace-link" data-workspace-target="workspace-grounding" type="button">
-              <span class="workspace-name">Grounded Answer</span>
-              <span class="workspace-meta">Search, fetch, and source-backed synthesis</span>
-            </button>
-            <button class="workspace-link" data-workspace-target="workspace-fetch" type="button">
-              <span class="workspace-name">Fetch Inspector</span>
-              <span class="workspace-meta">Read article text without using the model</span>
-            </button>
-            <button class="workspace-link" data-workspace-target="workspace-stack" type="button">
-              <span class="workspace-name">Stack Snapshot</span>
-              <span class="workspace-meta">Runtime, providers, and local entrypoints</span>
-            </button>
+        <section class="sidebar-panel">
+          <div class="panel-head">
+            <div>
+              <p class="section-label">Direct Chat History</p>
+              <p class="panel-copy">Delete any entry or purge the whole local list.</p>
+            </div>
+            <button id="purge-history" type="button" class="ghost-button ghost-button-small">Purge</button>
           </div>
+          <div id="chat-history-list" class="history-list"></div>
         </section>
 
-        <section class="sidebar-section">
-          <p class="section-label">Live Stack</p>
-          <div class="sidebar-card">
-            <label class="field field-compact">
-              <span>Requested model</span>
-              <select id="model-select"></select>
-            </label>
-            <p id="model-selection-note" class="sidebar-note">
-              Prompt and grounding requests use this selection.
-            </p>
-            <div id="sidebar-runtime-status" class="sidebar-runtime">Checking runtime...</div>
-            <div id="sidebar-stack-glance" class="sidebar-glance"></div>
-          </div>
-        </section>
-
-        <section class="sidebar-section">
-          <p class="section-label">Quick Actions</p>
-          <div class="action-stack">
-            <button id="refresh-status" type="button" class="action-button">Refresh Snapshot</button>
-            <a
-              id="open-search-link"
-              class="action-button action-button-secondary"
-              href="http://127.0.0.1:8085"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open SearXNG
-            </a>
-          </div>
-        </section>
+        <div class="sidebar-actions">
+          <button id="open-settings" type="button" class="ghost-button ghost-button-wide">Settings</button>
+          <button id="open-stack" type="button" class="ghost-button ghost-button-wide">Stack</button>
+          <a
+            id="open-search-link"
+            class="ghost-button ghost-button-wide ghost-link"
+            href="http://127.0.0.1:8085"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open SearXNG
+          </a>
+        </div>
       </aside>
 
       <main class="main-shell">
         <header class="topbar">
-          <div class="topbar-copy">
-            <div class="topbar-label">Active workspace</div>
-            <div id="active-workspace-title" class="topbar-title">Direct Chat</div>
-            <p id="active-workspace-copy" class="topbar-note">
-              Prompt the selected local model while the stack details stay present but quieter.
-            </p>
+          <div class="workspace-switch">
+            <button class="workspace-pill active" data-workspace-target="workspace-chat" type="button">
+              Direct Chat
+            </button>
+            <button class="workspace-pill" data-workspace-target="workspace-grounding" type="button">
+              Grounded Answer
+            </button>
+            <button class="workspace-pill" data-workspace-target="workspace-fetch" type="button">
+              Fetch Inspector
+            </button>
           </div>
 
-          <div class="topbar-chips">
-            <span id="environment-chip" class="context-chip">Loading environment...</span>
-            <span id="runtime-chip" class="context-chip">Checking runtime...</span>
-            <span id="model-chip" class="context-chip">Model · loading...</span>
-            <span id="search-chip" class="context-chip">Search · loading...</span>
+          <div class="topbar-tools">
+            <button id="topbar-open-settings" type="button" class="topbar-button">Settings</button>
+            <button id="topbar-open-stack" type="button" class="topbar-button">Stack</button>
+            <span id="environment-chip" class="context-chip">Environment - loading</span>
+            <span id="runtime-chip" class="context-chip">Runtime - loading</span>
+            <span id="model-chip" class="context-chip">Model - loading</span>
+            <span id="search-chip" class="context-chip">Search - loading</span>
           </div>
         </header>
 
         <div class="main-scroll">
-          <section class="intro-panel">
-            <p class="eyebrow">Local LLM Workbench</p>
-            <h2>Ask your local model</h2>
-            <p>
-              Editorial calm, source visibility, and only the active context you need while
-              working locally.
-            </p>
+          <section class="workspace-lede">
+            <div class="workspace-lede-copy">
+              <p id="workspace-eyebrow" class="eyebrow">Direct Chat</p>
+              <h2 id="workspace-title">Model-only chat</h2>
+              <p id="workspace-copy">
+                Direct Chat talks only to the selected model. It does not trigger SearXNG, fetches,
+                or grounded source packaging.
+              </p>
+            </div>
+            <div class="workspace-lede-chips">
+              <span id="mode-chip" class="context-chip">Mode - model only</span>
+              <span id="active-chat-chip" class="context-chip">Chat - new chat</span>
+            </div>
           </section>
 
           <section id="workspace-chat" class="workspace-panel">
-            <div class="workspace-head">
-              <div class="workspace-copy">
-                <p class="workspace-eyebrow">Direct chat</p>
-                <h3>Talk straight to the selected local runtime</h3>
-                <p>
-                  Keep the response central, keep the shell quiet, and let the model selection
-                  stay global instead of cluttering every form.
-                </p>
-              </div>
-              <div id="chat-meta" class="chip-row"></div>
-            </div>
-
+            <div id="chat-meta" class="chip-row"></div>
             <div id="chat-output" class="conversation-thread" aria-live="polite"></div>
-
-            <form id="chat-form" class="stack">
-              <label class="field field-subtle">
-                <span>Optional system prompt</span>
-                <textarea
-                  id="system-input"
-                  rows="3"
-                  placeholder="Keep answers concise, careful, and source-aware."
-                ></textarea>
-              </label>
-
-              <div class="composer-shell">
-                <label class="composer-main">
-                  <span class="sr-only">Prompt</span>
-                  <textarea
-                    id="prompt-input"
-                    rows="4"
-                    placeholder="Message your local model…"
-                  ></textarea>
-                </label>
-                <div class="composer-footer">
-                  <div class="composer-note">
-                    Runtime, model, and search provider stay visible in the shell header while you
-                    work.
-                  </div>
-                  <button type="submit" class="primary-button">Send</button>
-                </div>
-              </div>
-            </form>
           </section>
 
           <section id="workspace-grounding" class="workspace-panel" hidden>
-            <div class="workspace-head">
-              <div class="workspace-copy">
-                <p class="workspace-eyebrow">Grounded answer</p>
-                <h3>Search, fetch, and synthesize with source visibility intact</h3>
-                <p>
-                  Use this when snippets are not enough and you want the answer tied back to fetched
-                  page text.
-                </p>
-              </div>
-              <div id="grounding-meta" class="chip-row"></div>
-            </div>
-
             <div id="grounding-answer" class="conversation-thread" aria-live="polite"></div>
-
-            <form id="grounding-form" class="stack">
-              <label class="field">
-                <span>Question or search query</span>
-                <input
-                  id="grounding-query"
-                  type="text"
-                  placeholder="Ask something that should be answered from fetched source text."
-                />
-              </label>
-              <div class="inline-grid">
-                <label class="field field-compact">
-                  <span>Search limit</span>
-                  <input id="search-limit" type="number" min="1" max="10" value="5" />
-                </label>
-                <label class="field field-compact">
-                  <span>Fetch limit</span>
-                  <input id="fetch-limit" type="number" min="1" max="5" value="3" />
-                </label>
-                <div class="inline-action">
-                  <button type="submit" class="primary-button">Generate</button>
-                </div>
+            <details id="grounding-details" class="detail-panel" hidden>
+              <summary>Grounding details</summary>
+              <div class="detail-body">
+                <div id="grounding-meta" class="chip-row"></div>
+                <div id="grounding-errors" class="stack"></div>
+                <div id="grounding-summary" class="summary-grid"></div>
+                <div id="grounding-output" class="source-stack"></div>
               </div>
-            </form>
-
-            <div id="grounding-errors" class="stack"></div>
-            <div id="grounding-summary" class="summary-grid"></div>
-            <div id="grounding-output" class="source-stack"></div>
+            </details>
           </section>
 
           <section id="workspace-fetch" class="workspace-panel" hidden>
-            <div class="workspace-head">
-              <div class="workspace-copy">
-                <p class="workspace-eyebrow">Fetch inspector</p>
-                <h3>Read the extracted page text without involving the model</h3>
-                <p>
-                  Useful for checking whether the fetcher can reach and normalize a page before you
-                  use it for grounding.
-                </p>
-              </div>
-              <div id="fetch-meta" class="chip-row"></div>
-            </div>
-
-            <form id="fetch-form" class="stack">
-              <label class="field">
-                <span>URL</span>
-                <input id="fetch-url" type="url" placeholder="https://example.com/article" />
-              </label>
-              <div class="inline-action">
-                <button type="submit" class="primary-button">Fetch article</button>
-              </div>
-            </form>
-
+            <div id="fetch-meta" class="chip-row"></div>
             <div id="fetch-output" class="inspector-card" aria-live="polite">
               <div class="empty-state">
-                Readable article text will appear here once a fetch request succeeds.
+                Fetched article text will appear here. This workspace never sends the result to the
+                model by itself.
               </div>
             </div>
-          </section>
-
-          <section id="workspace-stack" class="workspace-panel" hidden>
-            <div class="workspace-head">
-              <div class="workspace-copy">
-                <p class="workspace-eyebrow">Stack snapshot</p>
-                <h3>Keep the runtime honest without letting it dominate the layout</h3>
-                <p>
-                  Review the configured default model, runtime readiness, provider stack, and local
-                  entrypoints in one place.
-                </p>
-              </div>
-            </div>
-
-            <div class="stack-grid">
-              <article class="info-card">
-                <p class="card-label">Configured default</p>
-                <div id="configured-model" class="card-value">Loading...</div>
-                <p id="runtime-note" class="card-note">
-                  Runtime details will appear here after the first snapshot refresh.
-                </p>
-              </article>
-
-              <article class="info-card">
-                <p class="card-label">Runtime snapshot</p>
-                <div id="runtime-summary" class="stack compact"></div>
-              </article>
-
-              <article class="info-card">
-                <p class="card-label">Provider stack</p>
-                <div id="provider-summary" class="stack compact"></div>
-              </article>
-
-              <article class="info-card">
-                <p class="card-label">Local entrypoints</p>
-                <div class="entrypoint-list">
-                  <a href="http://127.0.0.1:3000" target="_blank" rel="noreferrer">AnonExplo UI</a>
-                  <a href="http://127.0.0.1:8000/api/v1/health" target="_blank" rel="noreferrer">
-                    Backend health
-                  </a>
-                  <a id="stack-search-link" href="http://127.0.0.1:8085" target="_blank" rel="noreferrer">
-                    Standalone SearXNG
-                  </a>
-                </div>
-              </article>
-            </div>
-
-            <div id="status-output" class="status-stack"></div>
           </section>
         </div>
+
+        <footer class="composer-dock">
+          <form id="chat-form" class="composer-form">
+            <div class="composer-shell">
+              <div class="composer-head">
+                <p class="composer-label">Direct Chat</p>
+                <p class="composer-note">
+                  Saved instructions live in Settings. This mode is model only.
+                </p>
+              </div>
+              <textarea
+                id="prompt-input"
+                rows="4"
+                placeholder="Message the selected local model..."
+              ></textarea>
+              <div class="composer-actions">
+                <button type="button" id="composer-open-settings" class="ghost-button ghost-button-small">
+                  Settings
+                </button>
+                <button type="submit" class="primary-button">Send</button>
+              </div>
+            </div>
+          </form>
+
+          <form id="grounding-form" class="composer-form" hidden>
+            <div class="composer-shell">
+              <div class="composer-head">
+                <p class="composer-label">Grounded Answer</p>
+                <p class="composer-note">
+                  Uses search, fetch, and the selected model. Limits and instructions live in Settings.
+                </p>
+              </div>
+              <textarea
+                id="grounding-query"
+                rows="4"
+                placeholder="Ask a question that should be answered from fetched source text..."
+              ></textarea>
+              <div class="composer-actions">
+                <button type="button" id="grounding-open-settings" class="ghost-button ghost-button-small">
+                  Settings
+                </button>
+                <button type="submit" class="primary-button">Generate</button>
+              </div>
+            </div>
+          </form>
+
+          <form id="fetch-form" class="composer-form" hidden>
+            <div class="composer-shell">
+              <div class="composer-head">
+                <p class="composer-label">Fetch Inspector</p>
+                <p class="composer-note">Reads article text only. No model request is made here.</p>
+              </div>
+              <input id="fetch-url" type="url" placeholder="https://example.com/article" />
+              <div class="composer-actions">
+                <span class="composer-spacer"></span>
+                <button type="submit" class="primary-button">Fetch</button>
+              </div>
+            </div>
+          </form>
+        </footer>
       </main>
+    </div>
+
+    <div id="settings-modal" class="modal-shell" hidden>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h3>Local instructions and defaults</h3>
+          </div>
+          <button type="button" class="ghost-button ghost-button-small" data-close-modal="settings-modal">
+            Close
+          </button>
+        </div>
+
+        <form id="settings-form" class="modal-form">
+          <label class="field">
+            <span>Requested model</span>
+            <select id="settings-model-select"></select>
+          </label>
+
+          <label class="field">
+            <span>Direct chat instructions</span>
+            <textarea
+              id="settings-chat-system"
+              rows="6"
+              placeholder="Saved only in this browser. Applied to Direct Chat requests."
+            ></textarea>
+          </label>
+
+          <label class="field">
+            <span>Grounded answer instructions</span>
+            <textarea
+              id="settings-grounding-system"
+              rows="6"
+              placeholder="Saved only in this browser. Applied after search and fetch in Grounded Answer."
+            ></textarea>
+          </label>
+
+          <div class="inline-grid">
+            <label class="field">
+              <span>Default search limit</span>
+              <input id="settings-search-limit" type="number" min="1" max="10" />
+            </label>
+            <label class="field">
+              <span>Default fetch limit</span>
+              <input id="settings-fetch-limit" type="number" min="1" max="5" />
+            </label>
+          </div>
+
+          <p class="modal-note">
+            Direct Chat is model only. Grounded Answer is the mode that uses SearXNG plus fetched
+            source text.
+          </p>
+
+          <div class="modal-actions">
+            <button type="button" class="ghost-button" data-close-modal="settings-modal">Cancel</button>
+            <button type="submit" class="primary-button">Save settings</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="stack-modal" class="modal-shell" hidden>
+      <div class="modal-card modal-card-wide">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Stack</p>
+            <h3>Runtime and local entrypoints</h3>
+          </div>
+          <div class="modal-head-actions">
+            <button id="refresh-status" type="button" class="ghost-button ghost-button-small">Refresh</button>
+            <button type="button" class="ghost-button ghost-button-small" data-close-modal="stack-modal">
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div class="stack-grid">
+          <article class="info-card">
+            <p class="section-label">Configured default</p>
+            <div id="configured-model" class="card-value">Loading...</div>
+            <p id="runtime-note" class="panel-copy">
+              Runtime details will appear here after the first snapshot refresh.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <p class="section-label">Runtime snapshot</p>
+            <div id="runtime-summary" class="stack compact"></div>
+          </article>
+
+          <article class="info-card">
+            <p class="section-label">Provider stack</p>
+            <div id="provider-summary" class="stack compact"></div>
+          </article>
+
+          <article class="info-card">
+            <p class="section-label">Local entrypoints</p>
+            <div class="entrypoint-list">
+              <a href="http://127.0.0.1:3000" target="_blank" rel="noreferrer">AnonExplo UI</a>
+              <a href="http://127.0.0.1:8000/api/v1/health" target="_blank" rel="noreferrer">
+                Backend health
+              </a>
+              <a id="stack-search-link" href="http://127.0.0.1:8085" target="_blank" rel="noreferrer">
+                Standalone SearXNG
+              </a>
+            </div>
+          </article>
+        </div>
+
+        <div id="status-output" class="status-stack"></div>
+      </div>
     </div>
 
     <script src="/app.js" defer></script>

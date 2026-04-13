@@ -1,53 +1,90 @@
-const STORAGE_KEY = "anonexplo.selectedModel";
+const STORAGE_KEYS = {
+  selectedModel: "anonexplo.selectedModel",
+  settings: "anonexplo.uiSettings",
+  directChats: "anonexplo.directChats",
+  activeChatId: "anonexplo.activeChatId",
+};
+
+const DEFAULT_SETTINGS = {
+  chatSystemPrompt: "",
+  groundingSystemPrompt: "",
+  groundingSearchLimit: 5,
+  groundingFetchLimit: 3,
+};
 
 const WORKSPACES = {
   "workspace-chat": {
-    title: "Direct Chat",
-    copy: "Prompt the selected local model while the stack details stay present but quieter.",
+    eyebrow: "Direct Chat",
+    title: "Model-only chat",
+    copy: "Direct Chat talks only to the selected model. It does not call SearXNG, page fetches, or grounded source packaging.",
+    modeLabel: "Mode - model only",
+    activityLabel: "History - browser local",
+    formId: "chat-form",
     focusId: "prompt-input",
   },
   "workspace-grounding": {
-    title: "Grounded Answer",
-    copy: "Search, fetch, and synthesize from readable source text without losing the sources.",
+    eyebrow: "Grounded Answer",
+    title: "Search, fetch, then answer",
+    copy: "Grounded Answer is the workspace that uses SearXNG, page fetches, and the selected model together.",
+    modeLabel: "Mode - search + fetch + model",
+    activityLabel: "History - transient",
+    formId: "grounding-form",
     focusId: "grounding-query",
   },
   "workspace-fetch": {
-    title: "Fetch Inspector",
-    copy: "Inspect readable article extraction before you hand anything off to the model.",
+    eyebrow: "Fetch Inspector",
+    title: "Fetch without model synthesis",
+    copy: "Fetch Inspector reads and parses article text only. It does not send the result to the model by itself.",
+    modeLabel: "Mode - fetch only",
+    activityLabel: "Output - transient",
+    formId: "fetch-form",
     focusId: "fetch-url",
-  },
-  "workspace-stack": {
-    title: "Stack Snapshot",
-    copy: "Review runtime readiness, provider routing, and local entrypoints in one place.",
-    focusId: "refresh-status",
   },
 };
 
-async function getConfig() {
-  const response = await fetch("/config.json");
-  if (!response.ok) {
-    throw new Error("Could not load UI config.");
-  }
-  return response.json();
-}
-
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function getConfig() {
+  return fetch("/config.json").then(async (response) => {
+    if (!response.ok) {
+      throw new Error("Could not load UI config.");
+    }
+    return response.json();
+  });
+}
+
+async function readJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    return {};
+  }
+}
+
+function buildRequestError(response, data) {
+  const detail = data.detail || null;
+  const message =
+    typeof detail === "string"
+      ? detail
+      : detail?.message || data.message || `Request failed with status ${response.status}.`;
+  const error = new Error(message);
+  error.status = response.status;
+  error.detail = detail;
+  return error;
 }
 
 async function fetchJson(url) {
   const response = await fetch(url);
-  const data = await response.json().catch(() => ({}));
+  const data = await readJsonResponse(response);
   if (!response.ok) {
-    const error = new Error(
-      typeof data.detail === "string" ? data.detail : data.detail?.message || "Request failed.",
-    );
-    error.detail = data.detail || null;
-    error.status = response.status;
-    throw error;
+    throw buildRequestError(response, data);
   }
   return data;
 }
@@ -60,41 +97,216 @@ async function requestJson(url, payload) {
     },
     body: JSON.stringify(payload),
   });
-
-  const data = await response.json().catch(() => ({}));
+  const data = await readJsonResponse(response);
   if (!response.ok) {
-    const error = new Error(
-      typeof data.detail === "string" ? data.detail : data.detail?.message || "Request failed.",
-    );
-    error.detail = data.detail || null;
-    error.status = response.status;
-    throw error;
+    throw buildRequestError(response, data);
   }
   return data;
 }
 
-function buildChip(label, value, type = "muted") {
-  return `<span class="chip chip-${type}">${escapeHtml(label)}: ${escapeHtml(value)}</span>`;
+function safeStorageGet(key, fallback = null) {
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    return rawValue === null ? fallback : rawValue;
+  } catch (error) {
+    return fallback;
+  }
 }
 
-function buildBanner(title, message, type = "warning", extra = "") {
-  return `
-    <div class="banner banner-${type}">
-      <strong>${escapeHtml(title)}</strong>
-      <div>${escapeHtml(message)}</div>
-      ${extra}
-    </div>
-  `;
+function safeStorageSet(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (error) {
+    // Ignore browser storage failures in privacy-focused local use.
+  }
 }
 
-function getSelectionStatusClass(status) {
-  if (status === "ready" || status === "ok" || status === "grounded") {
-    return "ok";
+function safeStorageRemove(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch (error) {
+    // Ignore browser storage failures in privacy-focused local use.
   }
-  if (status === "unreachable" || status === "invalid_response" || status === "model_error") {
-    return "error";
+}
+
+function readStoredJson(key, fallback) {
+  const rawValue = safeStorageGet(key);
+  if (!rawValue) {
+    return fallback;
   }
-  return "warn";
+  try {
+    return JSON.parse(rawValue);
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function clampNumber(value, minimum, maximum, fallback) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+  return Math.min(maximum, Math.max(minimum, Math.round(numericValue)));
+}
+
+function makeId(prefix) {
+  if (window.crypto?.randomUUID) {
+    return `${prefix}-${window.crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function getIsoTimestamp() {
+  return new Date().toISOString();
+}
+
+function getTimeLabel(timestamp = new Date()) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+}
+
+function getHistoryLabel(timestamp) {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const isSameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  if (isSameDay) {
+    return getTimeLabel(date);
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function createMessage(role, content, tone = "default") {
+  const createdAt = getIsoTimestamp();
+  return {
+    role,
+    content,
+    tone,
+    createdAt,
+    time: getTimeLabel(createdAt),
+  };
+}
+
+function deriveChatTitle(prompt) {
+  const trimmed = String(prompt || "").trim().replace(/\s+/g, " ");
+  if (!trimmed) {
+    return "New chat";
+  }
+  return trimmed.length > 44 ? `${trimmed.slice(0, 41)}...` : trimmed;
+}
+
+function summarizeText(value, maximumLength = 72) {
+  const normalized = String(value || "").trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return "No messages yet.";
+  }
+  return normalized.length > maximumLength ? `${normalized.slice(0, maximumLength - 3)}...` : normalized;
+}
+
+function createChatSession(title = "New chat") {
+  const timestamp = getIsoTimestamp();
+  return {
+    id: makeId("chat"),
+    title,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    messages: [],
+  };
+}
+
+function normalizeChatSession(candidate) {
+  if (!candidate || typeof candidate !== "object") {
+    return null;
+  }
+
+  const id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim() : makeId("chat");
+  const createdAt = typeof candidate.createdAt === "string" ? candidate.createdAt : getIsoTimestamp();
+  const updatedAt = typeof candidate.updatedAt === "string" ? candidate.updatedAt : createdAt;
+  const messages = Array.isArray(candidate.messages)
+    ? candidate.messages
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          role: item.role === "user" ? "user" : "assistant",
+          content: String(item.content || ""),
+          tone: item.tone === "error" || item.tone === "pending" ? item.tone : "default",
+          createdAt: typeof item.createdAt === "string" ? item.createdAt : getIsoTimestamp(),
+          time: typeof item.time === "string" && item.time.trim() ? item.time : getTimeLabel(),
+        }))
+    : [];
+
+  return {
+    id,
+    title: typeof candidate.title === "string" && candidate.title.trim() ? candidate.title.trim() : "New chat",
+    createdAt,
+    updatedAt,
+    messages,
+  };
+}
+
+function loadSettings() {
+  const stored = readStoredJson(STORAGE_KEYS.settings, {});
+  return {
+    chatSystemPrompt: typeof stored.chatSystemPrompt === "string" ? stored.chatSystemPrompt : DEFAULT_SETTINGS.chatSystemPrompt,
+    groundingSystemPrompt:
+      typeof stored.groundingSystemPrompt === "string"
+        ? stored.groundingSystemPrompt
+        : DEFAULT_SETTINGS.groundingSystemPrompt,
+    groundingSearchLimit: clampNumber(
+      stored.groundingSearchLimit,
+      1,
+      10,
+      DEFAULT_SETTINGS.groundingSearchLimit,
+    ),
+    groundingFetchLimit: clampNumber(
+      stored.groundingFetchLimit,
+      1,
+      5,
+      DEFAULT_SETTINGS.groundingFetchLimit,
+    ),
+  };
+}
+
+function loadDirectChats() {
+  const stored = readStoredJson(STORAGE_KEYS.directChats, []);
+  if (!Array.isArray(stored)) {
+    return [createChatSession()];
+  }
+
+  const sessions = stored
+    .map(normalizeChatSession)
+    .filter(Boolean)
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+
+  return sessions.length ? sessions : [createChatSession()];
+}
+
+function ensureActiveChatId(directChats, activeChatId) {
+  if (activeChatId && directChats.some((chat) => chat.id === activeChatId)) {
+    return activeChatId;
+  }
+  return directChats[0]?.id || createChatSession().id;
+}
+
+function getActiveChat(state) {
+  return state.directChats.find((chat) => chat.id === state.activeChatId) || null;
+}
+
+function saveSettings(state) {
+  safeStorageSet(STORAGE_KEYS.settings, JSON.stringify(state.settings));
+}
+
+function saveDirectChats(state) {
+  safeStorageSet(STORAGE_KEYS.directChats, JSON.stringify(state.directChats));
+  safeStorageSet(STORAGE_KEYS.activeChatId, state.activeChatId);
 }
 
 function normalizeSnapshot(health, providers, modelsPayload) {
@@ -104,7 +316,7 @@ function normalizeSnapshot(health, providers, modelsPayload) {
     providers.model?.model_name ||
     health.providers?.model_name ||
     runtime.configured_model ||
-    "unknown";
+    "";
 
   return {
     health,
@@ -116,54 +328,59 @@ function normalizeSnapshot(health, providers, modelsPayload) {
 }
 
 function chooseSelectedModel(snapshot, previousSelection) {
-  const availableModelIds = new Set(snapshot.availableModels.map((item) => item.id));
-
-  if (previousSelection && (!availableModelIds.size || availableModelIds.has(previousSelection))) {
+  const availableIds = new Set(snapshot.availableModels.map((item) => item.id));
+  if (previousSelection && (!availableIds.size || availableIds.has(previousSelection))) {
     return previousSelection;
   }
-
-  if (snapshot.configuredModel && (!availableModelIds.size || availableModelIds.has(snapshot.configuredModel))) {
+  if (snapshot.configuredModel && (!availableIds.size || availableIds.has(snapshot.configuredModel))) {
     return snapshot.configuredModel;
   }
-
   return snapshot.availableModels[0]?.id || snapshot.configuredModel || "";
 }
 
-function getStoredSelectedModel() {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) || "";
-  } catch (error) {
-    return "";
+function getStatusVariant(status) {
+  if (["ok", "ready", "grounded"].includes(status)) {
+    return "ok";
   }
-}
-
-function setStoredSelectedModel(value) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, value);
-  } catch (error) {
-    // Ignore localStorage failures in local-only browsers.
+  if (["unreachable", "invalid_response", "model_error", "error"].includes(status)) {
+    return "error";
   }
+  return "warn";
 }
 
-function getTimestamp() {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date());
+function buildChip(label, value, variant = "muted") {
+  return `<span class="chip chip-${escapeHtml(variant)}">${escapeHtml(label)} - ${escapeHtml(value)}</span>`;
 }
 
-function createMessage(role, content, tone = "default") {
-  return {
-    role,
-    content,
-    tone,
-    time: getTimestamp(),
-  };
+function buildBanner(title, message, variant = "warning", extra = "") {
+  return `
+    <div class="banner banner-${escapeHtml(variant)}">
+      <strong>${escapeHtml(title)}</strong>
+      <div>${escapeHtml(message)}</div>
+      ${extra}
+    </div>
+  `;
 }
 
-function renderConversation(target, messages) {
+function setContextChip(element, label, value, variant = "muted") {
+  element.className = `context-chip chip-${variant}`;
+  element.textContent = `${label} - ${value}`;
+}
+
+function getWorkspaceActivityLabel(state, workspaceId) {
+  if (workspaceId === "workspace-chat") {
+    return getActiveChat(state)?.title || "New chat";
+  }
+  return WORKSPACES[workspaceId].activityLabel;
+}
+
+function scrollThreadToBottom(target) {
+  target.scrollTop = target.scrollHeight;
+}
+
+function renderConversation(target, messages, emptyText) {
   if (!messages.length) {
-    target.innerHTML = '<div class="empty-state">No messages yet.</div>';
+    target.innerHTML = `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
     return;
   }
 
@@ -171,17 +388,17 @@ function renderConversation(target, messages) {
     .map((message) => {
       const roleLabel = message.role === "user" ? "You" : "Assistant";
       const rowClass = message.role === "user" ? "message-row-user" : "message-row-assistant";
-      const cardClass = message.role === "user" ? "message-card-user" : "message-card-assistant";
       const toneClass =
         message.tone === "pending"
-          ? "message-pending"
+          ? "message-card-pending"
           : message.tone === "error"
-            ? "message-error"
+            ? "message-card-error"
             : "";
+      const userClass = message.role === "user" ? "message-card-user" : "";
 
       return `
         <div class="message-row ${rowClass}">
-          <article class="message-card ${cardClass} ${toneClass}">
+          <article class="message-card ${userClass} ${toneClass}">
             <div class="message-meta">
               <span class="message-role">${escapeHtml(roleLabel)}</span>
               <span class="message-time">${escapeHtml(message.time || "")}</span>
@@ -192,211 +409,292 @@ function renderConversation(target, messages) {
       `;
     })
     .join("");
+
+  scrollThreadToBottom(target);
 }
 
-function renderModelSelector(selectElement, noteElement, snapshot, selectedModel) {
-  const options = [];
-
-  if (!snapshot.availableModels.length) {
-    options.push(
-      `<option value="${escapeHtml(snapshot.configuredModel)}">${escapeHtml(snapshot.configuredModel)}</option>`,
-    );
-  } else {
-    for (const model of snapshot.availableModels) {
-      const selected = model.id === selectedModel ? " selected" : "";
-      options.push(`<option value="${escapeHtml(model.id)}"${selected}>${escapeHtml(model.id)}</option>`);
-    }
-  }
-
-  selectElement.innerHTML = options.join("");
-  selectElement.value = selectedModel;
-  noteElement.textContent =
-    selectedModel === snapshot.configuredModel
-      ? "Requests are using the configured default model."
-      : "Requests are overriding the configured default model for this browser session.";
+function buildHistoryRows(state) {
+  return state.directChats
+    .map((chat) => {
+      const previewSource = chat.messages[chat.messages.length - 1]?.content || "";
+      const activeClass = chat.id === state.activeChatId ? " active" : "";
+      return `
+        <div class="history-row">
+          <button type="button" class="history-button${activeClass}" data-chat-id="${escapeHtml(chat.id)}">
+            <span class="history-title">${escapeHtml(chat.title)}</span>
+            <span class="history-preview">${escapeHtml(summarizeText(previewSource, 54))}</span>
+            <span class="history-time">${escapeHtml(getHistoryLabel(chat.updatedAt))}</span>
+          </button>
+          <button type="button" class="history-delete" data-delete-chat-id="${escapeHtml(chat.id)}">Delete</button>
+        </div>
+      `;
+    })
+    .join("");
 }
 
-function renderSidebarSnapshot(runtimeTarget, glanceTarget, snapshot, selectedModel) {
-  const runtimeStatus = snapshot.runtime.status || "unknown";
-  runtimeTarget.innerHTML = `
-    ${buildChip("Runtime", runtimeStatus, getSelectionStatusClass(runtimeStatus))}
-    ${buildChip("Search", snapshot.providers.search?.provider || "unknown", "muted")}
-  `;
-
-  glanceTarget.innerHTML = `
-    <div class="glance-line"><span>Selected model</span><strong>${escapeHtml(selectedModel || snapshot.configuredModel)}</strong></div>
-    <div class="glance-line"><span>Configured default</span><strong>${escapeHtml(snapshot.configuredModel)}</strong></div>
-    <div class="glance-line"><span>Model provider</span><strong>${escapeHtml(snapshot.providers.model?.provider || "unknown")}</strong></div>
-    <div class="glance-line"><span>Fetch path</span><strong>${escapeHtml(snapshot.providers.fetch?.base_url || "unknown")}</strong></div>
-  `;
+function renderChatHistory(state, elements) {
+  elements.chatHistoryList.innerHTML = buildHistoryRows(state);
 }
 
-function setHeaderChip(element, text, type = "muted") {
-  element.textContent = text;
-  element.className = `context-chip chip-${type}`;
-}
-
-function renderTopbarSnapshot(config, state, elements) {
-  setHeaderChip(elements.environmentChip, `Environment · ${config.environment}`, "muted");
-  setHeaderChip(
-    elements.runtimeChip,
-    `Runtime · ${state.snapshot.runtime.status || "unknown"}`,
-    getSelectionStatusClass(state.snapshot.runtime.status || "unknown"),
-  );
-  setHeaderChip(
-    elements.modelChip,
-    `Model · ${state.selectedModel || state.snapshot.configuredModel}`,
-    "active",
-  );
-  setHeaderChip(
-    elements.searchChip,
-    `Search · ${state.snapshot.providers.search?.provider || "unknown"}`,
+function renderWorkspaceShell(state, elements) {
+  const workspace = WORKSPACES[state.activeWorkspace];
+  elements.workspaceEyebrow.textContent = workspace.eyebrow;
+  elements.workspaceTitle.textContent = workspace.title;
+  elements.workspaceCopy.textContent = workspace.copy;
+  setContextChip(elements.modeChip, "Mode", workspace.modeLabel.replace("Mode - ", ""), "muted");
+  setContextChip(
+    elements.activeChatChip,
+    workspaceIdToChipLabel(state.activeWorkspace),
+    getWorkspaceActivityLabel(state, state.activeWorkspace),
     "muted",
   );
+
+  Object.entries(WORKSPACES).forEach(([workspaceId, meta]) => {
+    document.getElementById(workspaceId).hidden = workspaceId !== state.activeWorkspace;
+    document.getElementById(meta.formId).hidden = workspaceId !== state.activeWorkspace;
+  });
+
+  document.querySelectorAll("[data-workspace-target]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.workspaceTarget === state.activeWorkspace);
+  });
 }
 
-function renderRuntimeSummary(target, runtime) {
-  const availableModels = Array.isArray(runtime.available_models) ? runtime.available_models : [];
-  if (!runtime.status) {
-    target.innerHTML = '<div class="meta">Runtime details are not available yet.</div>';
+function workspaceIdToChipLabel(workspaceId) {
+  if (workspaceId === "workspace-chat") {
+    return "Chat";
+  }
+  if (workspaceId === "workspace-grounding") {
+    return "History";
+  }
+  return "Output";
+}
+
+function renderTopbar(config, state, elements) {
+  const runtimeStatus = state.snapshot?.runtime?.status || "loading";
+  const searchProvider = state.snapshot?.providers?.search?.provider || "loading";
+  const selectedModel = state.selectedModel || state.snapshot?.configuredModel || "loading";
+
+  setContextChip(elements.environmentChip, "Environment", config.environment || "local", "muted");
+  setContextChip(elements.runtimeChip, "Runtime", runtimeStatus, getStatusVariant(runtimeStatus));
+  setContextChip(elements.modelChip, "Model", selectedModel, "active");
+  setContextChip(elements.searchChip, "Search", searchProvider, "muted");
+}
+
+function buildModelOptions(state) {
+  const models = state.snapshot?.availableModels || [];
+  const fallbackId = state.selectedModel || state.snapshot?.configuredModel || "";
+
+  if (!models.length && fallbackId) {
+    return [`<option value="${escapeHtml(fallbackId)}">${escapeHtml(fallbackId)}</option>`].join("");
+  }
+
+  return models
+    .map((model) => {
+      const selected = model.id === state.selectedModel ? " selected" : "";
+      return `<option value="${escapeHtml(model.id)}"${selected}>${escapeHtml(model.id)}</option>`;
+    })
+    .join("");
+}
+
+function renderSettingsForm(state, elements) {
+  elements.settingsModelSelect.innerHTML = buildModelOptions(state);
+  if (state.selectedModel) {
+    elements.settingsModelSelect.value = state.selectedModel;
+  }
+  elements.settingsChatSystem.value = state.settings.chatSystemPrompt;
+  elements.settingsGroundingSystem.value = state.settings.groundingSystemPrompt;
+  elements.settingsSearchLimit.value = String(state.settings.groundingSearchLimit);
+  elements.settingsFetchLimit.value = String(state.settings.groundingFetchLimit);
+}
+
+function renderStackModal(state, elements) {
+  if (!state.snapshot) {
+    elements.configuredModel.textContent = "Loading...";
+    elements.runtimeNote.textContent = "Runtime details will appear after the first snapshot refresh.";
+    elements.runtimeSummary.innerHTML = '<div class="meta">Loading runtime snapshot...</div>';
+    elements.providerSummary.innerHTML = '<div class="meta">Loading provider summary...</div>';
+    elements.statusOutput.innerHTML = '<div class="status-card">Loading local snapshot...</div>';
     return;
   }
 
-  target.innerHTML = `
-    <div>${buildChip("Status", runtime.status, getSelectionStatusClass(runtime.status))}</div>
-    <div>${buildChip("Reachable", runtime.reachable ? "yes" : "no", runtime.reachable ? "ok" : "error")}</div>
-    <div>${buildChip("Advertised", availableModels.length, availableModels.length ? "ok" : "warn")}</div>
-    <div class="meta">${escapeHtml(runtime.checked_url || "unknown")}</div>
-  `;
+  const runtime = state.snapshot.runtime || {};
+  const providers = state.snapshot.providers || {};
+  const advertisedModels = state.snapshot.availableModels || [];
+
+  elements.configuredModel.textContent = state.snapshot.configuredModel || "unknown";
+  elements.runtimeNote.textContent =
+    runtime.error || "Runtime readiness is checked against the live local model endpoint.";
+
+  elements.runtimeSummary.innerHTML = [
+    buildChip("Status", runtime.status || "unknown", getStatusVariant(runtime.status || "unknown")),
+    buildChip("Reachable", runtime.reachable ? "yes" : "no", runtime.reachable ? "ok" : "error"),
+    buildChip("Advertised", String(advertisedModels.length), advertisedModels.length ? "ok" : "warn"),
+    runtime.checked_url ? `<div class="meta">${escapeHtml(runtime.checked_url)}</div>` : "",
+  ].join("");
+
+  elements.providerSummary.innerHTML = [
+    buildChip("Model provider", providers.model?.provider || "unknown", "muted"),
+    buildChip("Search provider", providers.search?.provider || "unknown", "muted"),
+    buildChip("Fetch path", providers.fetch?.base_url || "unknown", "muted"),
+    buildChip("Runtime profile", providers.model?.runtime_profile || "unknown", "muted"),
+  ].join("");
+
+  const statusCards = [
+    `<div class="status-card"><strong>Backend</strong><div class="meta">${escapeHtml(
+      state.snapshot.health?.status || "unknown",
+    )}</div></div>`,
+    `<div class="status-card"><strong>Selected model</strong><div class="meta">${escapeHtml(
+      state.selectedModel || state.snapshot.configuredModel || "unknown",
+    )}</div></div>`,
+  ];
+
+  if (advertisedModels.length) {
+    statusCards.push(
+      `<div class="status-card"><strong>Advertised models</strong><div class="chip-row">${advertisedModels
+        .map((item) =>
+          buildChip(
+            item.id,
+            item.id === state.selectedModel ? "selected" : "available",
+            item.id === state.selectedModel ? "active" : "muted",
+          ),
+        )
+        .join("")}</div></div>`,
+    );
+  }
+
+  elements.statusOutput.innerHTML = statusCards.join("");
 }
 
-function renderProviderSummary(target, snapshot) {
-  target.innerHTML = `
-    <div>${buildChip("Model", snapshot.providers.model?.provider || "unknown", "muted")}</div>
-    <div>${buildChip("Search", snapshot.providers.search?.provider || "unknown", "muted")}</div>
-    <div>${buildChip("Fetch", snapshot.providers.fetch?.base_url || "unknown", "muted")}</div>
-    <div>${buildChip("Runtime", snapshot.providers.model?.runtime_profile || "unknown", "muted")}</div>
-  `;
+function renderChatMeta(state, elements) {
+  const chips = [
+    buildChip("Mode", "model only", "muted"),
+    buildChip("Search", "off", "muted"),
+    buildChip("Model", state.selectedModel || state.snapshot?.configuredModel || "unknown", "active"),
+  ];
+
+  if (state.chatStatus.kind === "pending") {
+    chips.push(buildChip("Status", "waiting", "warn"));
+  }
+
+  if (state.chatStatus.kind === "success") {
+    chips.push(
+      buildChip("Runtime", state.chatStatus.payload.runtime_status || "unknown", getStatusVariant(state.chatStatus.payload.runtime_status || "unknown")),
+    );
+    chips.push(
+      buildChip("Usage", String(state.chatStatus.payload.usage?.total_tokens || 0), "muted"),
+    );
+  }
+
+  if (state.chatStatus.kind === "error") {
+    const detail = state.chatStatus.error.detail || {};
+    const runtimeStatus = detail.runtime?.status;
+    if (runtimeStatus) {
+      chips.push(buildChip("Runtime", runtimeStatus, getStatusVariant(runtimeStatus)));
+    }
+    chips.push(buildChip("Status", "request failed", "error"));
+  }
+
+  elements.chatMeta.innerHTML = chips.join("");
 }
 
-function renderStatusPanel(target, snapshot, selectedModel) {
-  const runtime = snapshot.runtime;
-  const backendClass =
-    snapshot.health.status === "ok"
-      ? "ok"
-      : snapshot.health.status === "degraded"
-        ? "warn"
-        : "error";
-  const advertisedModels = snapshot.availableModels
+function renderGroundingMeta(state, elements) {
+  const searchProvider = state.snapshot?.providers?.search?.provider || "unknown";
+  const chips = [
+    buildChip("Mode", "search + fetch + model", "muted"),
+    buildChip("Search", searchProvider, "muted"),
+    buildChip("Model", state.selectedModel || state.snapshot?.configuredModel || "unknown", "active"),
+  ];
+
+  if (state.groundingStatus.kind === "pending") {
+    chips.push(buildChip("Status", "grounding", "warn"));
+  }
+
+  if (state.groundingStatus.kind === "success") {
+    chips.push(
+      buildChip(
+        "Answer",
+        state.groundingStatus.payload.answer_status || "unknown",
+        getStatusVariant(state.groundingStatus.payload.answer_status || "unknown"),
+      ),
+    );
+  }
+
+  if (state.groundingStatus.kind === "error") {
+    chips.push(buildChip("Status", "request failed", "error"));
+  }
+
+  elements.groundingMeta.innerHTML = chips.join("");
+}
+
+function renderFetchMeta(state, elements) {
+  const chips = [buildChip("Mode", "fetch only", "muted")];
+
+  if (state.fetchStatus.kind === "pending") {
+    chips.push(buildChip("Status", "fetching", "warn"));
+  }
+
+  if (state.fetchStatus.kind === "success") {
+    chips.push(buildChip("Chars", String(state.fetchStatus.payload.content_char_count || 0), "muted"));
+    chips.push(buildChip("Words", String(state.fetchStatus.payload.word_count || 0), "muted"));
+  }
+
+  if (state.fetchStatus.kind === "error") {
+    chips.push(buildChip("Status", "request failed", "error"));
+  }
+
+  elements.fetchMeta.innerHTML = chips.join("");
+}
+
+function renderGroundingDetails(state, elements) {
+  if (state.groundingStatus.kind !== "success") {
+    elements.groundingDetails.hidden = true;
+    elements.groundingErrors.innerHTML = "";
+    elements.groundingSummary.innerHTML = "";
+    elements.groundingOutput.innerHTML = "";
+    return;
+  }
+
+  const payload = state.groundingStatus.payload;
+  const grounding = payload.grounding || payload;
+  const summary = grounding.summary || {};
+  const fetchedById = new Map((grounding.fetched_sources || []).map((item) => [item.source_id, item]));
+
+  elements.groundingDetails.hidden = false;
+  elements.groundingDetails.open = true;
+  elements.groundingSummary.innerHTML = [
+    `<div class="status-card"><strong>Search hits</strong><div class="meta">${escapeHtml(summary.search_results || 0)}</div></div>`,
+    `<div class="status-card"><strong>Unique hits</strong><div class="meta">${escapeHtml(summary.unique_search_results || 0)}</div></div>`,
+    `<div class="status-card"><strong>Fetched</strong><div class="meta">${escapeHtml(summary.fetched_sources || 0)}</div></div>`,
+    `<div class="status-card"><strong>Failures</strong><div class="meta">${escapeHtml(summary.failed_sources || 0)}</div></div>`,
+    `<div class="status-card"><strong>Context chars</strong><div class="meta">${escapeHtml(summary.grounding_characters || 0)}</div></div>`,
+    `<div class="status-card"><strong>Selected</strong><div class="meta">${escapeHtml(summary.selected_sources || 0)}</div></div>`,
+  ].join("");
+
+  const errors = grounding.errors || [];
+  elements.groundingErrors.innerHTML = errors
     .map((item) =>
-      buildChip(item.id, item.id === selectedModel ? "selected" : "available", item.id === selectedModel ? "active" : "muted"),
+      buildBanner(
+        item.source_id ? `Source ${item.source_id} issue` : "Grounding issue",
+        item.message || "Unknown grounding error.",
+        "warning",
+        item.url ? `<div class="meta">${escapeHtml(item.url)}</div>` : "",
+      ),
     )
     .join("");
 
-  const cards = [
-    `<div class="status-card"><strong>Backend status:</strong> <span class="${backendClass}">${escapeHtml(snapshot.health.status)}</span></div>`,
-    `<div class="status-card"><strong>Configured default:</strong> ${escapeHtml(snapshot.configuredModel)}</div>`,
-    `<div class="status-card"><strong>Selected for requests:</strong> ${escapeHtml(selectedModel || snapshot.configuredModel)}</div>`,
-  ];
-
-  if (runtime.error) {
-    cards.push(buildBanner("Runtime note", runtime.error, "warning"));
-  }
-
-  if (advertisedModels) {
-    cards.push(`<div class="status-card"><strong>Advertised models</strong><div class="chip-row">${advertisedModels}</div></div>`);
-  }
-
-  target.innerHTML = cards.join("");
-}
-
-function renderChatSuccess(metaTarget, payload) {
-  metaTarget.innerHTML = `
-    ${buildChip("Selected", payload.selection.selected_model, "active")}
-    ${buildChip("Configured", payload.selection.configured_model, "muted")}
-    ${buildChip("Runtime", payload.runtime_status, getSelectionStatusClass(payload.runtime_status))}
-    ${buildChip("Usage", payload.usage.total_tokens || 0, "muted")}
-  `;
-}
-
-function renderChatError(metaTarget, error) {
-  const detail = error.detail || {};
-  const selection = detail.selection || {};
-  const runtime = detail.runtime || {};
-  metaTarget.innerHTML = `
-    ${selection.selected_model ? buildChip("Selected", selection.selected_model, "warn") : ""}
-    ${selection.configured_model ? buildChip("Configured", selection.configured_model, "muted") : ""}
-    ${runtime.status ? buildChip("Runtime", runtime.status, getSelectionStatusClass(runtime.status)) : ""}
-  `;
-}
-
-function renderFetchSuccess(target, metaTarget, payload) {
-  metaTarget.innerHTML = `
-    ${buildChip("Title", payload.title || "Untitled", "muted")}
-    ${buildChip("Chars", payload.content_char_count || 0, "muted")}
-    ${buildChip("Words", payload.word_count || 0, "muted")}
-  `;
-
-  target.innerHTML = `
-    <h3>${escapeHtml(payload.title || "Untitled")}</h3>
-    <p class="meta">${escapeHtml(payload.final_url || payload.requested_url || "")}</p>
-    <p>${escapeHtml(payload.excerpt || "No excerpt available.")}</p>
-    <div class="source-text">${escapeHtml(payload.content_text || "No article text returned.")}</div>
-  `;
-}
-
-function renderFetchError(target, metaTarget, error) {
-  metaTarget.innerHTML = "";
-  target.innerHTML = buildBanner("Fetch request failed", error.message, "error");
-}
-
-function renderGroundingSuccess(metaTarget, summaryTarget, errorsTarget, sourcesTarget, payload) {
-  const grounding = payload.grounding || payload;
-  const fetchedById = new Map((grounding.fetched_sources || []).map((item) => [item.source_id, item]));
-  const groupedErrors = grounding.errors || [];
-
-  metaTarget.innerHTML = `
-    ${payload.selection ? buildChip("Selected", payload.selection.selected_model, "active") : ""}
-    ${payload.selection ? buildChip("Configured", payload.selection.configured_model, "muted") : ""}
-    ${payload.runtime_status ? buildChip("Runtime", payload.runtime_status, getSelectionStatusClass(payload.runtime_status)) : ""}
-    ${buildChip("Answer state", payload.answer_status || "preview", getSelectionStatusClass(payload.answer_status || "preview"))}
-  `;
-
-  summaryTarget.innerHTML = `
-    <div class="status-card"><strong>Search hits:</strong> ${escapeHtml(grounding.summary.search_results)}</div>
-    <div class="status-card"><strong>Unique hits:</strong> ${escapeHtml(grounding.summary.unique_search_results)}</div>
-    <div class="status-card"><strong>Selected:</strong> ${escapeHtml(grounding.summary.selected_sources)}</div>
-    <div class="status-card"><strong>Fetched:</strong> ${escapeHtml(grounding.summary.fetched_sources)}</div>
-    <div class="status-card"><strong>Failures:</strong> ${escapeHtml(grounding.summary.failed_sources)}</div>
-    <div class="status-card"><strong>Context chars:</strong> ${escapeHtml(grounding.summary.grounding_characters)}</div>
-  `;
-
-  if (groupedErrors.length) {
-    errorsTarget.innerHTML = groupedErrors
-      .map((item) =>
-        buildBanner(
-          item.source_id ? `Source ${item.source_id} failed` : "Grounding issue",
-          item.message || "Unknown grounding error.",
-          "warning",
-          item.url ? `<div class="meta">${escapeHtml(item.url)}</div>` : "",
-        ),
-      )
-      .join("");
-  } else {
-    errorsTarget.innerHTML = "";
-  }
-
-  if (!(grounding.selected_sources || []).length) {
-    sourcesTarget.innerHTML = '<div class="result-card">No sources were selected from the search results.</div>';
+  const selectedSources = grounding.selected_sources || [];
+  if (!selectedSources.length) {
+    elements.groundingOutput.innerHTML =
+      '<div class="result-card">No sources were selected from the current search results.</div>';
     return;
   }
 
-  sourcesTarget.innerHTML = grounding.selected_sources
+  elements.groundingOutput.innerHTML = selectedSources
     .map((source) => {
       const fetched = fetchedById.get(source.source_id);
-      const error = groupedErrors.find((item) => item.source_id === source.source_id);
-      const statusClass = fetched ? "status-fetched" : error ? "status-failed" : "status-selected";
-      const statusLabel = fetched ? "Fetched" : error ? "Failed" : "Selected";
+      const sourceError = errors.find((item) => item.source_id === source.source_id);
+      const statusLabel = fetched ? "Fetched" : sourceError ? "Failed" : "Selected";
+      const statusClass = fetched ? "status-fetched" : sourceError ? "status-failed" : "status-selected";
 
       return `
         <div class="result-card">
@@ -405,7 +703,7 @@ function renderGroundingSuccess(metaTarget, summaryTarget, errorsTarget, sources
             <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
           </div>
           <div class="meta">
-            Rank ${escapeHtml(source.search_rank)} &middot; ${escapeHtml(source.domain)} &middot;
+            Rank ${escapeHtml(source.search_rank)} | ${escapeHtml(source.domain)} | 
             <a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.url)}</a>
           </div>
           <div class="source-body">
@@ -413,12 +711,18 @@ function renderGroundingSuccess(metaTarget, summaryTarget, errorsTarget, sources
             ${
               fetched
                 ? `
-                  <div class="meta">Context used: ${escapeHtml(fetched.context_chars_used)} chars &middot; Extracted: ${escapeHtml(fetched.content_char_count)} chars &middot; ${escapeHtml(fetched.word_count)} words</div>
-                  <div class="source-text">${escapeHtml(fetched.context_text || fetched.excerpt || "No source text available.")}</div>
+                  <div class="meta">
+                    Context used ${escapeHtml(fetched.context_chars_used)} chars | Extracted ${escapeHtml(
+                      fetched.content_char_count,
+                    )} chars | ${escapeHtml(fetched.word_count)} words
+                  </div>
+                  <div class="source-text">${escapeHtml(
+                    fetched.context_text || fetched.excerpt || "No grounded source text available.",
+                  )}</div>
                 `
-                : error
-                  ? `<p class="error">${escapeHtml(error.message)}</p>`
-                  : `<p class="meta">Selected for grounding but not fetched.</p>`
+                : sourceError
+                  ? `<p class="error">${escapeHtml(sourceError.message)}</p>`
+                  : '<p class="meta">Selected for grounding but not fetched.</p>'
             }
           </div>
         </div>
@@ -427,19 +731,73 @@ function renderGroundingSuccess(metaTarget, summaryTarget, errorsTarget, sources
     .join("");
 }
 
-function renderGroundingError(metaTarget, summaryTarget, errorsTarget, sourcesTarget, error) {
-  const detail = error.detail || {};
-  const selection = detail.selection || {};
-  const runtime = detail.runtime || {};
+function renderFetchOutput(state, elements) {
+  if (state.fetchStatus.kind === "success") {
+    const payload = state.fetchStatus.payload;
+    elements.fetchOutput.innerHTML = `
+      <h3>${escapeHtml(payload.title || "Untitled")}</h3>
+      <p class="meta">${escapeHtml(payload.final_url || payload.requested_url || "")}</p>
+      <p>${escapeHtml(payload.excerpt || "No excerpt available.")}</p>
+      <div class="source-text">${escapeHtml(payload.content_text || "No readable article text returned.")}</div>
+    `;
+    return;
+  }
 
-  metaTarget.innerHTML = `
-    ${selection.selected_model ? buildChip("Selected", selection.selected_model, "warn") : ""}
-    ${selection.configured_model ? buildChip("Configured", selection.configured_model, "muted") : ""}
-    ${runtime.status ? buildChip("Runtime", runtime.status, getSelectionStatusClass(runtime.status)) : ""}
+  if (state.fetchStatus.kind === "error") {
+    elements.fetchOutput.innerHTML = buildBanner("Fetch request failed", state.fetchStatus.error.message, "error");
+    return;
+  }
+
+  if (state.fetchStatus.kind === "pending") {
+    elements.fetchOutput.innerHTML = '<div class="empty-state">Fetching and parsing article...</div>';
+    return;
+  }
+
+  elements.fetchOutput.innerHTML = `
+    <div class="empty-state">
+      Fetched article text will appear here. This workspace never sends the result to the model by itself.
+    </div>
   `;
-  summaryTarget.innerHTML = "";
-  errorsTarget.innerHTML = buildBanner("Grounded answer failed", error.message, "error");
-  sourcesTarget.innerHTML = "";
+}
+
+function renderDirectChat(state, elements) {
+  const activeChat = getActiveChat(state);
+  renderConversation(
+    elements.chatOutput,
+    activeChat?.messages || [],
+    "No direct-chat messages yet. This workspace is model only and never triggers search or fetch.",
+  );
+  renderChatMeta(state, elements);
+}
+
+function renderGroundingWorkspace(state, elements) {
+  renderConversation(
+    elements.groundingAnswer,
+    state.groundingMessages,
+    "No grounded requests yet. Use this workspace when you want SearXNG, fetched page text, and sourced answers.",
+  );
+  renderGroundingMeta(state, elements);
+  renderGroundingDetails(state, elements);
+}
+
+function renderApp(config, state, elements) {
+  renderChatHistory(state, elements);
+  renderWorkspaceShell(state, elements);
+  renderTopbar(config, state, elements);
+  renderSettingsForm(state, elements);
+  renderStackModal(state, elements);
+  renderDirectChat(state, elements);
+  renderGroundingWorkspace(state, elements);
+  renderFetchMeta(state, elements);
+  renderFetchOutput(state, elements);
+}
+
+function openModal(modal) {
+  modal.hidden = false;
+}
+
+function closeModal(modal) {
+  modal.hidden = true;
 }
 
 function buildGroundingAssistantText(payload) {
@@ -447,91 +805,90 @@ function buildGroundingAssistantText(payload) {
     return payload.answer || "(empty grounded answer)";
   }
   if (payload.answer_status === "insufficient_sources") {
-    return "Search finished, but no fetched source text was available for model synthesis.";
+    return "Search finished, but not enough fetched source text was available to answer from derived material only.";
   }
   if (payload.answer_status === "model_error") {
-    return payload.model_error || "The sources were fetched, but model synthesis failed.";
+    return payload.model_error || "Source collection finished, but the local model failed while synthesizing an answer.";
   }
-  return "Grounding preview generated without model synthesis.";
-}
-
-function setActiveWorkspace(state, workspaceId, elements) {
-  state.activeWorkspace = workspaceId;
-
-  for (const [id] of Object.entries(WORKSPACES)) {
-    const section = document.getElementById(id);
-    section.hidden = id !== workspaceId;
-  }
-
-  for (const button of document.querySelectorAll("[data-workspace-target]")) {
-    button.classList.toggle("active", button.dataset.workspaceTarget === workspaceId);
-  }
-
-  elements.workspaceTitle.textContent = WORKSPACES[workspaceId].title;
-  elements.workspaceCopy.textContent = WORKSPACES[workspaceId].copy;
-}
-
-function focusActiveWorkspace(state) {
-  const focusId = WORKSPACES[state.activeWorkspace]?.focusId;
-  if (!focusId) {
-    return;
-  }
-  const focusTarget = document.getElementById(focusId);
-  if (focusTarget) {
-    focusTarget.focus();
-  }
+  return "Grounding finished without a synthesized answer.";
 }
 
 async function main() {
   const config = await getConfig();
-  const apiBaseUrl = config.apiBaseUrl;
+  const directChats = loadDirectChats();
+  const activeChatId = ensureActiveChatId(
+    directChats,
+    safeStorageGet(STORAGE_KEYS.activeChatId, directChats[0]?.id || ""),
+  );
+
   const state = {
     snapshot: null,
-    selectedModel: getStoredSelectedModel(),
+    selectedModel: safeStorageGet(STORAGE_KEYS.selectedModel, ""),
+    settings: loadSettings(),
+    directChats,
+    activeChatId,
     activeWorkspace: "workspace-chat",
-    messages: {
-      chat: [
-        createMessage(
-          "assistant",
-          "Prompt the selected local model from here. Switch models from the sidebar and keep the rest of the stack quiet until you need it.",
-        ),
-      ],
-      grounding: [
-        createMessage(
-          "assistant",
-          "Use grounded answers when you want search, readable page fetches, and source inspection to stay attached to the answer.",
-        ),
-      ],
-    },
+    chatStatus: { kind: "idle" },
+    groundingStatus: { kind: "idle" },
+    fetchStatus: { kind: "idle" },
+    groundingMessages: [],
   };
 
   const elements = {
+    chatHistoryList: document.getElementById("chat-history-list"),
+    newChatButton: document.getElementById("new-chat"),
+    purgeHistoryButton: document.getElementById("purge-history"),
+    openSettingsButtons: [
+      document.getElementById("open-settings"),
+      document.getElementById("topbar-open-settings"),
+      document.getElementById("composer-open-settings"),
+      document.getElementById("grounding-open-settings"),
+    ].filter(Boolean),
+    openStackButtons: [
+      document.getElementById("open-stack"),
+      document.getElementById("topbar-open-stack"),
+    ].filter(Boolean),
+    openSearchLink: document.getElementById("open-search-link"),
+    stackSearchLink: document.getElementById("stack-search-link"),
+    workspaceEyebrow: document.getElementById("workspace-eyebrow"),
+    workspaceTitle: document.getElementById("workspace-title"),
+    workspaceCopy: document.getElementById("workspace-copy"),
+    modeChip: document.getElementById("mode-chip"),
+    activeChatChip: document.getElementById("active-chat-chip"),
     environmentChip: document.getElementById("environment-chip"),
     runtimeChip: document.getElementById("runtime-chip"),
     modelChip: document.getElementById("model-chip"),
     searchChip: document.getElementById("search-chip"),
-    workspaceTitle: document.getElementById("active-workspace-title"),
-    workspaceCopy: document.getElementById("active-workspace-copy"),
-    modelSelect: document.getElementById("model-select"),
-    modelSelectionNote: document.getElementById("model-selection-note"),
-    sidebarRuntimeStatus: document.getElementById("sidebar-runtime-status"),
-    sidebarStackGlance: document.getElementById("sidebar-stack-glance"),
+    chatMeta: document.getElementById("chat-meta"),
+    chatOutput: document.getElementById("chat-output"),
+    groundingAnswer: document.getElementById("grounding-answer"),
+    groundingDetails: document.getElementById("grounding-details"),
+    groundingMeta: document.getElementById("grounding-meta"),
+    groundingErrors: document.getElementById("grounding-errors"),
+    groundingSummary: document.getElementById("grounding-summary"),
+    groundingOutput: document.getElementById("grounding-output"),
+    fetchMeta: document.getElementById("fetch-meta"),
+    fetchOutput: document.getElementById("fetch-output"),
+    settingsModal: document.getElementById("settings-modal"),
+    stackModal: document.getElementById("stack-modal"),
+    settingsForm: document.getElementById("settings-form"),
+    settingsModelSelect: document.getElementById("settings-model-select"),
+    settingsChatSystem: document.getElementById("settings-chat-system"),
+    settingsGroundingSystem: document.getElementById("settings-grounding-system"),
+    settingsSearchLimit: document.getElementById("settings-search-limit"),
+    settingsFetchLimit: document.getElementById("settings-fetch-limit"),
     configuredModel: document.getElementById("configured-model"),
     runtimeNote: document.getElementById("runtime-note"),
     runtimeSummary: document.getElementById("runtime-summary"),
     providerSummary: document.getElementById("provider-summary"),
     statusOutput: document.getElementById("status-output"),
-    chatMeta: document.getElementById("chat-meta"),
-    chatOutput: document.getElementById("chat-output"),
-    fetchMeta: document.getElementById("fetch-meta"),
-    fetchOutput: document.getElementById("fetch-output"),
-    groundingMeta: document.getElementById("grounding-meta"),
-    groundingAnswer: document.getElementById("grounding-answer"),
-    groundingErrors: document.getElementById("grounding-errors"),
-    groundingSummary: document.getElementById("grounding-summary"),
-    groundingOutput: document.getElementById("grounding-output"),
-    openSearchLink: document.getElementById("open-search-link"),
-    stackSearchLink: document.getElementById("stack-search-link"),
+    refreshStatusButton: document.getElementById("refresh-status"),
+    chatForm: document.getElementById("chat-form"),
+    chatPrompt: document.getElementById("prompt-input"),
+    groundingForm: document.getElementById("grounding-form"),
+    groundingQuery: document.getElementById("grounding-query"),
+    fetchForm: document.getElementById("fetch-form"),
+    fetchUrl: document.getElementById("fetch-url"),
   };
 
   const standaloneSearchUrl =
@@ -539,201 +896,289 @@ async function main() {
     `${window.location.protocol}//${window.location.hostname}:8085`;
   elements.openSearchLink.href = standaloneSearchUrl;
   elements.stackSearchLink.href = standaloneSearchUrl;
-  elements.environmentChip.textContent = `Environment · ${config.environment}`;
 
-  renderConversation(elements.chatOutput, state.messages.chat);
-  renderConversation(elements.groundingAnswer, state.messages.grounding);
-  setActiveWorkspace(state, state.activeWorkspace, elements);
+  function persistModelSelection() {
+    if (state.selectedModel) {
+      safeStorageSet(STORAGE_KEYS.selectedModel, state.selectedModel);
+      return;
+    }
+    safeStorageRemove(STORAGE_KEYS.selectedModel);
+  }
+
+  function rerender() {
+    renderApp(config, state, elements);
+  }
+
+  function activateWorkspace(workspaceId) {
+    state.activeWorkspace = workspaceId;
+    rerender();
+    const focusId = WORKSPACES[workspaceId]?.focusId;
+    if (focusId) {
+      document.getElementById(focusId)?.focus();
+    }
+  }
+
+  function createAndActivateNewChat() {
+    const chat = createChatSession();
+    state.directChats = [chat, ...state.directChats];
+    state.activeChatId = chat.id;
+    state.chatStatus = { kind: "idle" };
+    saveDirectChats(state);
+    activateWorkspace("workspace-chat");
+  }
+
+  function deleteChat(chatId) {
+    state.directChats = state.directChats.filter((chat) => chat.id !== chatId);
+    if (!state.directChats.length) {
+      state.directChats = [createChatSession()];
+    }
+    state.activeChatId = ensureActiveChatId(state.directChats, state.activeChatId === chatId ? "" : state.activeChatId);
+    state.chatStatus = { kind: "idle" };
+    saveDirectChats(state);
+    rerender();
+  }
+
+  function refreshActiveChatAfterMutation(session) {
+    session.updatedAt = getIsoTimestamp();
+    state.directChats = [session, ...state.directChats.filter((item) => item.id !== session.id)];
+    state.activeChatId = session.id;
+    saveDirectChats(state);
+  }
 
   async function refreshSnapshot() {
-    elements.statusOutput.innerHTML = '<div class="status-card">Refreshing local workbench snapshot...</div>';
+    elements.statusOutput.innerHTML = '<div class="status-card">Refreshing local snapshot...</div>';
 
     const [health, providers, modelsPayload] = await Promise.all([
-      fetchJson(`${apiBaseUrl}/health`),
-      fetchJson(`${apiBaseUrl}/system/providers`),
-      fetchJson(`${apiBaseUrl}/model/models`),
+      fetchJson(`${config.apiBaseUrl}/health`),
+      fetchJson(`${config.apiBaseUrl}/system/providers`),
+      fetchJson(`${config.apiBaseUrl}/model/models`),
     ]);
 
     state.snapshot = normalizeSnapshot(health, providers, modelsPayload);
     state.selectedModel = chooseSelectedModel(state.snapshot, state.selectedModel);
-    setStoredSelectedModel(state.selectedModel);
-
-    renderModelSelector(elements.modelSelect, elements.modelSelectionNote, state.snapshot, state.selectedModel);
-    renderSidebarSnapshot(
-      elements.sidebarRuntimeStatus,
-      elements.sidebarStackGlance,
-      state.snapshot,
-      state.selectedModel,
-    );
-    renderTopbarSnapshot(config, state, elements);
-    elements.configuredModel.textContent = state.snapshot.configuredModel;
-    elements.runtimeNote.textContent =
-      state.snapshot.runtime.error || "Runtime readiness is checked against the live model endpoint.";
-    renderRuntimeSummary(elements.runtimeSummary, state.snapshot.runtime);
-    renderProviderSummary(elements.providerSummary, state.snapshot);
-    renderStatusPanel(elements.statusOutput, state.snapshot, state.selectedModel);
+    persistModelSelection();
+    rerender();
   }
 
-  elements.modelSelect.addEventListener("change", () => {
-    state.selectedModel = elements.modelSelect.value;
-    setStoredSelectedModel(state.selectedModel);
-    if (state.snapshot) {
-      renderModelSelector(elements.modelSelect, elements.modelSelectionNote, state.snapshot, state.selectedModel);
-      renderSidebarSnapshot(
-        elements.sidebarRuntimeStatus,
-        elements.sidebarStackGlance,
-        state.snapshot,
-        state.selectedModel,
-      );
-      renderTopbarSnapshot(config, state, elements);
-      renderStatusPanel(elements.statusOutput, state.snapshot, state.selectedModel);
+  document.querySelectorAll("[data-workspace-target]").forEach((button) => {
+    button.addEventListener("click", () => activateWorkspace(button.dataset.workspaceTarget));
+  });
+
+  elements.newChatButton.addEventListener("click", createAndActivateNewChat);
+  elements.purgeHistoryButton.addEventListener("click", () => {
+    state.directChats = [createChatSession()];
+    state.activeChatId = state.directChats[0].id;
+    state.chatStatus = { kind: "idle" };
+    saveDirectChats(state);
+    activateWorkspace("workspace-chat");
+  });
+
+  elements.chatHistoryList.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest("[data-delete-chat-id]");
+    if (deleteButton) {
+      deleteChat(deleteButton.dataset.deleteChatId);
+      return;
+    }
+
+    const openButton = event.target.closest("[data-chat-id]");
+    if (openButton) {
+      state.activeChatId = openButton.dataset.chatId;
+      state.chatStatus = { kind: "idle" };
+      saveDirectChats(state);
+      activateWorkspace("workspace-chat");
     }
   });
 
-  document.getElementById("refresh-status").addEventListener("click", async () => {
-    try {
-      await refreshSnapshot();
-    } catch (error) {
-      elements.statusOutput.innerHTML = buildBanner("Snapshot refresh failed", error.message, "error");
-      setHeaderChip(elements.runtimeChip, "Runtime · refresh failed", "error");
-      elements.sidebarRuntimeStatus.innerHTML = buildChip("Runtime", "refresh failed", "error");
-    }
-  });
-
-  document.getElementById("focus-composer").addEventListener("click", () => {
-    focusActiveWorkspace(state);
-  });
-
-  for (const button of document.querySelectorAll("[data-workspace-target]")) {
+  elements.openSettingsButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      setActiveWorkspace(state, button.dataset.workspaceTarget, elements);
-      focusActiveWorkspace(state);
+      renderSettingsForm(state, elements);
+      openModal(elements.settingsModal);
     });
-  }
+  });
 
-  document.getElementById("chat-form").addEventListener("submit", async (event) => {
+  elements.openStackButtons.forEach((button) => {
+    button.addEventListener("click", () => openModal(elements.stackModal));
+  });
+
+  document.querySelectorAll("[data-close-modal]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const modal = document.getElementById(button.dataset.closeModal);
+      if (modal) {
+        closeModal(modal);
+      }
+    });
+  });
+
+  [elements.settingsModal, elements.stackModal].forEach((modal) => {
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        closeModal(modal);
+      }
+    });
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    [elements.settingsModal, elements.stackModal].forEach((modal) => {
+      if (!modal.hidden) {
+        closeModal(modal);
+      }
+    });
+  });
+
+  elements.settingsForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const promptInput = document.getElementById("prompt-input");
-    const prompt = promptInput.value.trim();
+    state.selectedModel = elements.settingsModelSelect.value.trim();
+    state.settings = {
+      chatSystemPrompt: elements.settingsChatSystem.value.trim(),
+      groundingSystemPrompt: elements.settingsGroundingSystem.value.trim(),
+      groundingSearchLimit: clampNumber(elements.settingsSearchLimit.value, 1, 10, DEFAULT_SETTINGS.groundingSearchLimit),
+      groundingFetchLimit: clampNumber(elements.settingsFetchLimit.value, 1, 5, DEFAULT_SETTINGS.groundingFetchLimit),
+    };
+    persistModelSelection();
+    saveSettings(state);
+    closeModal(elements.settingsModal);
+    rerender();
+  });
+
+  elements.refreshStatusButton.addEventListener("click", async () => {
+    try {
+      await refreshSnapshot();
+    } catch (error) {
+      state.snapshot = state.snapshot || null;
+      elements.statusOutput.innerHTML = buildBanner("Snapshot refresh failed", error.message, "error");
+      setContextChip(elements.runtimeChip, "Runtime", "refresh failed", "error");
+    }
+  });
+
+  elements.chatForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const prompt = elements.chatPrompt.value.trim();
     if (!prompt) {
-      elements.chatMeta.innerHTML = buildChip("Prompt", "required", "warn");
+      state.chatStatus = { kind: "error", error: new Error("A prompt is required.") };
+      rerender();
       return;
     }
 
-    state.messages.chat.push(createMessage("user", prompt), createMessage("assistant", "Waiting for the local model...", "pending"));
-    renderConversation(elements.chatOutput, state.messages.chat);
-    elements.chatMeta.innerHTML = "";
-    promptInput.value = "";
+    const activeChat = getActiveChat(state) || createChatSession();
+    if (!state.directChats.some((chat) => chat.id === activeChat.id)) {
+      state.directChats = [activeChat, ...state.directChats];
+    }
+
+    if (activeChat.title === "New chat") {
+      activeChat.title = deriveChatTitle(prompt);
+    }
+
+    activeChat.messages.push(createMessage("user", prompt));
+    activeChat.messages.push(createMessage("assistant", "Waiting for the selected local model...", "pending"));
+    refreshActiveChatAfterMutation(activeChat);
+    state.chatStatus = { kind: "pending" };
+    elements.chatPrompt.value = "";
+    rerender();
 
     try {
-      const payload = {
+      const payload = await requestJson(`${config.apiBaseUrl}/model/chat`, {
         prompt,
-        system_prompt: document.getElementById("system-input").value || null,
+        system_prompt: state.settings.chatSystemPrompt || null,
         selected_model: state.selectedModel || null,
-      };
-      const data = await requestJson(`${apiBaseUrl}/model/chat`, payload);
-      state.messages.chat[state.messages.chat.length - 1] = createMessage(
-        "assistant",
-        data.answer || "(empty response)",
-      );
-      renderConversation(elements.chatOutput, state.messages.chat);
-      renderChatSuccess(elements.chatMeta, data);
+      });
+      const session = getActiveChat(state);
+      if (session) {
+        session.messages[session.messages.length - 1] = createMessage("assistant", payload.answer || "(empty response)");
+        refreshActiveChatAfterMutation(session);
+      }
+      state.chatStatus = { kind: "success", payload };
+      rerender();
       await refreshSnapshot();
     } catch (error) {
-      state.messages.chat[state.messages.chat.length - 1] = createMessage("assistant", error.message, "error");
-      renderConversation(elements.chatOutput, state.messages.chat);
-      renderChatError(elements.chatMeta, error);
+      const session = getActiveChat(state);
+      if (session) {
+        session.messages[session.messages.length - 1] = createMessage("assistant", error.message, "error");
+        refreshActiveChatAfterMutation(session);
+      }
+      state.chatStatus = { kind: "error", error };
+      rerender();
     }
   });
 
-  document.getElementById("fetch-form").addEventListener("submit", async (event) => {
+  elements.groundingForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const urlInput = document.getElementById("fetch-url");
-    const url = urlInput.value.trim();
-    if (!url) {
-      elements.fetchMeta.innerHTML = buildChip("URL", "required", "warn");
-      return;
-    }
-
-    elements.fetchMeta.innerHTML = "";
-    elements.fetchOutput.innerHTML = '<div class="empty-state">Fetching and parsing article...</div>';
-
-    try {
-      const data = await requestJson(`${apiBaseUrl}/fetch`, { url });
-      renderFetchSuccess(elements.fetchOutput, elements.fetchMeta, data);
-    } catch (error) {
-      renderFetchError(elements.fetchOutput, elements.fetchMeta, error);
-    }
-  });
-
-  document.getElementById("grounding-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const queryInput = document.getElementById("grounding-query");
-    const query = queryInput.value.trim();
+    const query = elements.groundingQuery.value.trim();
     if (!query) {
-      elements.groundingMeta.innerHTML = buildChip("Query", "required", "warn");
+      state.groundingStatus = { kind: "error", error: new Error("A grounded query is required.") };
+      rerender();
       return;
     }
 
-    state.messages.grounding.push(
-      createMessage("user", query),
-      createMessage("assistant", "Searching, fetching, and assembling readable source context...", "pending"),
+    state.groundingMessages.push(createMessage("user", query));
+    state.groundingMessages.push(
+      createMessage("assistant", "Searching, fetching, and assembling grounded source text...", "pending"),
     );
-    renderConversation(elements.groundingAnswer, state.messages.grounding);
-    elements.groundingMeta.innerHTML = "";
-    elements.groundingErrors.innerHTML = "";
-    elements.groundingSummary.innerHTML = "";
-    elements.groundingOutput.innerHTML = "";
-    queryInput.value = "";
+    state.groundingStatus = { kind: "pending" };
+    elements.groundingQuery.value = "";
+    rerender();
 
     try {
-      const payload = {
+      const payload = await requestJson(`${config.apiBaseUrl}/grounding/answer`, {
         query,
-        search_limit: Number(document.getElementById("search-limit").value),
-        fetch_limit: Number(document.getElementById("fetch-limit").value),
+        search_limit: state.settings.groundingSearchLimit,
+        fetch_limit: state.settings.groundingFetchLimit,
+        system_prompt: state.settings.groundingSystemPrompt || null,
         selected_model: state.selectedModel || null,
-      };
-      const data = await requestJson(`${apiBaseUrl}/grounding/answer`, payload);
-      state.messages.grounding[state.messages.grounding.length - 1] = createMessage(
+      });
+      state.groundingMessages[state.groundingMessages.length - 1] = createMessage(
         "assistant",
-        buildGroundingAssistantText(data),
-        data.answer_status === "model_error" ? "error" : "default",
+        buildGroundingAssistantText(payload),
+        payload.answer_status === "model_error" ? "error" : "default",
       );
-      renderConversation(elements.groundingAnswer, state.messages.grounding);
-      renderGroundingSuccess(
-        elements.groundingMeta,
-        elements.groundingSummary,
-        elements.groundingErrors,
-        elements.groundingOutput,
-        data,
-      );
+      state.groundingStatus = { kind: "success", payload };
+      rerender();
       await refreshSnapshot();
     } catch (error) {
-      state.messages.grounding[state.messages.grounding.length - 1] = createMessage(
-        "assistant",
-        error.message,
-        "error",
-      );
-      renderConversation(elements.groundingAnswer, state.messages.grounding);
-      renderGroundingError(
-        elements.groundingMeta,
-        elements.groundingSummary,
-        elements.groundingErrors,
-        elements.groundingOutput,
-        error,
-      );
+      state.groundingMessages[state.groundingMessages.length - 1] = createMessage("assistant", error.message, "error");
+      state.groundingStatus = { kind: "error", error };
+      rerender();
     }
   });
+
+  elements.fetchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const url = elements.fetchUrl.value.trim();
+    if (!url) {
+      state.fetchStatus = { kind: "error", error: new Error("A URL is required.") };
+      rerender();
+      return;
+    }
+
+    state.fetchStatus = { kind: "pending" };
+    rerender();
+
+    try {
+      const payload = await requestJson(`${config.apiBaseUrl}/fetch`, { url });
+      state.fetchStatus = { kind: "success", payload };
+      rerender();
+    } catch (error) {
+      state.fetchStatus = { kind: "error", error };
+      rerender();
+    }
+  });
+
+  rerender();
 
   try {
     await refreshSnapshot();
   } catch (error) {
     elements.statusOutput.innerHTML = buildBanner("Initial snapshot failed", error.message, "error");
-    setHeaderChip(elements.runtimeChip, "Runtime · unavailable", "error");
-    elements.sidebarRuntimeStatus.innerHTML = buildChip("Runtime", "unavailable", "error");
+    setContextChip(elements.runtimeChip, "Runtime", "unavailable", "error");
   }
 }
 
 main().catch((error) => {
-  document.getElementById("environment-chip").textContent = error.message;
+  const runtimeChip = document.getElementById("runtime-chip");
+  if (runtimeChip) {
+    runtimeChip.textContent = error.message;
+    runtimeChip.className = "context-chip chip-error";
+  }
 });

@@ -293,7 +293,12 @@ async def build_grounding_bundle(
     return bundle, grounding_context
 
 
-def build_grounded_model_request(query: str, grounding_context: str, temperature: float) -> GroundedModelRequest:
+def build_grounded_model_request(
+    query: str,
+    grounding_context: str,
+    temperature: float,
+    additional_system_prompt: str | None = None,
+) -> GroundedModelRequest:
     prompt = "\n\n".join(
         [
             "Answer the user's question using only the grounded source text below.",
@@ -308,4 +313,12 @@ def build_grounded_model_request(query: str, grounding_context: str, temperature
         "You are a privacy-first local assistant. Use the supplied grounded sources, be explicit about uncertainty, "
         "and do not invent facts that are not supported by the provided source text."
     )
+    if isinstance(additional_system_prompt, str) and additional_system_prompt.strip():
+        system_prompt = "\n\n".join(
+            [
+                system_prompt,
+                "Additional user instructions:",
+                additional_system_prompt.strip(),
+            ]
+        )
     return GroundedModelRequest(prompt=prompt, system_prompt=system_prompt, temperature=temperature)

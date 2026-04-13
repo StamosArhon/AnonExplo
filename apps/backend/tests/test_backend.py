@@ -383,6 +383,81 @@ class BackendApiTests(unittest.TestCase):
         self.assertIn("Alpha content for the grounding path.", prompt)
 
     @patch("app.main.build_model_provider")
+    @patch("app.main.build_fetcher_client")
+    @patch("app.main.build_search_provider")
+    def test_grounding_answer_passes_additional_system_instructions(
+        self,
+        build_search_provider: AsyncMock,
+        build_fetcher_client: AsyncMock,
+        build_model_provider: AsyncMock,
+    ) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(title="Alpha", url="https://example.com/article", snippet="alpha", engine="mock")
+        ]
+        build_search_provider.return_value = search_provider
+
+        fetcher = AsyncMock()
+        fetcher.fetch.return_value = FetchDocument(
+            requested_url="https://example.com/article",
+            final_url="https://example.com/article",
+            title="Alpha Title",
+            excerpt="Alpha excerpt",
+            content_text="Alpha content for the grounding path.",
+            content_char_count=37,
+            word_count=6,
+            content_type="text/html",
+        )
+        build_fetcher_client.return_value = fetcher
+
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+        selection = type(
+            "Selection",
+            (),
+            {
+                "selected_model": "test-model",
+                "requested_model": None,
+                "selection_source": "configured_default",
+                "configured_model": "test-model",
+                "model_dump": lambda self=None: {
+                    "configured_model": "test-model",
+                    "selected_model": "test-model",
+                    "requested_model": None,
+                    "selection_source": "configured_default",
+                },
+            },
+        )()
+        model_provider = Mock()
+        model_provider.probe_runtime = AsyncMock(return_value=runtime)
+        model_provider.select_model = Mock(return_value=selection)
+        model_provider.chat = AsyncMock(return_value={
+            "model": "test-model",
+            "answer": "Grounded answer [S1]",
+            "usage": {"total_tokens": 42},
+            "selected_model": "test-model",
+        })
+        build_model_provider.return_value = model_provider
+
+        response = self.client.post(
+            "/api/v1/grounding/answer",
+            json={
+                "query": "What does Alpha say?",
+                "system_prompt": "Do not guess and always cite sources.",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        system_prompt = model_provider.chat.await_args.kwargs["system_prompt"]
+        self.assertIn("Do not guess and always cite sources.", system_prompt)
+
+    @patch("app.main.build_model_provider")
     def test_grounding_answer_rejects_unadvertised_model_override(self, build_model_provider: AsyncMock) -> None:
         provider = Mock()
         runtime = ModelRuntimeStatus(

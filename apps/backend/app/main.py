@@ -41,6 +41,7 @@ class GroundingRequest(BaseModel):
     query: str = Field(min_length=1)
     search_limit: int = Field(default=5, ge=1, le=10)
     fetch_limit: int = Field(default=3, ge=1, le=5)
+    system_prompt: str | None = None
     selected_model: str | None = Field(default=None, min_length=1)
 
 
@@ -324,6 +325,7 @@ def create_app() -> FastAPI:
             query=payload.query,
             grounding_context=grounding_context,
             temperature=current_settings.grounding_model_temperature,
+            additional_system_prompt=payload.system_prompt,
         )
 
         try:
