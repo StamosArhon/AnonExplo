@@ -5,7 +5,7 @@
 AnonExplo uses a local-first, privacy-first service layout:
 
 - `host-gateway`
-  - localhost-only reverse proxy that exposes the UI and backend to the host without putting those app services directly on a non-internal Docker network
+  - localhost-only reverse proxy that exposes the UI, backend, and optional standalone SearXNG UI to the host without putting those app services directly on a non-internal Docker network
 - `ui`
   - local browser interface for prompts, model selection, provider status, and grounding inspection
 - `backend`
@@ -28,6 +28,7 @@ flowchart LR
     User["Local Browser"] --> Gateway["Host Gateway (127.0.0.1)"]
     Gateway --> UIService["UI Service (internal)"]
     Gateway --> Backend["Backend (localhost via gateway)"]
+    Gateway --> SearchUI["SearXNG Web UI (localhost via gateway)"]
     Backend --> Model["Model Backend (internal only)"]
     Backend --> Search["Search Provider"]
     Backend --> Fetcher["Fetcher / Reader"]
@@ -81,7 +82,7 @@ The backend uses environment-driven provider selection:
 
 The current code includes:
 
-- a localhost-only reverse proxy in front of the UI and backend host ports
+- a localhost-only reverse proxy in front of the UI, backend, and optional standalone SearXNG host ports
 - an OpenAI-compatible model adapter
 - a native Ollama model adapter
 - a SearXNG search adapter
@@ -92,7 +93,7 @@ The current code includes:
 
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
 The backend also no longer hard-depends on a Compose service literally named `search-provider`, so `SEARCH_BASE_URL` can point at any reachable internal or local search service that matches one of the supported adapters.
-The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` service rather than from direct publishing on internal-only app containers, because Docker Desktop did not reliably expose those ports when the services were attached only to `internal: true` networks.
+The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` service rather than from direct publishing on internal-only app containers, because Docker Desktop did not reliably expose those ports when the services were attached only to `internal: true` networks. That same gateway also provides an optional browser path to the bundled SearXNG service, so standalone search and LLM-grounded search can coexist without changing the internal network shape.
 
 ## Data Flow
 

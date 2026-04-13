@@ -54,4 +54,5 @@
 - Request-level model selection should stay bounded to runtime-advertised models and should not mutate the backend's configured default model.
 - Do not reintroduce a backend orchestration dependency on one hard-coded search service name; provider switching should remain env-driven at the backend boundary.
 - Keep the host-facing UI and backend access path behind the dedicated localhost gateway unless there is a documented reason to publish app containers directly.
+- If the bundled SearXNG web UI is exposed for standalone use, route it through the same localhost gateway rather than publishing the search container directly.
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.

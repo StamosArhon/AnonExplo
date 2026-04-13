@@ -9,9 +9,11 @@ services:
     depends_on:
       - ui
       - backend
+      - search-provider
     ports:
       - 127.0.0.1:${UI_PORT:-3000}:3000
       - 127.0.0.1:${BACKEND_PORT:-8000}:8000
+      - 127.0.0.1:${SEARXNG_UI_PORT:-8085}:8085
     networks:
       - host_access
       - core_internal
@@ -29,7 +31,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O /dev/null http://127.0.0.1:3000/ && wget -q -O /dev/null http://127.0.0.1:8000/api/v1/health",
+          "wget -q -O /dev/null http://127.0.0.1:3000/ && wget -q -O /dev/null http://127.0.0.1:8000/api/v1/health && wget -q -O /dev/null http://127.0.0.1:8085/",
         ]
       interval: 30s
       timeout: 5s

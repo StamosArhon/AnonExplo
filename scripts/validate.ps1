@@ -105,6 +105,10 @@ function Invoke-BackendPython {
 }
 
 try {
+    $uiPort = Get-EnvValue -Key "UI_PORT" -DefaultValue "3000"
+    $backendPort = Get-EnvValue -Key "BACKEND_PORT" -DefaultValue "8000"
+    $searxngUiPort = Get-EnvValue -Key "SEARXNG_UI_PORT" -DefaultValue "8085"
+
     Write-Host "Validating docker compose configuration..."
     docker compose config | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "docker compose config failed." }
@@ -144,33 +148,42 @@ try {
         throw "UI smoke check failed."
     }
 
-    if (-not (Wait-ForServiceStatus -ServiceName "host-gateway" -ExpectedStatus "healthy")) {
-        docker compose logs host-gateway ui backend
-        throw "Host gateway health check failed."
-    }
-
     if (-not (Wait-ForServiceStatus -ServiceName "search-provider" -ExpectedStatus "running")) {
         docker compose logs search-provider
         throw "Search provider failed to stay running."
     }
 
-    $backendPorts = Get-ServicePortBindings -ServiceName "host-gateway"
-    if ($backendPorts -notmatch '"8000/tcp"' -or $backendPorts -notmatch '"HostIp":"127.0.0.1"') {
-        throw "Backend localhost port binding is missing."
+    if (-not (Wait-ForServiceStatus -ServiceName "host-gateway" -ExpectedStatus "healthy")) {
+        docker compose logs host-gateway ui backend search-provider
+        throw "Host gateway health check failed."
     }
 
-    if ($backendPorts -notmatch '"3000/tcp"' -or $backendPorts -notmatch '"HostPort":"3000"') {
+    $backendPorts = Get-ServicePortBindings -ServiceName "host-gateway"
+    if ($backendPorts -notmatch '"3000/tcp"' -or $backendPorts -notmatch ('"HostPort":"' + $uiPort + '"')) {
         throw "UI localhost port binding is missing."
     }
 
-    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:3000/")) {
-        docker compose logs host-gateway ui
-        throw "UI was not reachable on the Windows host at http://127.0.0.1:3000/."
+    if ($backendPorts -notmatch '"8000/tcp"' -or $backendPorts -notmatch ('"HostPort":"' + $backendPort + '"') -or $backendPorts -notmatch '"HostIp":"127.0.0.1"') {
+        throw "Backend localhost port binding is missing."
     }
 
-    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:8000/api/v1/health")) {
+    if ($backendPorts -notmatch '"8085/tcp"' -or $backendPorts -notmatch ('"HostPort":"' + $searxngUiPort + '"')) {
+        throw "SearXNG localhost port binding is missing."
+    }
+
+    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$uiPort/")) {
+        docker compose logs host-gateway ui
+        throw "UI was not reachable on the Windows host at http://127.0.0.1:$uiPort/."
+    }
+
+    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$backendPort/api/v1/health")) {
         docker compose logs host-gateway backend
-        throw "Backend was not reachable on the Windows host at http://127.0.0.1:8000/api/v1/health."
+        throw "Backend was not reachable on the Windows host at http://127.0.0.1:$backendPort/api/v1/health."
+    }
+
+    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$searxngUiPort/")) {
+        docker compose logs host-gateway search-provider
+        throw "SearXNG was not reachable on the Windows host at http://127.0.0.1:$searxngUiPort/."
     }
 
     $modelFileName = Get-EnvValue -Key "MODEL_FILE_NAME" -DefaultValue "Qwen2.5-7B-Instruct.Q4_K_M.gguf"

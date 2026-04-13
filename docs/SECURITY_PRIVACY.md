@@ -12,9 +12,10 @@ This project assumes a local single-user workstation deployment. The main risks 
 
 ## Security Defaults
 
-- The host-facing UI and backend entrypoints bind to `127.0.0.1` only through a dedicated localhost gateway service.
+- The host-facing UI, backend, and optional standalone SearXNG entrypoints bind to `127.0.0.1` only through a dedicated localhost gateway service.
 - The model backend stays on an internal-only Docker network.
 - Search and fetch services are the only default services that join the egress-capable network.
+- The bundled SearXNG web UI is reachable only through the localhost gateway; the search container itself is still not published directly to the host.
 - Repo-managed services run as non-root where practical.
 - Capabilities are dropped and `no-new-privileges` is enabled where practical.
 - No remote frontend assets, fonts, telemetry, analytics, or CDNs are used.
@@ -55,7 +56,7 @@ If `SEARCH_PROVIDER=yacy` is used, review YaCy's own peer-to-peer or network set
 
 Docker internal networks reduce accidental reachability, but they are not a complete security boundary if a container is compromised. Recommended follow-up hardening:
 
-- keep the localhost gateway as small and low-privilege as practical, because it is the one default service that must sit on a non-internal bridge for host browser access
+- keep the localhost gateway as small and low-privilege as practical, because it is the one default service that must sit on a non-internal bridge for host browser access, including the optional SearXNG browser route
 - host firewall rules that restrict outbound traffic for non-egress services
 - explicit model file provisioning and checksum verification
 - tighter container filesystem constraints where compatible with the chosen runtime

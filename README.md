@@ -4,7 +4,7 @@ AnonExplo is a privacy-first, self-hosted local-LLM stack for local use on perso
 
 ## Current Status
 
-This repository is currently focused on the `provider-expansion` milestone. The repo now provides:
+This repository is currently focused on turning the secure local stack into a practical daily-use workbench. The repo now provides:
 
 - the durable repo protocol for future Codex threads
 - the initial architecture and security documents
@@ -20,6 +20,7 @@ This repository is currently focused on the `provider-expansion` milestone. The 
 - backend adapters for both OpenAI-compatible runtimes and native Ollama APIs
 - backend adapters for both SearXNG and YaCy search services
 - a localhost gateway service that makes the UI and backend reachable on Docker Desktop while keeping the app services on internal networks
+- an optional localhost-only SearXNG web UI route for standalone searching when you do not want the LLM workflow
 
 ## Design Goals
 
@@ -44,7 +45,7 @@ This repository is currently focused on the `provider-expansion` milestone. The 
 - `services/fetcher`
   - FastAPI service that fetches, parses, and normalizes article text
 - `search-provider`
-  - default example is SearXNG behind an internal service name
+  - default example is SearXNG behind an internal service name, with an optional localhost-only browser route through the host gateway
 - `model-backend`
   - profile-gated `llama.cpp` CUDA runtime slot with pinned image and GGUF-driven config
 
@@ -88,9 +89,11 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 
 7. Open the local UI at `http://127.0.0.1:3000`.
 
-   The localhost entrypoint is the dedicated `host-gateway` proxy. It exposes the UI on port `3000` and the backend API on port `8000` while the `ui` and `backend` containers themselves remain on internal Docker networks.
+   The localhost entrypoint is the dedicated `host-gateway` proxy. It exposes the UI on port `3000`, the backend API on port `8000`, and the bundled SearXNG web UI on port `8085` while the `ui`, `backend`, and `search-provider` containers themselves remain on internal Docker networks.
 
-8. Use the local UI's grounded-answer panel to search, fetch, inspect sources, and synthesize an answer from retrieved page text.
+8. Optional: open the standalone SearXNG UI at `http://127.0.0.1:8085`.
+
+9. Use the local UI's grounded-answer panel to search, fetch, inspect sources, and synthesize an answer from retrieved page text.
    The workbench keeps the selected model id in browser local storage so chat and grounded-answer requests stay aligned across refreshes.
 
 ## Provider Switching
