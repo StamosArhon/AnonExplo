@@ -77,6 +77,7 @@ The current code includes:
 - a SearXNG search adapter
 - a fetcher client that calls the internal fetch service
 - a grounded-answer path that composes bounded source context before calling the model
+- a runtime-readiness probe that distinguishes configuration from live model availability
 
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
 
@@ -104,4 +105,4 @@ Search snippets alone are not enough. The fetcher exists so the system can retri
 
 ## First Runtime Profile
 
-The first concrete local runtime profile is `llama.cpp` in CUDA server mode, exposed as an OpenAI-compatible endpoint. See `docs/LLAMA_CPP_RUNTIME_PROFILE.md` for the pinned image, default settings, and provisioning flow.
+The first concrete local runtime profile is `llama.cpp` in CUDA server mode, exposed as an OpenAI-compatible endpoint. The Compose profile now sets an explicit alias for the configured model name so the runtime, backend, and UI share the same stable identifier. See `docs/LLAMA_CPP_RUNTIME_PROFILE.md` for the pinned image, the default GGUF source and checksum, and the provisioning and validation flow.

@@ -3,6 +3,7 @@ import unittest
 from collections import deque
 from unittest.mock import AsyncMock, patch
 
+import httpx
 from fastapi.testclient import TestClient
 
 os.environ["MODEL_PROVIDER"] = "openai_compatible"
@@ -13,20 +14,80 @@ os.environ["SEARCH_BASE_URL"] = "http://search-provider:8080"
 os.environ["FETCH_BASE_URL"] = "http://fetcher:8081"
 
 from app.main import app
-from app.providers import FetchDocument, ProviderError, SearchHit
+from app.providers import (
+    FetchDocument,
+    ModelDescriptor,
+    ModelRuntimeStatus,
+    OpenAICompatibleModelProvider,
+    ProviderError,
+    SearchHit,
+)
+
+
+class MockAsyncClient:
+    def __init__(self, *, response: httpx.Response | None = None, error: Exception | None = None) -> None:
+        self.response = response
+        self.error = error
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def get(self, url: str):
+        if self.error is not None:
+            raise self.error
+        if self.response is None:
+            raise AssertionError("MockAsyncClient requires either a response or an error.")
+        return self.response
 
 
 class BackendApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.client = TestClient(app)
 
-    def test_health_endpoint_exposes_provider_summary(self) -> None:
+    @patch("app.main.build_model_provider")
+    def test_health_endpoint_exposes_provider_summary(self, build_model_provider: AsyncMock) -> None:
+        provider = AsyncMock()
+        provider.probe_runtime.return_value = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+        build_model_provider.return_value = provider
+
         response = self.client.get("/api/v1/health")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["providers"]["model"], "openai_compatible")
         self.assertEqual(payload["providers"]["model_runtime_profile"], "llama.cpp-cuda")
+        self.assertTrue(payload["model_runtime"]["ready"])
+
+    @patch("app.main.build_model_provider")
+    def test_health_endpoint_reports_degraded_runtime(self, build_model_provider: AsyncMock) -> None:
+        provider = AsyncMock()
+        provider.probe_runtime.return_value = ModelRuntimeStatus(
+            ready=False,
+            reachable=False,
+            status="unreachable",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[],
+            error="Model runtime request failed: connect failed",
+        )
+        build_model_provider.return_value = provider
+
+        response = self.client.get("/api/v1/health")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "degraded")
+        self.assertEqual(payload["model_runtime"]["status"], "unreachable")
 
     def test_provider_endpoint_returns_configured_base_urls(self) -> None:
         response = self.client.get("/api/v1/system/providers")
@@ -34,6 +95,27 @@ class BackendApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["model"]["model_name"], "test-model")
         self.assertTrue(payload["search"]["base_url"].startswith("http://search-provider"))
+
+    @patch("app.main.build_model_provider")
+    def test_model_runtime_endpoint_returns_probe_state(self, build_model_provider: AsyncMock) -> None:
+        provider = AsyncMock()
+        provider.probe_runtime.return_value = ModelRuntimeStatus(
+            ready=False,
+            reachable=True,
+            status="configured_model_missing",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="other-model", owned_by="local")],
+            error="Configured model 'test-model' is not advertised by the runtime.",
+        )
+        build_model_provider.return_value = provider
+
+        response = self.client.get("/api/v1/model/runtime")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["ready"])
+        self.assertEqual(payload["status"], "configured_model_missing")
+        self.assertEqual(payload["available_models"][0]["id"], "other-model")
 
     @patch("app.main.build_model_provider")
     def test_chat_endpoint_returns_provider_response(self, build_model_provider: AsyncMock) -> None:
@@ -145,6 +227,44 @@ class BackendApiTests(unittest.TestCase):
         prompt = model_provider.chat.await_args.kwargs["prompt"]
         self.assertIn("[S1]", prompt)
         self.assertIn("Alpha content for the grounding path.", prompt)
+
+
+class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_probe_runtime_reports_unreachable_runtime(self) -> None:
+        provider = OpenAICompatibleModelProvider(
+            base_url="http://model-backend:8080/v1",
+            model_name="test-model",
+            timeout_seconds=90.0,
+            probe_timeout_seconds=5.0,
+        )
+        with patch(
+            "app.providers.httpx.AsyncClient",
+            return_value=MockAsyncClient(error=httpx.ConnectError("connect failed")),
+        ):
+            status = await provider.probe_runtime()
+
+        self.assertFalse(status.ready)
+        self.assertFalse(status.reachable)
+        self.assertEqual(status.status, "unreachable")
+
+    async def test_probe_runtime_reports_invalid_response(self) -> None:
+        provider = OpenAICompatibleModelProvider(
+            base_url="http://model-backend:8080/v1",
+            model_name="test-model",
+            timeout_seconds=90.0,
+            probe_timeout_seconds=5.0,
+        )
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "http://model-backend:8080/v1/models"),
+            content=b"not-json",
+        )
+        with patch("app.providers.httpx.AsyncClient", return_value=MockAsyncClient(response=response)):
+            status = await provider.probe_runtime()
+
+        self.assertFalse(status.ready)
+        self.assertTrue(status.reachable)
+        self.assertEqual(status.status, "invalid_response")
 
 
 if __name__ == "__main__":

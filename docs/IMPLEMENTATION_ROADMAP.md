@@ -33,12 +33,12 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Current Phase
 
-- Active phase: `grounding-vertical-slice`
-- Goal: turn the scaffold into a practical grounded-answer slice with one concrete local model runtime profile
+- Active phase: `local-model-integration`
+- Goal: make the first concrete local model runtime path reproducible, observable, and validated end to end on the target workstation class
 
 ## Active Branch
 
-- `stamos/grounding-vertical-slice`
+- `stamos/local-model-integration`
 
 ## Completed Work
 
@@ -53,6 +53,11 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - Upgraded the local UI to show grounded answers, source status, and the exact source text slices used for grounding.
 - Finalized the first concrete `llama.cpp` CUDA runtime profile and documented its provisioning flow.
 - Tightened the base-stack validation to cover the grounded slice, the llama.cpp profile config, and the local Docker stack wiring.
+- Added a runtime-readiness probe that distinguishes a healthy backend from a missing or misconfigured local model runtime.
+- Added a model-runtime endpoint and surfaced runtime readiness in the local UI status view.
+- Added a Docker healthcheck plus stable runtime aliasing for the `llama.cpp` profile so the backend, runtime, and UI share the same model identifier.
+- Added `scripts/provision-default-model.ps1` to download the default GGUF into `data/models/` and verify its SHA256.
+- Validated the default `QuantFactory/Qwen2.5-7B-Instruct-GGUF` Q4_K_M artifact end to end on the current development machine with the repo-managed validation flow.
 
 ## In-Progress Work
 
@@ -60,7 +65,8 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 
 ## Open Questions / Blockers
 
-- This branch validates the `llama.cpp` runtime profile wiring and provisioning path, but it does not include a committed GGUF model file or a full end-to-end inference benchmark on the target machine.
+- The repo now validates a real GGUF load and chat probe, but it still does not record benchmark-style throughput numbers or token/sec measurements for the target hardware.
+- Existing local `.env` files created before this branch may need a manual refresh of the model-runtime keys if they still contain placeholder values.
 - The current SearXNG configuration is intentionally conservative and still needs deeper engine and limiter tuning in a later hardening pass.
 - Host firewall guidance has been documented conceptually, but not automated.
 
@@ -74,6 +80,9 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 - Grounded answers are built from bounded fetched source text, with per-source selection and error reporting exposed to the UI.
 - `llama.cpp` CUDA server mode is the first concrete runtime profile because it fits the target hardware and keeps the backend adapter boundary clean.
 - Bootstrap now generates a local SearXNG secret for new environments instead of relying on the insecure default.
+- The default local model artifact is pinned by source URL, filename, and SHA256 so provisioning is explicit and repeatable.
+- The backend health surface now distinguishes backend availability from model-runtime readiness so failures are easier to understand locally.
+- The `llama.cpp` runtime command now sets an explicit alias matching `MODEL_NAME` to keep model discovery stable across backend, runtime, and UI.
 
 ## Security / Privacy Assumptions
 
@@ -87,6 +96,7 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
 ## Validation Status
 
 - `scripts/validate.ps1`: passed on 2026-04-13
+- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
@@ -95,18 +105,25 @@ Docker Compose is the initial orchestration layer. Only the UI and backend are p
   - fetcher unit tests in the fetcher container
   - base-stack smoke validation for `ui`, `backend`, `fetcher`, and `search-provider`
   - container health and localhost port-binding inspection for the base stack
+  - checksum verification for the default GGUF artifact
+  - `llama.cpp` runtime startup with the pinned default GGUF
+  - backend runtime-readiness probe against the live model service
+  - a minimal OpenAI-compatible chat-completions probe against the live model runtime
 - `scripts/bootstrap.ps1`: passed on 2026-04-13 and created the expected local `.env` plus data directories
+- `scripts/provision-default-model.ps1`: passed on 2026-04-13 and downloaded the default GGUF to `data/models/`
 
 ## Exact Next Steps
 
-1. Start the next branch from updated `main` as `stamos/local-model-integration`.
-2. Provision and validate one concrete GGUF model on the target hardware through the pinned `llama.cpp` profile.
-3. Measure practical local defaults such as context size, GPU layers, and response quality for the first recommended model.
+1. Push `stamos/local-model-integration` and review the `main...stamos/local-model-integration` diff after confirming the validation output.
+2. Merge `stamos/local-model-integration` after review and cleanup the branch per the repo workflow.
+3. Improve the local workbench UX for model switching, runtime state, grounding inspection, and failure visibility on a dedicated `stamos/ui-workbench` branch.
+4. Decide whether to add lightweight local benchmark reporting in a later branch or keep performance notes purely in docs.
 
 ## Handoff Notes For A Fresh Codex Thread
 
 - Read `AGENTS.md` first.
 - Then read this roadmap and `docs/INSTRUCTIONS_AND_NOTES.md`.
-- The repo now includes a real grounded-answer vertical slice plus a documented `llama.cpp` runtime profile.
+- The repo now includes a real grounded-answer vertical slice plus a validated `llama.cpp` runtime path with a tracked default GGUF source and checksum.
 - The grounding flow is intentionally bounded and transparent: search, source selection, fetch, source packaging, and model synthesis are all visible in the UI and backend responses.
-- The next implementation thread should begin with `stamos/local-model-integration` after confirming `main` is clean.
+- The backend and UI now expose model-runtime readiness separately from general backend health, which future branches should preserve.
+- The next implementation thread should begin with `stamos/ui-workbench` after confirming `main` is clean.

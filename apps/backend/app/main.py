@@ -8,6 +8,7 @@ from app.grounding import build_grounded_model_request, build_grounding_bundle
 from app.config import Settings, get_settings
 from app.providers import (
     FetcherClient,
+    ModelRuntimeStatus,
     OpenAICompatibleModelProvider,
     ProviderError,
     SearxngSearchProvider,
@@ -40,6 +41,7 @@ def build_model_provider(settings: Settings) -> OpenAICompatibleModelProvider:
         base_url=settings.model_base_url,
         model_name=settings.model_name,
         timeout_seconds=settings.model_request_timeout_seconds,
+        probe_timeout_seconds=settings.model_probe_timeout_seconds,
     )
 
 
@@ -76,8 +78,10 @@ def create_app() -> FastAPI:
 
     @app.get(f"{settings.api_prefix}/health")
     async def health(current_settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, object]:
+        model_provider = build_model_provider(current_settings)
+        runtime_status = await model_provider.probe_runtime()
         return {
-            "status": "ok",
+            "status": "ok" if runtime_status.ready else "degraded",
             "app": current_settings.app_name,
             "providers": {
                 "model": current_settings.model_provider,
@@ -86,6 +90,7 @@ def create_app() -> FastAPI:
                 "search": current_settings.search_provider,
                 "fetch": "internal-fetcher",
             },
+            "model_runtime": runtime_status.model_dump(),
         }
 
     @app.get(f"{settings.api_prefix}/system/providers")
@@ -110,8 +115,17 @@ def create_app() -> FastAPI:
     @app.get(f"{settings.api_prefix}/model/models")
     async def list_models(current_settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, object]:
         provider = build_model_provider(current_settings)
-        models = await provider.list_models()
-        return {"models": [item.model_dump() for item in models]}
+        runtime = await provider.probe_runtime()
+        models = await provider.list_models(runtime_status=runtime)
+        return {
+            "models": [item.model_dump() for item in models],
+            "runtime": runtime.model_dump(),
+        }
+
+    @app.get(f"{settings.api_prefix}/model/runtime", response_model=ModelRuntimeStatus)
+    async def model_runtime(current_settings: Annotated[Settings, Depends(get_settings)]) -> ModelRuntimeStatus:
+        provider = build_model_provider(current_settings)
+        return await provider.probe_runtime()
 
     @app.post(f"{settings.api_prefix}/model/chat")
     async def chat(

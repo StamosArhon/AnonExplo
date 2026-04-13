@@ -28,6 +28,10 @@ class Settings(BaseSettings):
         default=90.0,
         validation_alias="MODEL_REQUEST_TIMEOUT_SECONDS",
     )
+    model_probe_timeout_seconds: float = Field(
+        default=5.0,
+        validation_alias="MODEL_PROBE_TIMEOUT_SECONDS",
+    )
 
     search_provider: Literal["searxng"] = Field(
         default="searxng",

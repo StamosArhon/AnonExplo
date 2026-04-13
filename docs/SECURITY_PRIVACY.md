@@ -26,6 +26,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Never commit tokens, cookies, API keys, or private model access credentials.
 - Model files and fetched content are local assets, not Git assets.
 - The bootstrap flow generates a local `SEARXNG_SECRET` in `.env` for the default search-provider path.
+- The default model provisioning flow downloads the GGUF on the host into `data/models/` and verifies it against a tracked SHA256 value; the model container itself does not fetch weights at runtime.
 
 ## Logging Guidance
 

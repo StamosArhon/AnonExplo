@@ -14,9 +14,13 @@ function escapeHtml(value) {
 }
 
 function renderStatus(target, payload) {
+  const runtime = payload.model_runtime || {};
+  const overallClass = payload.status === "ok" ? "ok" : "error";
+  const availableModels = Array.isArray(runtime.available_models) ? runtime.available_models.length : 0;
+
   target.innerHTML = `
     <div class="status-card">
-      <strong>Status:</strong> <span class="ok">${escapeHtml(payload.status)}</span>
+      <strong>Status:</strong> <span class="${overallClass}">${escapeHtml(payload.status)}</span>
     </div>
     <div class="status-card">
       <strong>Model provider:</strong> ${escapeHtml(payload.providers.model)}
@@ -28,11 +32,22 @@ function renderStatus(target, payload) {
       <strong>Runtime profile:</strong> ${escapeHtml(payload.providers.model_runtime_profile || "unknown")}
     </div>
     <div class="status-card">
+      <strong>Runtime status:</strong> ${escapeHtml(runtime.status || "unknown")}
+    </div>
+    <div class="status-card">
+      <strong>Advertised models:</strong> ${escapeHtml(availableModels)}
+    </div>
+    <div class="status-card">
       <strong>Search provider:</strong> ${escapeHtml(payload.providers.search)}
     </div>
     <div class="status-card">
       <strong>Fetch pipeline:</strong> ${escapeHtml(payload.providers.fetch)}
     </div>
+    ${
+      runtime.error
+        ? `<div class="status-card error"><strong>Model runtime note:</strong> ${escapeHtml(runtime.error)}</div>`
+        : ""
+    }
   `;
 }
 
@@ -79,7 +94,7 @@ function renderGrounding(summaryTarget, answerTarget, sourcesTarget, payload) {
             <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
           </div>
           <div class="meta">
-            Rank ${escapeHtml(source.search_rank)} · ${escapeHtml(source.domain)} ·
+            Rank ${escapeHtml(source.search_rank)} &middot; ${escapeHtml(source.domain)} &middot;
             <a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.url)}</a>
           </div>
           <div class="source-body">
@@ -87,7 +102,7 @@ function renderGrounding(summaryTarget, answerTarget, sourcesTarget, payload) {
             ${
               fetched
                 ? `
-                  <div class="meta">Context used: ${escapeHtml(fetched.context_chars_used)} chars · Extracted: ${escapeHtml(fetched.content_char_count)} chars · ${escapeHtml(fetched.word_count)} words</div>
+                  <div class="meta">Context used: ${escapeHtml(fetched.context_chars_used)} chars &middot; Extracted: ${escapeHtml(fetched.content_char_count)} chars &middot; ${escapeHtml(fetched.word_count)} words</div>
                   <div class="source-text">${escapeHtml(fetched.context_text || fetched.excerpt || "No source text available.")}</div>
                 `
                 : error

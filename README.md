@@ -4,7 +4,7 @@ AnonExplo is a privacy-first, self-hosted local-LLM stack for local use on perso
 
 ## Current Status
 
-This repository is currently focused on the `grounding-vertical-slice` milestone. The repo now provides:
+This repository is currently focused on the `local-model-integration` milestone. The repo now provides:
 
 - the durable repo protocol for future Codex threads
 - the initial architecture and security documents
@@ -13,6 +13,9 @@ This repository is currently focused on the `grounding-vertical-slice` milestone
 - a grounded-answer path that passes fetched source text into the configured local model
 - provider abstraction points for the model and search layers
 - a concrete `llama.cpp` CUDA runtime profile for the first local model path
+- a repo-managed provisioning script for the default GGUF baseline
+- runtime readiness reporting in the backend and UI
+- end-to-end validation of the default local model path on the current development machine
 
 ## Design Goals
 
@@ -53,23 +56,35 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 
 2. Review `.env` and adjust provider settings as needed.
    The bootstrap script generates a local `SEARXNG_SECRET` value automatically for new environments.
+   If `.env` predates the current repo template and still contains placeholder model settings, copy the current model-runtime keys from `.env.example`.
 
-3. Start the base stack:
+3. Provision the default local GGUF model:
 
    ```powershell
-   docker compose up --build ui backend fetcher search-provider
+   powershell -ExecutionPolicy Bypass -File scripts/provision-default-model.ps1
    ```
 
-4. Open the local UI at `http://127.0.0.1:3000`.
+4. Run the full validation path, including the model runtime probe:
 
-5. Provision a local GGUF model in `data/models/`, review `.env`, and enable the pinned llama.cpp profile:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/validate.ps1 -RequireModelRuntime
+   ```
+
+5. Start the pinned llama.cpp runtime profile:
 
    ```powershell
    docker compose --profile llamacpp up -d model-backend
+   ```
+
+6. Start the base stack:
+
+   ```powershell
    docker compose up --build ui backend fetcher search-provider
    ```
 
-6. Use the local UI's grounded-answer panel to search, fetch, inspect sources, and synthesize an answer from retrieved page text.
+7. Open the local UI at `http://127.0.0.1:3000`.
+
+8. Use the local UI's grounded-answer panel to search, fetch, inspect sources, and synthesize an answer from retrieved page text.
 
 ## Provider Switching
 
@@ -101,7 +116,13 @@ The UI also surfaces per-source fetch failures and the exact source text slice u
 
 ## Llama.cpp Profile
 
-The first concrete model runtime profile is documented in `docs/LLAMA_CPP_RUNTIME_PROFILE.md`. It uses the `llama.cpp` OpenAI-compatible server image pinned to a digest and is tuned for a practical 4B to 8B GGUF baseline on the target machine class.
+The first concrete model runtime profile is documented in `docs/LLAMA_CPP_RUNTIME_PROFILE.md`. It uses the `llama.cpp` OpenAI-compatible server image pinned to a digest, aliases the configured model name explicitly, and is tuned for a practical 4B to 8B GGUF baseline on the target machine class.
+
+The current default model artifact is:
+
+- source: `QuantFactory/Qwen2.5-7B-Instruct-GGUF`
+- file: `Qwen2.5-7B-Instruct.Q4_K_M.gguf`
+- sha256: `4e9221217000d0fc8f5ffdbae51a7201fcc3613de18ff1b1cd8c7c01f924437b`
 
 ## Validation
 
@@ -109,6 +130,12 @@ Run the repo validation script before shipping changes:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/validate.ps1
+```
+
+For the full local-model path, require the runtime probe:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/validate.ps1 -RequireModelRuntime
 ```
 
 ## Repository Layout

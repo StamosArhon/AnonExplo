@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ProviderError(RuntimeError):
@@ -38,6 +38,16 @@ class GroundedModelRequest(BaseModel):
     temperature: float
 
 
+class ModelRuntimeStatus(BaseModel):
+    ready: bool
+    reachable: bool
+    status: str
+    configured_model: str
+    checked_url: str
+    available_models: list[ModelDescriptor] = Field(default_factory=list)
+    error: str | None = None
+
+
 def _normalize_message_content(content: Any) -> str:
     if isinstance(content, str):
         return content
@@ -53,23 +63,87 @@ def _normalize_message_content(content: Any) -> str:
 
 
 class OpenAICompatibleModelProvider:
-    def __init__(self, base_url: str, model_name: str, timeout_seconds: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model_name: str,
+        timeout_seconds: float,
+        probe_timeout_seconds: float,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model_name = model_name
         self.timeout_seconds = timeout_seconds
+        self.probe_timeout_seconds = probe_timeout_seconds
 
-    async def list_models(self) -> list[ModelDescriptor]:
+    async def probe_runtime(self) -> ModelRuntimeStatus:
+        endpoint = f"{self.base_url}/models"
         try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.get(f"{self.base_url}/models")
+            async with httpx.AsyncClient(timeout=self.probe_timeout_seconds) as client:
+                response = await client.get(endpoint)
                 response.raise_for_status()
+        except httpx.HTTPError as exc:
+            return ModelRuntimeStatus(
+                ready=False,
+                reachable=False,
+                status="unreachable",
+                configured_model=self.model_name,
+                checked_url=endpoint,
+                error=f"Model runtime request failed: {exc}",
+            )
+
+        try:
             payload = response.json()
-        except (httpx.HTTPError, ValueError):
-            return [ModelDescriptor(id=self.model_name, owned_by="configured-default")]
+        except ValueError as exc:
+            return ModelRuntimeStatus(
+                ready=False,
+                reachable=True,
+                status="invalid_response",
+                configured_model=self.model_name,
+                checked_url=endpoint,
+                error=f"Model runtime returned invalid JSON: {exc}",
+            )
 
         models = payload.get("data", [])
-        parsed = [ModelDescriptor(id=item["id"], owned_by=item.get("owned_by")) for item in models if "id" in item]
-        return parsed or [ModelDescriptor(id=self.model_name, owned_by="configured-default")]
+        available_models = [
+            ModelDescriptor(id=item["id"], owned_by=item.get("owned_by")) for item in models if "id" in item
+        ]
+        available_model_ids = {item.id for item in available_models}
+
+        if not available_models:
+            return ModelRuntimeStatus(
+                ready=False,
+                reachable=True,
+                status="no_models_reported",
+                configured_model=self.model_name,
+                checked_url=endpoint,
+                available_models=[],
+                error="Model runtime responded without any advertised models.",
+            )
+
+        if self.model_name not in available_model_ids:
+            return ModelRuntimeStatus(
+                ready=False,
+                reachable=True,
+                status="configured_model_missing",
+                configured_model=self.model_name,
+                checked_url=endpoint,
+                available_models=available_models,
+                error=f"Configured model '{self.model_name}' is not advertised by the runtime.",
+            )
+
+        return ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model=self.model_name,
+            checked_url=endpoint,
+            available_models=available_models,
+            error=None,
+        )
+
+    async def list_models(self, runtime_status: ModelRuntimeStatus | None = None) -> list[ModelDescriptor]:
+        runtime_status = runtime_status or await self.probe_runtime()
+        return runtime_status.available_models or [ModelDescriptor(id=self.model_name, owned_by="configured-default")]
 
     async def chat(self, prompt: str, system_prompt: str | None, temperature: float) -> dict[str, Any]:
         messages: list[dict[str, Any]] = []

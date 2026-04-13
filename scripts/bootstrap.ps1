@@ -21,5 +21,6 @@ New-Item -ItemType Directory -Force -Path (Join-Path $root "data\searxng-cache")
 Write-Host "Bootstrap complete."
 Write-Host "Next steps:"
 Write-Host "  1. Review .env"
-Write-Host "  2. Provision a local model file before enabling the llamacpp profile"
-Write-Host "  3. Run docker compose up --build ui backend fetcher search-provider"
+Write-Host "  2. Run powershell -ExecutionPolicy Bypass -File scripts/provision-default-model.ps1 if you want the default GGUF path"
+Write-Host "  3. Start the model runtime only after the model file is present in data\models"
+Write-Host "  4. Run docker compose up --build ui backend fetcher search-provider"
