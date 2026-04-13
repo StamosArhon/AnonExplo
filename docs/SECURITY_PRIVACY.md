@@ -1,0 +1,60 @@
+# Security And Privacy
+
+## Threat Model
+
+This project assumes a local single-user workstation deployment. The main risks are:
+
+- accidental exposure beyond localhost
+- the model runtime gaining unnecessary network reach
+- prompt or article text ending up in logs or tracked files
+- the fetcher being abused to read local or private network targets
+- service sprawl causing unclear trust boundaries
+
+## Security Defaults
+
+- UI and backend ports bind to `127.0.0.1` only.
+- The model backend stays on an internal-only Docker network.
+- Search and fetch services are the only default services that join the egress-capable network.
+- Repo-managed services run as non-root where practical.
+- Capabilities are dropped and `no-new-privileges` is enabled where practical.
+- No remote frontend assets, fonts, telemetry, analytics, or CDNs are used.
+
+## Secrets Handling
+
+- Keep secrets in local untracked files such as `.env`.
+- Never commit tokens, cookies, API keys, or private model access credentials.
+- Model files and fetched content are local assets, not Git assets.
+
+## Logging Guidance
+
+- Keep logs operational, not archival.
+- Do not add debug logging that dumps prompts, full fetched article bodies, headers, or provider payloads by default.
+- If deeper logging is ever added for troubleshooting, it must be temporary and documented.
+
+## Fetcher Controls
+
+The fetcher is the most sensitive service because it has egress. Current guardrails:
+
+- only `http` and `https` URLs are accepted
+- obvious localhost and private-address targets are rejected
+- response size is capped
+- non-HTML responses are rejected
+- extracted text is trimmed to a bounded size
+
+These controls reduce privacy leakage and resource abuse, but they are not a substitute for host firewall policy.
+
+## Defense In Depth
+
+Docker internal networks reduce accidental reachability, but they are not a complete security boundary if a container is compromised. Recommended follow-up hardening:
+
+- host firewall rules that restrict outbound traffic for non-egress services
+- explicit model file provisioning and checksum verification
+- tighter container filesystem constraints where compatible with the chosen runtime
+- periodic dependency and image review
+
+## Out Of Scope For Now
+
+- public internet exposure
+- multi-user auth and RBAC
+- external identity providers
+- long-term prompt history storage

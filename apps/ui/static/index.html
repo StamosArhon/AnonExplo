@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AnonExplo</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <p class="eyebrow">Local LLM Workbench</p>
+        <h1>AnonExplo</h1>
+        <p class="intro">
+          A privacy-first local interface for model prompts, provider status, and
+          grounded search-and-fetch inspection.
+        </p>
+        <div class="hero-meta" id="environment-chip">Loading environment...</div>
+      </header>
+
+      <main class="grid">
+        <section class="panel panel-highlight">
+          <div class="panel-heading">
+            <h2>System Status</h2>
+            <button id="refresh-status" type="button">Refresh</button>
+          </div>
+          <div id="status-output" class="stack"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Prompt</h2>
+          <form id="chat-form" class="stack">
+            <label>
+              Prompt
+              <textarea id="prompt-input" rows="6" placeholder="Ask the active local model something practical."></textarea>
+            </label>
+            <label>
+              Optional system prompt
+              <textarea id="system-input" rows="3" placeholder="Keep answers terse and source-aware."></textarea>
+            </label>
+            <button type="submit">Send Prompt</button>
+          </form>
+          <pre id="chat-output" class="output">Model response will appear here.</pre>
+        </section>
+
+        <section class="panel">
+          <h2>Grounding Preview</h2>
+          <form id="grounding-form" class="stack">
+            <label>
+              Query
+              <input id="grounding-query" type="text" placeholder="Search, fetch, and inspect source text." />
+            </label>
+            <div class="split">
+              <label>
+                Search limit
+                <input id="search-limit" type="number" min="1" max="10" value="5" />
+              </label>
+              <label>
+                Fetch limit
+                <input id="fetch-limit" type="number" min="1" max="5" value="3" />
+              </label>
+            </div>
+            <button type="submit">Run Grounding</button>
+          </form>
+          <div id="grounding-output" class="stack output-block"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Direct Fetch</h2>
+          <form id="fetch-form" class="stack">
+            <label>
+              URL
+              <input id="fetch-url" type="url" placeholder="https://example.com/article" />
+            </label>
+            <button type="submit">Fetch Article</button>
+          </form>
+          <pre id="fetch-output" class="output">Readable article text will appear here.</pre>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>

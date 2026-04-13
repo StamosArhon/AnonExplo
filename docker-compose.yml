@@ -1,0 +1,161 @@
+name: ${PROJECT_NAME:-anonexplo}
+
+services:
+  ui:
+    build:
+      context: ./apps/ui
+    restart: unless-stopped
+    environment:
+      UI_HOST: 0.0.0.0
+      UI_PORT: 8080
+      UI_API_BASE_URL: http://127.0.0.1:${BACKEND_PORT:-8000}${API_PREFIX:-/api/v1}
+      UI_ENVIRONMENT: local
+    ports:
+      - 127.0.0.1:${UI_PORT:-3000}:8080
+    depends_on:
+      - backend
+    networks:
+      - core_internal
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  backend:
+    build:
+      context: ./apps/backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: AnonExplo Orchestrator
+      API_PREFIX: ${API_PREFIX:-/api/v1}
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: 8000
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai_compatible}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-http://model-backend:8080/v1}
+      MODEL_NAME: ${MODEL_NAME:-replace-with-local-model}
+      MODEL_REQUEST_TIMEOUT_SECONDS: ${MODEL_REQUEST_TIMEOUT_SECONDS:-90}
+      SEARCH_PROVIDER: ${SEARCH_PROVIDER:-searxng}
+      SEARCH_BASE_URL: ${SEARCH_BASE_URL:-http://search-provider:8080}
+      SEARCH_RESULT_LIMIT: ${SEARCH_RESULT_LIMIT:-5}
+      SEARCH_REQUEST_TIMEOUT_SECONDS: ${SEARCH_REQUEST_TIMEOUT_SECONDS:-20}
+      FETCH_BASE_URL: ${FETCH_BASE_URL:-http://fetcher:8081}
+      FETCH_REQUEST_TIMEOUT_SECONDS: ${FETCH_REQUEST_TIMEOUT_SECONDS:-20}
+    ports:
+      - 127.0.0.1:${BACKEND_PORT:-8000}:8000
+    depends_on:
+      - fetcher
+      - search-provider
+    networks:
+      - core_internal
+      - model_internal
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  fetcher:
+    build:
+      context: ./services/fetcher
+    restart: unless-stopped
+    environment:
+      FETCHER_HOST: 0.0.0.0
+      FETCHER_PORT: 8081
+      FETCH_REQUEST_TIMEOUT_SECONDS: ${FETCH_REQUEST_TIMEOUT_SECONDS:-20}
+      FETCH_MAX_RESPONSE_BYTES: ${FETCH_MAX_RESPONSE_BYTES:-2000000}
+      FETCH_MAX_TEXT_CHARS: ${FETCH_MAX_TEXT_CHARS:-40000}
+      FETCH_USER_AGENT: ${FETCH_USER_AGENT:-AnonExploFetcher/0.1}
+    networks:
+      - core_internal
+      - egress
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  search-provider:
+    image: ${SEARXNG_IMAGE:-searxng/searxng:latest}
+    restart: unless-stopped
+    volumes:
+      - ./configs/searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - ./data/searxng-cache:/var/cache/searxng
+    networks:
+      - core_internal
+      - egress
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  model-backend:
+    profiles:
+      - llamacpp
+    image: ${MODEL_RUNTIME_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    command: "${MODEL_RUNTIME_COMMAND:-llama-server -m /models/replace-with-model.gguf --host 0.0.0.0 --port 8080 -ngl 99 -c 4096}"
+    restart: unless-stopped
+    networks:
+      - model_internal
+    volumes:
+      - ./data/models:/models:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  core_internal:
+    driver: bridge
+    internal: true
+  model_internal:
+    driver: bridge
+    internal: true
+  egress:
+    driver: bridge
