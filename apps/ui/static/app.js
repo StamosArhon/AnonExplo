@@ -16,9 +16,9 @@ const WORKSPACES = {
   "workspace-chat": {
     eyebrow: "Direct Chat",
     title: "Model-only chat",
-    copy: "Direct Chat talks only to the selected model. It does not call SearXNG, page fetches, or grounded source packaging.",
+    copy: "Direct Chat talks only to the selected model. Its saved history stays only in this browser on this device, and it does not call SearXNG, page fetches, or grounded source packaging.",
     modeLabel: "Mode - model only",
-    activityLabel: "History - browser local",
+    activityLabel: "History - browser local only",
     formId: "chat-form",
     focusId: "prompt-input",
   },

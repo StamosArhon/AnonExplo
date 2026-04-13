@@ -18,19 +18,23 @@
         </div>
 
         <p class="sidebar-copy">
-          Direct chat history stays local to this browser. Grounded answers and fetch inspection stay
-          transient unless you explicitly save something elsewhere.
+          Direct chat history is stored only in this browser on this device. Grounded answers and fetch
+          inspection stay transient unless you explicitly save something elsewhere.
         </p>
 
         <section class="sidebar-panel">
           <div class="panel-head">
             <div>
-              <p class="section-label">Direct Chat History</p>
-              <p class="panel-copy">Delete any entry or purge the whole local list.</p>
+              <p class="section-label">Browser-local Direct Chat History</p>
+              <p class="panel-copy">Stored only in this browser on this device.</p>
             </div>
             <button id="purge-history" type="button" class="ghost-button ghost-button-small">Purge</button>
           </div>
           <div id="chat-history-list" class="history-list"></div>
+          <p class="privacy-note">
+            Delete any entry or purge the whole list at any time. Nothing here is synced or stored as
+            server-side chat history.
+          </p>
         </section>
 
         <div class="sidebar-actions">
@@ -227,8 +231,8 @@
           </div>
 
           <p class="modal-note">
-            Direct Chat is model only. Grounded Answer is the mode that uses SearXNG plus fetched
-            source text.
+            Direct Chat is model only, and its saved history stays only in this browser on this device.
+            Grounded Answer is the mode that uses SearXNG plus fetched source text.
           </p>
 
           <div class="modal-actions">

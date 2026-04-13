@@ -40,7 +40,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Repo-managed UI, backend, fetcher, and localhost-gateway services suppress routine access logging where practical so request paths do not become default operational noise.
 - The local UI may remember the selected model id, saved local instruction text, and direct-chat history in browser local storage on the same workstation.
 - Grounded-answer transcripts, fetched source details, and fetch-inspector output must remain non-persistent by default.
-- Because direct-chat history is now browser-local persistent state, the UI must keep explicit delete and purge controls and must not silently expand that storage to grounded searches or fetched page bodies.
+- Because direct-chat history is now browser-local persistent state, the UI must keep explicit delete and purge controls, label that storage clearly as browser-local and device-local, and must not silently expand that storage to grounded searches or fetched page bodies.
 - If `MODEL_PROVIDER=ollama` is used, keep `MODEL_BASE_URL` on a local or otherwise trusted private endpoint; do not silently treat a hosted Ollama API as equivalent to a local runtime from a privacy perspective.
 
 ## Fetcher Controls
@@ -56,6 +56,7 @@ The fetcher is the most sensitive service because it has egress. Current guardra
 - blocked or rate-limited upstream responses are surfaced with structured failure codes so operators can tell why grounding degraded
 - grounded-answer prompts use only bounded excerpts of fetched source text
 - bounded search-result snippets may be used as a clearly labeled fallback when article fetches fail
+- the deliberate baseline is direct HTML fetch plus explicit snippet fallback, not a secondary reader proxy
 
 These controls reduce privacy leakage and resource abuse, but they are not a substitute for host firewall policy.
 

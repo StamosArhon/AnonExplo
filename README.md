@@ -23,6 +23,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - an optional localhost-only SearXNG web UI route for standalone searching when you do not want the LLM workflow
 - a calmer sidebar-and-editorial UI shell with settings and stack details moved into modals instead of the main chat area
 - browser-local direct chat history with per-entry delete and full purge controls
+- stronger browser-local history labeling so it is clear that direct chat history is device-local, purgeable, and not synced or stored server-side
 - explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
 - config-driven SearXNG tuning defaults for broader current-events coverage, including categories, language, and optional engine or time-range controls
 - ranked grounded-source selection with retry behavior so later sources can still be fetched when early candidates fail
@@ -104,7 +105,7 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 
 9. Use the local UI's workspaces to switch between direct chat, grounded answers, and fetch inspection.
    `Direct Chat` is model only. `Grounded Answer` is the mode that uses SearXNG, page fetches, and source-backed synthesis.
-   The workbench stores the selected model, saved local instructions, and direct-chat history in browser local storage. Grounded-answer details and fetch results stay transient in the current tab by default.
+   The workbench stores the selected model, saved local instructions, and direct-chat history in browser local storage on the same device only. Direct-chat history is purgeable from the sidebar, is not synced, and is not stored as server-side chat history. Grounded-answer details and fetch results stay transient in the current tab by default.
 
 10. Run the lightweight operator check when the stack is up:
 
@@ -161,7 +162,7 @@ The repo now supports a practical grounded-answer path:
 4. construct a bounded grounding context from fetched sources, or fall back to bounded search snippets when article fetches are unavailable
 5. pass that context into the configured model runtime with explicit citation-only instructions
 
-The UI also surfaces per-source fetch failures, error codes, the exact source text slice used for grounding, and the current grounding mode (`fetched_text` or `search_snippets`). If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
+The UI also surfaces per-source fetch failures, error codes, the exact source text slice used for grounding, and the current grounding mode (`fetched_text` or `search_snippets`). The current baseline deliberately uses direct HTML fetches plus explicit snippet fallback; it does not bundle a secondary reader proxy or hidden publisher-specific bypass. If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
 
 ## UI Workbench
 
@@ -170,6 +171,7 @@ The local UI is still static and self-hosted, but it now behaves like a real wor
 - it loads provider, runtime, and model-catalog state from the backend
 - it uses a calmer sidebar-and-editorial shell with settings and stack details in dedicated modals
 - it keeps a browser-local direct chat history with a new-chat action, per-entry delete, and full purge
+- it labels that history clearly as browser-local and device-local so it is not mistaken for synced or server-side storage
 - it lets you choose the requested model globally for direct-chat and grounded-answer requests
 - it stores the selected model plus saved direct-chat and grounded-answer instructions locally in the browser
 - it keeps grounded-answer transcripts, fetched source details, and fetch-inspector output transient in the current tab by default

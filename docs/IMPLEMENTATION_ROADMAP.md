@@ -38,11 +38,12 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
    - improve fetch success on hostile publishers, preserve explicit provenance, and add better operator guidance for fetch-path edge cases
 10. `fetcher-secondary-reader-strategy`
    - decide whether to add an opt-in secondary reader path for blocked publishers without weakening the privacy model
+   - resolved by decision: keep direct HTML fetches plus explicit snippet fallback as the steady-state design for now
 
 ## Current Phase
 
-- Active phase: `fetcher-secondary-reader-strategy`
-- Goal: decide whether the repo should add an opt-in secondary reader path for blocked publishers, or stay with direct HTML fetches plus explicit snippet fallback
+- Active phase: `roadmap-complete`
+- Goal: maintain the current baseline, validate regressions, and treat new work as post-roadmap enhancement rather than unfinished core setup
 
 ## Active Branch
 
@@ -100,10 +101,13 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Reworked fetch retries so later candidates are still tried after thin-content or generic fetch failures, while later URLs from the same domain are skipped after explicit robot-policy, forbidden, or rate-limited responses.
 - Added fetch-quality and error provenance to the UI's fetch inspector and grounded-source details so operators can see method, quality, warning, and upstream-status signals without opening container logs.
 - Added tracked fetcher tuning keys for minimum content size, minimum word count, and accept-language so the new behavior is reproducible across machines.
+- Closed `fetcher-secondary-reader-strategy` by decision: the current baseline will keep direct HTML fetches plus explicit snippet fallback instead of adding a secondary reader path.
+- Tightened browser-local history labeling so the UI now makes direct-chat persistence unmistakably device-local, purgeable, and non-server-side.
+- Completed the initial roadmap baseline so future work can be treated as post-roadmap enhancement rather than unfinished core setup.
 
 ## In-Progress Work
 
-- None inside the repo contents. The next planned work is `fetcher-secondary-reader-strategy`.
+- None inside the repo contents. The initial roadmap is now complete.
 
 ## Open Questions / Blockers
 
@@ -112,11 +116,11 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Existing local `.env` files may also still carry the older `SEARCH_RESULT_LIMIT` value and may be missing the newer SearXNG tuning keys if they were created before this branch.
 - The standalone SearXNG browser route is intentionally specific to the bundled repo-managed `search-provider` service. If the backend is pointed at YaCy or another search provider, that does not automatically change the standalone browser endpoint.
 - Windows-host firewall guidance is now documented, but not automated or enforced outside the existing Docker network and localhost-binding model.
-- Direct chat history now lives in browser local storage by design; future work should decide whether that history needs an opt-out or export path without weakening the current privacy defaults.
+- Direct chat history now lives in browser local storage by design. The current decision is to keep explicit labeling plus delete and purge controls rather than adding an opt-out or export path to the baseline.
 - The refreshed UI shell has been validated through the repo build and smoke path, but it still does not have browser-automation coverage for interaction regressions.
 - The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
 - Some publishers, especially Wikipedia and other anti-bot-protected sites, can still reject direct fetches from the containerized fetcher. This branch confirmed that Wikimedia HTML and official API endpoints still return robot-policy `403` responses from inside the fetcher container on this machine.
-- Because of that Wikimedia behavior, the repo still does not include a secondary reader path or publisher-specific bypass. The current fallback remains explicit snippet-grounding.
+- Because of that Wikimedia behavior, the repo still does not include a secondary reader path or publisher-specific bypass. That is now a deliberate baseline decision, and the current fallback remains explicit snippet-grounding.
 - Heavier grounded requests now survive the localhost gateway, but the repo still does not record performance baselines for search-plus-fetch-plus-model latency on the target hardware.
 
 ## Decisions Made And Why
@@ -146,6 +150,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The localhost gateway should tolerate longer-running grounded-answer calls so the proxy does not fail before the backend has finished search, fetch, and model synthesis.
 - Fetch resilience should improve operator clarity first through structured failure classification, thin-content detection, and domain-aware retry behavior before the repo adds any privacy-altering secondary reader strategy.
 - Wikimedia or similarly protected publishers should not receive a hidden special-case bypass until the privacy and maintenance tradeoffs of that path are explicitly reviewed.
+- Browser-local direct chat history is considered sufficiently controlled in the baseline when it is clearly labeled as device-local and purgeable; opt-out or export should be treated as later convenience features, not core privacy fixes.
 
 ## Security / Privacy Assumptions
 
@@ -163,6 +168,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `fetcher-resilience` branch
 - `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the `fetcher-resilience` branch
+- `scripts/validate.ps1`: passed on 2026-04-14 during the `roadmap-closeout` branch
+- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the `roadmap-closeout` branch
 - `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`
@@ -190,10 +197,10 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Exact Next Steps
 
-1. Start `stamos/fetcher-secondary-reader-strategy` from a clean `main`.
-2. Evaluate whether a secondary reader path is acceptable for blocked publishers without weakening the privacy or least-privilege model.
-3. If a secondary reader path is not acceptable, document direct-HTML-plus-snippet-fallback as the deliberate steady-state design and tune the remaining fetcher thresholds against real queries.
-4. Decide whether the current browser-local direct chat history model needs an opt-out, export path, or stronger session labeling.
+1. Keep validating the current baseline against real queries and regressions on the target hardware.
+2. Treat any future secondary reader, export, automation, or benchmark work as a new post-roadmap enhancement with its own scoped branch.
+3. If a future branch revisits blocked publishers, keep any alternate reader path opt-in and document the privacy tradeoff explicitly.
+4. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -216,4 +223,5 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The repo now supports two localhost-only browser modes at once: the main AnonExplo UI on port `3000` and the bundled standalone SearXNG UI on port `8085`, both through the same low-privilege host gateway.
 - The localhost gateway now allows longer backend request times so heavier grounded calls do not fail at the proxy first.
 - This branch intentionally did not add a hidden special-case Wikipedia or third-party reader bypass after confirming Wikimedia still returned robot-policy `403` responses from inside the fetcher container.
-- The next implementation thread should resume `stamos/fetcher-secondary-reader-strategy` from a clean `main`.
+- The initial roadmap is now complete on `main`.
+- Future threads should start from `main` and treat new work as post-roadmap enhancement rather than unfinished baseline setup.

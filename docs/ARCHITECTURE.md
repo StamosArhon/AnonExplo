@@ -110,7 +110,7 @@ The validation path now treats that network and exposure model as enforceable po
 3. UI may include a request-level model selection sourced from the runtime-advertised model list.
 4. Backend validates that selection against the runtime when possible and forwards the request to the model adapter.
 5. Backend returns the model response plus selection metadata to the UI.
-6. The browser may present that exchange inside a local conversation-style shell and persist direct-chat history locally in browser storage.
+6. The browser may present that exchange inside a local conversation-style shell and persist direct-chat history locally in browser storage on the same device only, with explicit delete and purge controls.
 7. Direct Chat intentionally does not call the search provider or fetcher.
 
 ### Grounded search flow
@@ -129,7 +129,7 @@ The validation path now treats that network and exposure model as enforceable po
 ## Why The Fetcher Is Separate
 
 Search snippets alone are not enough. The fetcher exists so the system can retrieve, parse, and normalize article text without giving the model backend internet access.
-The current fetcher pass also classifies thin extractions so the backend can reject paywall-shell or otherwise low-value pages instead of pretending they are usable grounding context. It still uses direct HTML fetches only; no third-party reader proxy or Wikipedia-specific bypass is bundled at this stage.
+The current fetcher pass also classifies thin extractions so the backend can reject paywall-shell or otherwise low-value pages instead of pretending they are usable grounding context. The deliberate steady-state design remains direct HTML fetches plus explicit snippet fallback; no third-party reader proxy or Wikipedia-specific bypass is bundled at this stage.
 
 ## First Runtime Profile
 
