@@ -703,7 +703,7 @@ function renderGroundingDetails(state, elements) {
             <span class="status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
           </div>
           <div class="meta">
-            Rank ${escapeHtml(source.search_rank)} | ${escapeHtml(source.domain)} | 
+            Rank ${escapeHtml(source.search_rank)} | ${escapeHtml(source.domain)} |
             <a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.url)}</a>
           </div>
           <div class="source-body">
