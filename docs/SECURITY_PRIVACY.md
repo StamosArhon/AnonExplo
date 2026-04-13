@@ -18,6 +18,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - The bundled SearXNG web UI is reachable only through the localhost gateway; the search container itself is still not published directly to the host.
 - Repo-managed services run as non-root where practical.
 - Capabilities are dropped and `no-new-privileges` is enabled where practical.
+- Compose validation now checks expected network membership, localhost-only publication, digest-pinned third-party images, and local-only CORS origins before a branch is declared ready.
 - No remote frontend assets, fonts, telemetry, analytics, or CDNs are used.
 - Grounded model prompts use bounded source-context limits so fetched page text is not forwarded to the model without size controls.
 
@@ -34,6 +35,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Keep logs operational, not archival.
 - Do not add debug logging that dumps prompts, full fetched article bodies, headers, or provider payloads by default.
 - If deeper logging is ever added for troubleshooting, it must be temporary and documented.
+- Repo-managed UI, backend, fetcher, and localhost-gateway services suppress routine access logging where practical so request paths do not become default operational noise.
 - The local UI may remember the selected model id, saved local instruction text, and direct-chat history in browser local storage on the same workstation.
 - Grounded-answer transcripts, fetched source details, and fetch-inspector output must remain non-persistent by default.
 - Because direct-chat history is now browser-local persistent state, the UI must keep explicit delete and purge controls and must not silently expand that storage to grounded searches or fetched page bodies.
@@ -63,6 +65,8 @@ Docker internal networks reduce accidental reachability, but they are not a comp
 - explicit model file provisioning and checksum verification
 - tighter container filesystem constraints where compatible with the chosen runtime
 - periodic dependency and image review
+
+See `docs/OPERATIONS_AND_MAINTENANCE.md` for the current Windows-host firewall guidance and operational recovery notes.
 
 ## Out Of Scope For Now
 

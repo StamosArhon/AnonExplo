@@ -11,6 +11,9 @@ class UIRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
+    def log_message(self, format: str, *args) -> None:
+        return
+
     def do_GET(self) -> None:
         if self.path == "/config.json":
             payload = {

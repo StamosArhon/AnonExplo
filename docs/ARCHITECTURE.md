@@ -94,6 +94,7 @@ The current code includes:
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
 The backend also no longer hard-depends on a Compose service literally named `search-provider`, so `SEARCH_BASE_URL` can point at any reachable internal or local search service that matches one of the supported adapters.
 The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` service rather than from direct publishing on internal-only app containers, because Docker Desktop did not reliably expose those ports when the services were attached only to `internal: true` networks. That same gateway also provides an optional browser path to the bundled SearXNG service, so standalone search and LLM-grounded search can coexist without changing the internal network shape.
+The validation path now treats that network and exposure model as enforceable policy: only the gateway may publish host ports, third-party runtime images stay digest-pinned by default, and the expected service-to-network memberships are checked before a branch is declared ready.
 
 ## Data Flow
 

@@ -30,6 +30,206 @@ function Get-EnvValue {
     return $DefaultValue
 }
 
+function Get-NamedValue {
+    param(
+        [object]$Container,
+        [string]$Name,
+        [string]$Kind
+    )
+
+    $property = $Container.PSObject.Properties | Where-Object Name -eq $Name | Select-Object -First 1
+    if (-not $property) {
+        throw "Missing $Kind '$Name' in the compose configuration."
+    }
+
+    return $property.Value
+}
+
+function Get-NamedKeys {
+    param([object]$Container)
+
+    if ($null -eq $Container) {
+        return @()
+    }
+
+    return @($Container.PSObject.Properties | ForEach-Object { $_.Name })
+}
+
+function Assert-SetEquality {
+    param(
+        [string]$Label,
+        [string[]]$Actual,
+        [string[]]$Expected
+    )
+
+    $normalizedActual = @($Actual | Sort-Object -Unique)
+    $normalizedExpected = @($Expected | Sort-Object -Unique)
+
+    if (($normalizedActual -join ",") -ne ($normalizedExpected -join ",")) {
+        throw "$Label did not match. Expected '$($normalizedExpected -join ", ")' but found '$($normalizedActual -join ", ")'."
+    }
+}
+
+function Get-ComposeConfig {
+    param([switch]$UseLlamaCppProfile)
+
+    if ($UseLlamaCppProfile) {
+        $json = docker compose --profile llamacpp config --format json
+    } else {
+        $json = docker compose config --format json
+    }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker compose config failed."
+    }
+
+    return $json | ConvertFrom-Json
+}
+
+function Test-DigestPinnedImage {
+    param([string]$ImageReference)
+
+    return $ImageReference -match "@sha256:[0-9a-f]{64}$"
+}
+
+function Assert-LocalOnlyCorsOrigins {
+    param([string]$Origins)
+
+    foreach ($origin in ($Origins -split "," | Where-Object { $_.Trim() })) {
+        $uri = $null
+        if (-not [Uri]::TryCreate($origin.Trim(), [UriKind]::Absolute, [ref]$uri)) {
+            throw "CORS origin '$origin' is not a valid absolute URI."
+        }
+
+        if ($uri.Host -notin @("127.0.0.1", "localhost")) {
+            throw "CORS origin '$origin' is not localhost-only."
+        }
+    }
+}
+
+function Assert-ServiceHasHealthcheck {
+    param(
+        [object]$ComposeConfig,
+        [string]$ServiceName
+    )
+
+    $service = Get-NamedValue -Container $ComposeConfig.services -Name $ServiceName -Kind "service"
+    $hasHealthcheck = $service.PSObject.Properties | Where-Object Name -eq "healthcheck" | Select-Object -First 1
+    if (-not $hasHealthcheck) {
+        throw "Service '$ServiceName' is missing a healthcheck."
+    }
+}
+
+function Assert-ServiceSecurityDefaults {
+    param(
+        [object]$ComposeConfig,
+        [string]$ServiceName
+    )
+
+    $service = Get-NamedValue -Container $ComposeConfig.services -Name $ServiceName -Kind "service"
+
+    if (-not $service.read_only) {
+        throw "Service '$ServiceName' must be read-only by default."
+    }
+
+    if ($service.cap_drop -notcontains "ALL") {
+        throw "Service '$ServiceName' must drop all Linux capabilities by default."
+    }
+
+    if ($service.security_opt -notcontains "no-new-privileges:true") {
+        throw "Service '$ServiceName' must enable no-new-privileges."
+    }
+}
+
+function Assert-ComposeHardeningPolicy {
+    param(
+        [object]$BaseComposeConfig,
+        [object]$LlamaComposeConfig,
+        [string]$UiPort,
+        [string]$BackendPort,
+        [string]$SearxngUiPort
+    )
+
+    $coreInternal = Get-NamedValue -Container $BaseComposeConfig.networks -Name "core_internal" -Kind "network"
+    if (-not $coreInternal.internal) {
+        throw "The core_internal network must remain internal."
+    }
+
+    $modelInternal = Get-NamedValue -Container $LlamaComposeConfig.networks -Name "model_internal" -Kind "network"
+    if (-not $modelInternal.internal) {
+        throw "The model_internal network must remain internal."
+    }
+
+    $servicesWithPorts = @(
+        $BaseComposeConfig.services.PSObject.Properties |
+            Where-Object {
+                ($_.Value.PSObject.Properties | Where-Object Name -eq "ports" | Select-Object -First 1) -and $_.Value.ports
+            } |
+            ForEach-Object { $_.Name }
+    )
+    Assert-SetEquality -Label "Services with published ports" -Actual $servicesWithPorts -Expected @("host-gateway")
+
+    $hostGateway = Get-NamedValue -Container $BaseComposeConfig.services -Name "host-gateway" -Kind "service"
+    $expectedPublishedPorts = @{
+        3000 = $UiPort
+        8000 = $BackendPort
+        8085 = $SearxngUiPort
+    }
+
+    if (@($hostGateway.ports).Count -ne $expectedPublishedPorts.Count) {
+        throw "The host-gateway service published an unexpected number of ports."
+    }
+
+    foreach ($targetPort in $expectedPublishedPorts.Keys) {
+        $portBinding = @($hostGateway.ports | Where-Object { $_.target -eq [int]$targetPort }) | Select-Object -First 1
+        if (-not $portBinding) {
+            throw "The host-gateway service is missing the published port for target $targetPort."
+        }
+
+        if ($portBinding.host_ip -ne "127.0.0.1") {
+            throw "Published port $targetPort must bind to 127.0.0.1."
+        }
+
+        if ($portBinding.published -ne [string]$expectedPublishedPorts[$targetPort]) {
+            throw "Published port $targetPort did not match the expected host port $($expectedPublishedPorts[$targetPort])."
+        }
+    }
+
+    $expectedNetworks = @{
+        "host-gateway"   = @("core_internal", "host_access")
+        "ui"             = @("core_internal")
+        "backend"        = @("core_internal", "model_internal")
+        "fetcher"        = @("core_internal", "egress")
+        "search-provider" = @("core_internal", "egress")
+    }
+
+    foreach ($serviceName in $expectedNetworks.Keys) {
+        $service = Get-NamedValue -Container $BaseComposeConfig.services -Name $serviceName -Kind "service"
+        Assert-SetEquality -Label "Service '$serviceName' networks" -Actual (Get-NamedKeys -Container $service.networks) -Expected $expectedNetworks[$serviceName]
+        Assert-ServiceSecurityDefaults -ComposeConfig $BaseComposeConfig -ServiceName $serviceName
+        Assert-ServiceHasHealthcheck -ComposeConfig $BaseComposeConfig -ServiceName $serviceName
+    }
+
+    $modelBackend = Get-NamedValue -Container $LlamaComposeConfig.services -Name "model-backend" -Kind "service"
+    Assert-SetEquality -Label "Service 'model-backend' networks" -Actual (Get-NamedKeys -Container $modelBackend.networks) -Expected @("model_internal")
+    Assert-ServiceSecurityDefaults -ComposeConfig $LlamaComposeConfig -ServiceName "model-backend"
+    Assert-ServiceHasHealthcheck -ComposeConfig $LlamaComposeConfig -ServiceName "model-backend"
+
+    foreach ($serviceName in @("host-gateway", "search-provider")) {
+        $service = Get-NamedValue -Container $BaseComposeConfig.services -Name $serviceName -Kind "service"
+        if (-not (Test-DigestPinnedImage -ImageReference $service.image)) {
+            throw "Service '$serviceName' must use a digest-pinned image reference."
+        }
+    }
+
+    if (-not (Test-DigestPinnedImage -ImageReference $modelBackend.image)) {
+        throw "Service 'model-backend' must use a digest-pinned image reference."
+    }
+
+    $backend = Get-NamedValue -Container $BaseComposeConfig.services -Name "backend" -Kind "service"
+    Assert-LocalOnlyCorsOrigins -Origins $backend.environment.CORS_ALLOWED_ORIGINS
+}
+
 function Get-ServiceContainerId {
     param([string]$ServiceName)
 
@@ -110,12 +310,18 @@ try {
     $searxngUiPort = Get-EnvValue -Key "SEARXNG_UI_PORT" -DefaultValue "8085"
 
     Write-Host "Validating docker compose configuration..."
-    docker compose config | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "docker compose config failed." }
+    $composeConfig = Get-ComposeConfig
 
     Write-Host "Validating llama.cpp profile configuration..."
-    docker compose --profile llamacpp config | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "llama.cpp profile config failed." }
+    $llamaComposeConfig = Get-ComposeConfig -UseLlamaCppProfile
+
+    Write-Host "Checking compose hardening policy..."
+    Assert-ComposeHardeningPolicy `
+        -BaseComposeConfig $composeConfig `
+        -LlamaComposeConfig $llamaComposeConfig `
+        -UiPort $uiPort `
+        -BackendPort $backendPort `
+        -SearxngUiPort $searxngUiPort
 
     Write-Host "Building repo-managed images..."
     docker compose build ui backend fetcher
@@ -128,6 +334,14 @@ try {
     Write-Host "Running fetcher tests..."
     docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"
     if ($LASTEXITCODE -ne 0) { throw "Fetcher tests failed." }
+
+    Write-Host "Running UI server syntax check..."
+    python -m py_compile apps/ui/server.py
+    if ($LASTEXITCODE -ne 0) { throw "UI server syntax validation failed." }
+
+    Write-Host "Running UI client syntax check..."
+    node --check apps/ui/static/app.js
+    if ($LASTEXITCODE -ne 0) { throw "UI client syntax validation failed." }
 
     Write-Host "Running base stack smoke test..."
     docker compose up -d host-gateway ui backend fetcher search-provider
@@ -148,9 +362,9 @@ try {
         throw "UI smoke check failed."
     }
 
-    if (-not (Wait-ForServiceStatus -ServiceName "search-provider" -ExpectedStatus "running")) {
+    if (-not (Wait-ForServiceStatus -ServiceName "search-provider" -ExpectedStatus "healthy")) {
         docker compose logs search-provider
-        throw "Search provider failed to stay running."
+        throw "Search provider health check failed."
     }
 
     if (-not (Wait-ForServiceStatus -ServiceName "host-gateway" -ExpectedStatus "healthy")) {
@@ -158,17 +372,23 @@ try {
         throw "Host gateway health check failed."
     }
 
-    $backendPorts = Get-ServicePortBindings -ServiceName "host-gateway"
-    if ($backendPorts -notmatch '"3000/tcp"' -or $backendPorts -notmatch ('"HostPort":"' + $uiPort + '"')) {
-        throw "UI localhost port binding is missing."
+    $gatewayPorts = Get-ServicePortBindings -ServiceName "host-gateway"
+    foreach ($targetPort in @("3000", "8000", "8085")) {
+        if ($gatewayPorts -notmatch ('"' + $targetPort + '/tcp"')) {
+            throw "The host gateway is missing port binding metadata for $targetPort/tcp."
+        }
     }
 
-    if ($backendPorts -notmatch '"8000/tcp"' -or $backendPorts -notmatch ('"HostPort":"' + $backendPort + '"') -or $backendPorts -notmatch '"HostIp":"127.0.0.1"') {
-        throw "Backend localhost port binding is missing."
+    if ($gatewayPorts -notmatch ('"HostPort":"' + $uiPort + '"') -or $gatewayPorts -notmatch '"HostIp":"127.0.0.1"') {
+        throw "UI localhost port binding is missing or not bound to 127.0.0.1."
     }
 
-    if ($backendPorts -notmatch '"8085/tcp"' -or $backendPorts -notmatch ('"HostPort":"' + $searxngUiPort + '"')) {
-        throw "SearXNG localhost port binding is missing."
+    if ($gatewayPorts -notmatch ('"HostPort":"' + $backendPort + '"') -or $gatewayPorts -notmatch '"HostIp":"127.0.0.1"') {
+        throw "Backend localhost port binding is missing or not bound to 127.0.0.1."
+    }
+
+    if ($gatewayPorts -notmatch ('"HostPort":"' + $searxngUiPort + '"') -or $gatewayPorts -notmatch '"HostIp":"127.0.0.1"') {
+        throw "SearXNG localhost port binding is missing or not bound to 127.0.0.1."
     }
 
     if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$uiPort/")) {

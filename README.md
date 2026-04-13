@@ -24,6 +24,8 @@ This repository is currently focused on turning the secure local stack into a pr
 - a calmer sidebar-and-editorial UI shell with settings and stack details moved into modals instead of the main chat area
 - browser-local direct chat history with per-entry delete and full purge controls
 - explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
+- quieter default logging across the repo-managed UI, backend, fetcher, and localhost gateway services
+- an operations guide plus a lightweight stack health-check script for daily local maintenance
 
 ## Design Goals
 
@@ -99,6 +101,12 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 9. Use the local UI's workspaces to switch between direct chat, grounded answers, and fetch inspection.
    `Direct Chat` is model only. `Grounded Answer` is the mode that uses SearXNG, page fetches, and source-backed synthesis.
    The workbench stores the selected model, saved local instructions, and direct-chat history in browser local storage. Grounded-answer details and fetch results stay transient in the current tab by default.
+
+10. Run the lightweight operator check when the stack is up:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/ops-check.ps1 -RequireModelRuntime
+   ```
 
 ## Provider Switching
 
@@ -180,6 +188,8 @@ For the full local-model path, require the runtime probe:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/validate.ps1 -RequireModelRuntime
 ```
+
+For daily operations, see `docs/OPERATIONS_AND_MAINTENANCE.md`.
 
 ## Repository Layout
 

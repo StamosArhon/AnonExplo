@@ -73,6 +73,7 @@ If a remote is missing or remote operations fail, record that explicitly in the 
 ## Useful Commands
 
 - Bootstrap local files: `powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1`
+- Check the running local stack: `powershell -ExecutionPolicy Bypass -File scripts/ops-check.ps1`
 - Provision the default GGUF locally: `powershell -ExecutionPolicy Bypass -File scripts/provision-default-model.ps1`
 - Validate the branch: `powershell -ExecutionPolicy Bypass -File scripts/validate.ps1`
 - Validate with the full model-runtime probe: `powershell -ExecutionPolicy Bypass -File scripts/validate.ps1 -RequireModelRuntime`

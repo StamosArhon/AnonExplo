@@ -154,7 +154,7 @@ services:
       retries: 3
 
   search-provider:
-    image: ${SEARXNG_IMAGE:-searxng/searxng:latest}
+    image: ${SEARXNG_IMAGE:-searxng/searxng:latest@sha256:00b57726b3d732c11f874af964ce68c9e5c38c02d73040567603c0681f0b6007}
     restart: unless-stopped
     environment:
       SEARXNG_SECRET: ${SEARXNG_SECRET:-replace-with-local-random-secret}
@@ -165,12 +165,24 @@ services:
     networks:
       - core_internal
       - egress
+    read_only: true
     tmpfs:
       - /tmp
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
   model-backend:
     profiles:

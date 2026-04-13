@@ -32,11 +32,13 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
    - move optional instructions and stack diagnostics into dedicated modal surfaces, add browser-local direct chat history controls, and make direct versus grounded behavior explicit in the UI
 7. `ops-hardening`
    - tighten observability, host firewall guidance, backup, update, and maintenance flows
+8. `grounding-quality-tuning`
+   - tune SearXNG defaults, grounded-source selection, and answer-citation behavior for better day-to-day grounded responses
 
 ## Current Phase
 
-- Active phase: `ops-hardening`
-- Goal: tighten host-firewall guidance, validation hardening, service maintenance, and log/privacy discipline on top of the current localhost-only stack
+- Active phase: `grounding-quality-tuning`
+- Goal: improve grounded-answer quality through search tuning, better source selection defaults, and clearer citation-oriented answer behavior
 
 ## Active Branch
 
@@ -76,10 +78,15 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Added browser-local direct chat history with a new-chat action, per-entry delete, and full purge controls.
 - Made the UI mode boundary explicit so Direct Chat is clearly model only while Grounded Answer is the search plus fetch plus model path.
 - Extended grounded-answer requests to accept their own saved browser-local instruction block after the backend assembles grounded source context.
+- Added a stricter Compose-policy validation pass that checks localhost-only publication, expected network membership, digest-pinned third-party images, local-only CORS origins, and default container hardening settings before a branch is declared ready.
+- Added `scripts/ops-check.ps1` as a lightweight day-to-day health check for the running local stack.
+- Added an operations and maintenance guide covering startup, update, recovery, Windows-host firewall guidance, and local backup notes.
+- Suppressed routine access logging in the repo-managed UI, backend, fetcher, and localhost gateway services where practical.
+- Hardened the bundled SearXNG service with a read-only root filesystem and a healthcheck so validation can treat it as a real service dependency rather than a process that merely stays running.
 
 ## In-Progress Work
 
-- None inside the repo contents. The next planned work is still the `ops-hardening` milestone.
+- None inside the repo contents. The next planned work is `grounding-quality-tuning`.
 
 ## Open Questions / Blockers
 
@@ -87,11 +94,11 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Existing local `.env` files created before this branch may need a manual refresh of the model-runtime keys if they still contain placeholder values.
 - The current SearXNG configuration is intentionally conservative and still needs deeper engine and limiter tuning in a later hardening pass.
 - The standalone SearXNG browser route is intentionally specific to the bundled repo-managed `search-provider` service. If the backend is pointed at YaCy or another search provider, that does not automatically change the standalone browser endpoint.
-- Host firewall guidance has been documented conceptually, but not automated.
+- Windows-host firewall guidance is now documented, but not automated or enforced outside the existing Docker network and localhost-binding model.
 - Direct chat history now lives in browser local storage by design; future work should decide whether that history needs an opt-out or export path without weakening the current privacy defaults.
 - The refreshed UI shell has been validated through the repo build and smoke path, but it still does not have browser-automation coverage for interaction regressions.
 - The repo now supports YaCy and native Ollama at the backend boundary, but the default validated Docker path is still the existing `llama.cpp` plus SearXNG stack rather than a fully validated alternate-provider Compose profile.
-- The localhost gateway solves the current Docker Desktop host-access bug, but host-firewall and non-egress enforcement for host-facing support services still belong in the next hardening milestone.
+- The next quality milestone still needs to tune SearXNG defaults, grounded source selection, and citation behavior against real queries rather than only the current architectural baseline.
 
 ## Decisions Made And Why
 
@@ -113,6 +120,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The UI can adopt a conversation-style shell as long as that presentation does not imply or introduce persistent local chat history without a deliberate privacy review.
 - Browser-local persistence is acceptable only for the selected model id, saved instruction text, and direct chat history on the same workstation; grounded source bundles and fetch output remain transient by default.
 - The UI must keep Direct Chat and Grounded Answer explicit because only Grounded Answer uses SearXNG plus fetched source text.
+- The repo's Compose security model is now treated as enforceable policy in validation, not just as a documentation recommendation.
+- Quiet operational logging is preferred by default, so repo-managed services now suppress routine access logs where practical and surface only startup or error information unless an operator opts into deeper inspection.
 
 ## Security / Privacy Assumptions
 
@@ -123,14 +132,17 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Secrets stay in untracked local files or in the operator environment, never in Git.
 - Logs should remain minimal and must not become a quiet store of prompts or fetched content.
 - Browser-local direct chat history is an intentional workstation-local privacy tradeoff and must stay purgeable from the UI.
+- The host's primary exposure control is still localhost-only port binding plus Docker network separation; Windows Firewall is a supporting control rather than a replacement for that model.
 
 ## Validation Status
 
-- `scripts/validate.ps1`: passed on 2026-04-13 after the UI declutter/history changes
-- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13 after the UI declutter/history changes
+- `scripts/validate.ps1`: passed on 2026-04-13 after the ops-hardening changes
+- `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-13 after the ops-hardening changes
+- `scripts/ops-check.ps1`: passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
+  - Compose-policy checks for localhost-only publication, expected network membership, healthchecks, read-only root filesystems, dropped capabilities, no-new-privileges, digest-pinned third-party images, and local-only CORS origins
   - Docker builds for `ui`, `backend`, and `fetcher`
   - backend unit tests in the backend container
   - fetcher unit tests in the fetcher container
@@ -151,10 +163,10 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Exact Next Steps
 
-1. Start `stamos/ops-hardening` from a clean `main`.
-2. Add stronger maintenance and recovery guidance, including host-firewall recommendations and service-update notes.
-3. Tighten validation and smoke coverage around host access, log discipline, and service health expectations.
-4. Review whether the bundled SearXNG settings need a first hardening pass without weakening the default privacy posture.
+1. Start `stamos/grounding-quality-tuning` from a clean `main`.
+2. Tune the bundled SearXNG defaults and source-selection heuristics against real grounded-answer queries.
+3. Improve answer-citation behavior so grounded answers are more consistently source-forward and less likely to drift into generic model phrasing.
+4. Decide whether the current browser-local direct chat history model needs an opt-out, export path, or stronger session labeling.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -167,6 +179,9 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The UI shell now uses workspace navigation plus in-tab conversation-style rendering for direct chat and grounded answers.
 - Direct chat history, the selected model id, and saved direct-chat or grounded-answer instructions are now stored in browser local storage; grounded details and fetch results remain transient.
 - Direct Chat does not call SearXNG or the fetcher. Grounded Answer is the explicit search plus fetch plus model workflow and should stay clearly documented in future branches.
+- The repo now includes `docs/OPERATIONS_AND_MAINTENANCE.md` plus `scripts/ops-check.ps1` for local maintenance and recovery work.
+- `scripts/validate.ps1` now enforces the intended Compose security model instead of treating it as documentation only.
+- Repo-managed services keep routine access logging quiet by default, so operators should use targeted `docker compose logs --tail=...` calls when they need deeper inspection.
 - The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
 - The repo now supports two localhost-only browser modes at once: the main AnonExplo UI on port `3000` and the bundled standalone SearXNG UI on port `8085`, both through the same low-privilege host gateway.
-- The next implementation thread should resume `stamos/ops-hardening` from a clean `main`.
+- The next implementation thread should resume `stamos/grounding-quality-tuning` from a clean `main`.
