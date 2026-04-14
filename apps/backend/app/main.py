@@ -169,6 +169,8 @@ def create_app() -> FastAPI:
                 "language": current_settings.search_language or "instance-default",
                 "time_range": current_settings.search_time_range or "none",
                 "engines": current_settings.search_engines or "instance-default",
+                "preferred_domains": current_settings.search_preferred_domains or "none",
+                "preferred_domain_boost": current_settings.search_preferred_domain_boost,
             },
             "fetch": {
                 "base_url": current_settings.fetch_base_url,
@@ -274,6 +276,8 @@ def create_app() -> FastAPI:
                 source_char_limit=current_settings.grounding_source_char_limit,
                 total_context_chars=current_settings.grounding_total_context_chars,
                 preview_chars=current_settings.grounding_preview_chars,
+                preferred_domains=current_settings.search_preferred_domains,
+                preferred_domain_boost=current_settings.search_preferred_domain_boost,
             )
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "grounding"}) from exc
@@ -312,6 +316,8 @@ def create_app() -> FastAPI:
                 source_char_limit=current_settings.grounding_source_char_limit,
                 total_context_chars=current_settings.grounding_total_context_chars,
                 preview_chars=current_settings.grounding_preview_chars,
+                preferred_domains=current_settings.search_preferred_domains,
+                preferred_domain_boost=current_settings.search_preferred_domain_boost,
             )
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "grounding"}) from exc

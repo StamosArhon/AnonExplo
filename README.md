@@ -28,6 +28,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
 - superscript-style grounded source references with hover tooltips plus a retractable source drawer so provenance stays available without overwhelming the main answer surface
 - config-driven SearXNG tuning defaults for broader current-events coverage, including categories, language, and optional engine or time-range controls
+- config-driven preferred-domain ranking bias for grounded search, with Wikipedia and Wikimedia as the default example so encyclopedic sources surface more reliably when relevant
 - ranked grounded-source selection with retry behavior so later sources can still be fetched when early candidates fail
 - structured fetcher failure codes, thin-content detection, and domain-aware retry behavior so blocked publishers are easier to understand without silently degrading into generic errors
 - an explicit snippet-fallback grounding mode for cases where search works but article fetches are blocked, with the UI showing whether an answer came from fetched text or search snippets
@@ -131,6 +132,8 @@ The repo treats provider choice as configuration:
   - `SEARCH_LANGUAGE`
   - `SEARCH_TIME_RANGE`
   - `SEARCH_ENGINES`
+  - `SEARCH_PREFERRED_DOMAINS`
+  - `SEARCH_PREFERRED_DOMAIN_BOOST`
 - fetch service:
   - `FETCH_BASE_URL`
   - `FETCH_MIN_CONTENT_CHARS`
@@ -162,7 +165,7 @@ For privacy-first deployments, keep Ollama pointed at a local or otherwise trust
 The repo now supports a practical grounded-answer path:
 
 1. search through the configured search provider
-2. rank and dedupe candidate sources with domain diversity and query-relevance heuristics
+2. rank and dedupe candidate sources with domain diversity, query-relevance heuristics, and an optional preferred-domain bias for trusted encyclopedic domains such as Wikipedia or Wikimedia
 3. fetch and parse readable page text through the fetcher, classifying blocked or thin pages and retrying later candidates when earlier fetches fail
 4. construct a bounded grounding context from fetched sources, or fall back to bounded search snippets when article fetches are unavailable
 5. pass that context into the configured model runtime with explicit citation-only instructions
@@ -170,6 +173,7 @@ The repo now supports a practical grounded-answer path:
 The UI now surfaces grounded provenance through superscript-style source references, hover tooltips, and an on-demand source drawer rather than a permanently expanded diagnostics block. It still keeps the current grounding mode (`fetched_text` or `search_snippets`) explicit. The current baseline deliberately uses direct HTML fetches plus explicit snippet fallback; it does not bundle a secondary reader proxy or hidden publisher-specific bypass. If you want the model to answer from current sourced material rather than its own prior knowledge, use `Grounded Answer`, not `Direct Chat`.
 
 If you want supported Wikimedia article URLs to use an official Wikimedia interface instead of the default direct HTML path, enable `FETCH_WIKIMEDIA_API_ENABLED=true` and set a descriptive, contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env`. When enabled, supported Wikimedia article pages are fetched through the official Parse API and still flow through the same bounded extraction pipeline.
+The preferred-domain ranking bias does not force every query into Wikipedia or run a second hidden provider. It simply gives configured domains a modest lift when they already appear in the search results and still look relevant to the query.
 
 ## UI Workbench
 

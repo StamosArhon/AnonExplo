@@ -110,6 +110,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Refined the grounded citation treatment into discreet superscript-style source references and restyled the active history card so the sidebar no longer uses an ambiguous bright highlight block.
 - Added an explicit opt-in Wikimedia fetch path that uses the official MediaWiki Parse API for supported Wikimedia article URLs instead of a hidden scraping workaround.
 - Added fetcher config scaffolding for `FETCH_WIKIMEDIA_API_ENABLED` and `FETCH_WIKIMEDIA_API_USER_AGENT` so Wikimedia support remains operator-controlled and reproducible across machines.
+- Added config-driven preferred-domain search ranking so grounded answers can modestly favor already-returned Wikipedia or Wikimedia results when they are relevant, without forcing a Wikipedia-only search mode.
 
 ## In-Progress Work
 
@@ -163,6 +164,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Those inline citations should stay discreet and superscript-like rather than appearing as large in-line buttons that interrupt reading flow.
 - Wikimedia support should use the official Parse API for supported Wikimedia article URLs and must require an operator-supplied descriptive user-agent before the opt-in path is enabled.
 - Any future changes to the Wikimedia-specific path should keep it explicit, opt-in, and based on an official Wikimedia interface rather than a robot-policy bypass.
+- Preferred-domain search tuning should live in the backend's source-ranking stage and stay modest, config-driven, and optional rather than becoming a hidden second search path or a hard-coded encyclopedia mode.
 
 ## Security / Privacy Assumptions
 
@@ -184,6 +186,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the `roadmap-closeout` branch
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `answer-surface-refresh` branch
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `wikimedia-official-api-path` branch
+- `scripts/validate.ps1`: passed on 2026-04-14 during the `wikipedia-search-tuning` branch
 - `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`
@@ -209,13 +212,15 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 with coverage for extraction quality classification, structured blocked-policy errors, and typed fetch response fields
 - `docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-14 after the Wikimedia branch build with added coverage for Wikimedia title extraction, opt-in route selection, Parse API content parsing, and required user-agent enforcement
 - `docker compose up -d --build host-gateway ui backend fetcher search-provider`: reached the UI on `http://127.0.0.1:3000`, the backend health endpoint on `http://127.0.0.1:8000/api/v1/health`, and the standalone SearXNG UI on `http://127.0.0.1:8085` from the Windows host on 2026-04-14 before the validation script's cleanup step
+- Manual live grounded-search check on 2026-04-14 for `What is the Twelve-Day War?`: selected `en.wikipedia.org` as `S1`, fetched it via `wikimedia_parse_api`, and returned `fetched_text` grounding context alongside other fetched sources
 
 ## Exact Next Steps
 
 1. Keep validating the current baseline against real queries and regressions on the target hardware.
 2. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
-3. Treat any future secondary reader, export, automation, or benchmark work as a new post-roadmap enhancement with its own scoped branch.
-4. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
+3. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
+4. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
+5. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -223,6 +228,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Then read this roadmap and `docs/INSTRUCTIONS_AND_NOTES.md`.
 - The repo now includes a real grounded-answer vertical slice plus a validated `llama.cpp` runtime path with a tracked default GGUF source and checksum.
 - The grounding flow is intentionally bounded and transparent: search, source selection, fetch, source packaging, and model synthesis are all visible in the UI and backend responses.
+- Grounded-source selection can now apply a modest preferred-domain bias from config, with Wikipedia and Wikimedia as the default example in `.env.example`.
 - Grounding summaries now expose `context_mode`, and the UI uses it to distinguish fetched article text from explicit snippet-fallback grounding.
 - The backend and UI now expose model-runtime readiness separately from general backend health, which future branches should preserve.
 - The static UI now uses backend-provided runtime and model-catalog state to drive a browser-local model selector for chat and grounded-answer requests.

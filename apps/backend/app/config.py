@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     search_language: str = Field(default="all", validation_alias="SEARCH_LANGUAGE")
     search_time_range: str = Field(default="", validation_alias="SEARCH_TIME_RANGE")
     search_engines: str = Field(default="", validation_alias="SEARCH_ENGINES")
+    search_preferred_domains: str = Field(
+        default="wikipedia.org,wikimedia.org",
+        validation_alias="SEARCH_PREFERRED_DOMAINS",
+    )
+    search_preferred_domain_boost: float = Field(
+        default=14.0,
+        validation_alias="SEARCH_PREFERRED_DOMAIN_BOOST",
+    )
     search_request_timeout_seconds: float = Field(
         default=20.0,
         validation_alias="SEARCH_REQUEST_TIMEOUT_SECONDS",

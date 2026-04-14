@@ -124,6 +124,8 @@ class BackendApiTests(unittest.TestCase):
         self.assertEqual(payload["search"]["categories"], "general,news")
         self.assertEqual(payload["search"]["language"], "all")
         self.assertEqual(payload["search"]["time_range"], "none")
+        self.assertEqual(payload["search"]["preferred_domains"], "wikipedia.org,wikimedia.org")
+        self.assertEqual(payload["search"]["preferred_domain_boost"], 14.0)
 
     @patch("app.main.build_model_provider")
     def test_model_runtime_endpoint_returns_probe_state(self, build_model_provider: AsyncMock) -> None:
@@ -839,6 +841,59 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bundle.search_results[1].status, "selected")
         self.assertIn("[S3]", context)
         self.assertIn("[S4]", context)
+
+    async def test_grounding_bundle_prefers_configured_domains_when_relevant(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Explainer",
+                url="https://alpha.example/explainer",
+                snippet="Overview of a twelve day conflict and regional reaction.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Twelve-Day War - Wikipedia",
+                url="https://en.wikipedia.org/wiki/Twelve-Day_War",
+                snippet="The Twelve-Day War was an armed conflict involving Israel, Iran, and the United States.",
+                engine="wikipedia",
+            ),
+            SearchHit(
+                title="Liveblog",
+                url="https://bravo.example/liveblog",
+                snippet="Rolling updates on the same conflict.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+        fetcher.fetch.return_value = FetchDocument(
+            requested_url="https://en.wikipedia.org/wiki/Twelve-Day_War",
+            final_url="https://en.wikipedia.org/wiki/Twelve-Day_War",
+            title="Twelve-Day War",
+            excerpt="Wikipedia summary",
+            content_text="Wikipedia-backed article text.",
+            content_char_count=30,
+            word_count=4,
+            content_type="text/html",
+            retrieval_method="wikimedia_parse_api",
+        )
+
+        bundle, context = await build_grounding_bundle(
+            query="What is the Twelve-Day War?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=3,
+            fetch_limit=1,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+            preferred_domains="wikipedia.org,wikimedia.org",
+            preferred_domain_boost=14.0,
+        )
+
+        self.assertEqual(bundle.selected_sources[0].domain, "en.wikipedia.org")
+        self.assertEqual(bundle.fetched_sources[0].retrieval_method, "wikimedia_parse_api")
+        self.assertIn("[S2]", context)
 
     async def test_grounding_bundle_falls_back_to_search_snippets(self) -> None:
         search_provider = AsyncMock()

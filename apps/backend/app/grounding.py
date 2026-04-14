@@ -152,6 +152,28 @@ def _extract_query_terms(query: str) -> list[str]:
     return query_terms
 
 
+def _parse_preferred_domains(preferred_domains: str) -> list[str]:
+    domains: list[str] = []
+    seen_domains: set[str] = set()
+    for item in preferred_domains.split(","):
+        normalized = item.strip().lower()
+        if not normalized or normalized in seen_domains:
+            continue
+        domains.append(normalized)
+        seen_domains.add(normalized)
+    return domains
+
+
+def _domain_matches_preference(domain: str, preferred_domains: list[str]) -> bool:
+    normalized_domain = domain.strip().lower()
+    if not normalized_domain:
+        return False
+    return any(
+        normalized_domain == preferred_domain or normalized_domain.endswith(f".{preferred_domain}")
+        for preferred_domain in preferred_domains
+    )
+
+
 def _build_search_results(query_hits: list[SearchHit]) -> tuple[list[GroundingSearchResult], list[GroundingSelectedSource]]:
     search_results: list[GroundingSearchResult] = []
     source_candidates: list[GroundingSelectedSource] = []
@@ -208,7 +230,13 @@ def _build_search_results(query_hits: list[SearchHit]) -> tuple[list[GroundingSe
     return search_results, source_candidates
 
 
-def _score_source(query: str, query_terms: list[str], candidate: GroundingSelectedSource) -> float:
+def _score_source(
+    query: str,
+    query_terms: list[str],
+    candidate: GroundingSelectedSource,
+    preferred_domains: list[str],
+    preferred_domain_boost: float,
+) -> float:
     title_match_text = _normalize_text_for_match(candidate.title)
     snippet_match_text = _normalize_text_for_match(candidate.snippet)
     combined_match_text = " ".join(
@@ -248,13 +276,36 @@ def _score_source(query: str, query_terms: list[str], candidate: GroundingSelect
     if candidate.snippet.strip():
         score += 2.0
 
+    if (
+        preferred_domain_boost > 0
+        and preferred_domains
+        and _domain_matches_preference(candidate.domain, preferred_domains)
+        and (combined_matches or (normalized_query and normalized_query in combined_match_text))
+    ):
+        score += preferred_domain_boost
+
     return score
 
 
-def _rank_sources(query: str, source_candidates: list[GroundingSelectedSource]) -> list[GroundingSelectedSource]:
+def _rank_sources(
+    query: str,
+    source_candidates: list[GroundingSelectedSource],
+    preferred_domains: list[str],
+    preferred_domain_boost: float,
+) -> list[GroundingSelectedSource]:
     query_terms = _extract_query_terms(query)
     scored_candidates = [
-        (candidate, _score_source(query, query_terms, candidate)) for candidate in source_candidates
+        (
+            candidate,
+            _score_source(
+                query,
+                query_terms,
+                candidate,
+                preferred_domains,
+                preferred_domain_boost,
+            ),
+        )
+        for candidate in source_candidates
     ]
     scored_candidates.sort(key=lambda item: (-item[1], item[0].search_rank, item[0].domain, item[0].normalized_url))
 
@@ -459,10 +510,17 @@ async def build_grounding_bundle(
     source_char_limit: int,
     total_context_chars: int,
     preview_chars: int,
+    preferred_domains: str = "",
+    preferred_domain_boost: float = 0.0,
 ) -> tuple[GroundingBundle, str]:
     query_hits = await search_provider.search(query, search_limit)
     search_results, source_candidates = _build_search_results(query_hits)
-    ranked_candidates = _rank_sources(query, source_candidates)
+    ranked_candidates = _rank_sources(
+        query,
+        source_candidates,
+        _parse_preferred_domains(preferred_domains),
+        preferred_domain_boost,
+    )
     selected_sources, fetch_results = await _fetch_selected_sources(
         ranked_candidates=ranked_candidates,
         fetch_limit=fetch_limit,
