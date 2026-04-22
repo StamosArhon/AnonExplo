@@ -62,6 +62,8 @@
 - Avoid duplicating grounded-answer source controls across multiple surfaces. One quiet per-answer source action plus the source drawer is preferred over repeating large source buttons in both the thread and the workspace header.
 - Grounded Answer now prefers fetched article text but may fall back to bounded search snippets when fetches fail. Treat `grounding.summary.context_mode` as the source of truth for which path was used.
 - Mixed grounding is now valid too: `fetched_plus_snippets` means fetched article text was available for part of the source set and bounded snippet fallback was appended for selected sources whose fetches failed. Keep fetched text preferred in prompts, copy, and future logic.
+- Keep query-term normalization symmetric between the query and the source text. If you tune grounded ranking or excerpt selection later, do not regress back to matching canonical variants on only one side.
+- Do not let single-passage excerpt shortcuts fire for clearly multi-part grounded questions. Smaller local models answer better when each major clause of the question is represented in the supplied evidence.
 - Keep grounded-answer citation syntax canonical as consecutive source IDs like `[S1][S2]`. Normalize that shape in the backend, and keep the UI tolerant of grouped or repeated citation formats as a rendering fallback rather than trusting raw model output.
 - Do not go back to naive head-only article truncation for grounded answers. Query-relevant excerpt selection from fetched pages is now part of answer quality, especially for smaller local models.
 - The grounding summary's `selected_sources` count is now effectively "selected or attempted" because the backend can try later ranked sources after early fetch failures.

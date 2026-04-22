@@ -121,6 +121,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Updated the UI context labels and source-drawer copy so grounded answers can explicitly show `fetched_plus_snippets` instead of pretending every mixed-evidence answer is purely fetched or purely snippet-backed.
 - Kept grounded-answer citation pills visually inline by removing whitespace-driven layout drift from the rich-answer renderer.
 - Moved source-preview hover cards into a shared floating overlay outside the clipped scroll shell so previews stay readable near viewport edges instead of being cut off by container overflow.
+- Tightened grounded-answer quality for current-events prompts by normalizing query and source term variants symmetrically, reducing over-aggressive live-page head bias, and filtering failed-source snippet fallback down to strongly query-matched snippets only.
+- Updated excerpt assembly so clearly multi-part questions do not short-circuit to one high-scoring paragraph when separate passages are needed to answer both parts of the query.
 
 ## In-Progress Work
 
@@ -144,6 +146,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The citation and tooltip refinements now reduce formatting drift, but the repo still does not have browser-automation coverage for grounded-answer rendering regressions.
 - Ambiguous recency wording such as `latest phase` can still pull a mix of current-coverage and historical-timeline sources; future tuning may need stronger recency or event-disambiguation heuristics in the ranking layer.
 - Mixed fetched-plus-snippet context improves partial-evidence coverage, but live-news ranking can still surface contradictory or noisy sources, especially on evolving geopolitical topics.
+- The grounded search and grounded answer endpoints still use env-backed context limits rather than per-request overrides, so live tuning remains an operator configuration task instead of a request-level control.
 
 ## Decisions Made And Why
 
@@ -182,6 +185,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Grounded context selection should prefer query-relevant excerpts from fetched documents rather than blindly truncating from the top of each article, because small local models answer more directly when the supplied evidence is tighter.
 - Citation normalization belongs in the backend first, with a matching UI fallback, so every client benefits from consistent `[S1][S2]` rendering and the UI does not depend on one model's exact citation habits.
 - When some selected sources fetch cleanly and others fail, the backend should preserve the successful fetched text and append bounded snippet fallback from the failed sources instead of forcing an all-or-nothing choice between fetched-only and snippet-only grounding.
+- Query-term normalization should be symmetric between the user query and source text. Canonicalizing only one side led to weaker matching for variants such as `USA` versus `U.S.` or `Iranian-American` versus `Iran` and `United States`.
+- Multi-part grounded questions should prefer bounded multi-passage excerpts over a single-passage shortcut when one paragraph does not cover the full question.
 
 ## Security / Privacy Assumptions
 
@@ -215,7 +220,10 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/hybrid-grounding-context`
 - `node --check apps/ui/static/app.js`: passed on 2026-04-22 during `stamos/citation-inline-layout-fix`
 - `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/citation-inline-layout-fix`
-- `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
+- `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/grounded-answer-quality-pass`
+- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-22 during `stamos/grounded-answer-quality-pass`
+- `python -m py_compile apps/backend/app/grounding.py`: passed on 2026-04-22 during `stamos/grounded-answer-quality-pass`
+- `scripts/ops-check.ps1`: passed on 2026-04-22 against the running local stack during `stamos/grounded-answer-quality-pass`
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
@@ -243,6 +251,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Manual live grounded-search check on 2026-04-14 for `What is the Twelve-Day War?`: selected `en.wikipedia.org` as `S1`, fetched it via `wikimedia_parse_api`, and returned `fetched_text` grounding context alongside other fetched sources
 - Manual live grounded-answer check on 2026-04-22 for `When did the latest phase of the Israel-Iran war begin?`: returned a direct first-sentence answer with canonicalized citations such as `[S4][S1][S2][S3]` and used query-relevant fetched excerpts from BBC, Wikimedia, and Britannica sources
 - Manual live grounded-answer check on 2026-04-22 for `Are the straits of hormuz open and what is happening with Iran-US negotiations for an ending to the war?`: reproduced the partial-fetch scenario, returned `fetched_plus_snippets`, and no longer fell back to the generic `insufficient_sources` path
+- Manual live grounded-search check on 2026-04-22 for `Are the Straits of Hormuz open? And what is the current state of the Iranian-American peace talks?`: after the quality pass, selected query-relevant NBC, CBS, and Democracy Now excerpts, kept total grounding context near 2k chars, and filtered failed-source snippet fallback to the stronger remaining evidence
+- Manual live grounded-answer check on 2026-04-22 for `Are the Straits of Hormuz open? And what is the current state of the Iranian-American peace talks?`: returned a direct sourced answer instead of the earlier vague fallback behavior, with runtime ready and `fetched_plus_snippets` grounding
 
 ## Exact Next Steps
 
@@ -252,6 +262,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 4. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
 5. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
 6. Choose the next post-roadmap branch based on whether the priority is answer-quality disambiguation, browser-automation coverage for the UI, or the next provider-expansion milestone.
+7. If answer quality still needs more improvement after this pass, prioritize source-ranking disambiguation and fetch-path tuning before widening the prompt surface again.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -273,6 +284,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The most recently merged enhancement also keeps mixed evidence explicit by appending failed-source snippet fallback to fetched grounding context instead of discarding that snippet evidence when only part of the selected source set is fetchable.
 - The fetcher, backend, and UI now share structured fetch provenance such as `blocked_by_remote_policy`, `content_too_thin`, `upstream_status`, and retryability hints.
 - The most recently merged enhancement adds query-aware excerpt selection from fetched documents, direct-answer-first grounded prompting, and backend citation normalization with a matching UI fallback for grouped citations.
+- The current working quality pass extends that answer-quality layer with symmetric query/source canonicalization, multi-part query handling in excerpt selection, and stricter failed-snippet filtering for noisy live-news result sets.
 - The repo now includes `docs/OPERATIONS_AND_MAINTENANCE.md` plus `scripts/ops-check.ps1` for local maintenance and recovery work.
 - `scripts/validate.ps1` now enforces the intended Compose security model instead of treating it as documentation only.
 - Repo-managed services keep routine access logging quiet by default, so operators should use targeted `docker compose logs --tail=...` calls when they need deeper inspection.

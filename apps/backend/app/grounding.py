@@ -104,9 +104,50 @@ DATEISH_PATTERN = re.compile(
     r"\b(?:\d{4}|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b",
     re.IGNORECASE,
 )
+NUMBERISH_PATTERN = re.compile(r"\b\d[\d,./:-]*\b")
 DIRECT_DATE_QUERY_PATTERN = re.compile(
     r"\b(?:when|date|year|month|day|time|started|start|began|begin|happened|occurred|took place|first|latest|last)\b",
     re.IGNORECASE,
+)
+DEFINITIONAL_QUERY_PATTERN = re.compile(
+    r"^\s*(?:what|who|where)\s+(?:is|are|was|were)\b|^\s*(?:define|explain|overview|summary)\b",
+    re.IGNORECASE,
+)
+YES_NO_QUERY_PATTERN = re.compile(
+    r"^\s*(?:is|are|was|were|do|does|did|has|have|had|can|could|will|would|should)\b",
+    re.IGNORECASE,
+)
+STATUS_QUERY_PATTERN = re.compile(
+    r"\b(?:status|state|open|closed|reopen|reopened|blockade|ceasefire|resume|resumed|resuming|ongoing|current)\b",
+    re.IGNORECASE,
+)
+LIVE_COVERAGE_HINT_PATTERN = re.compile(
+    r"\b(?:live|liveblog|updates?|rolling|as it happened)\b",
+    re.IGNORECASE,
+)
+DIRECT_ANSWER_HINT_PATTERN = re.compile(
+    r"\b(?:timeline|date|dated|first reported|first strike|began|started|happened|occurred|phase|ceasefire|blockade|negotiations?|talks?|open|closed|resume|resumed|resuming|confirmed|denied)\b",
+    re.IGNORECASE,
+)
+SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+(?=(?:[\"'(\[]*[A-Z0-9]))")
+MULTI_PART_QUERY_PATTERN = re.compile(
+    r"\band\s+(?:what|who|where|when|why|how|is|are|was|were|do|does|did|has|have|had|can|could|will|would|should)\b",
+    re.IGNORECASE,
+)
+TEXT_MATCH_CANONICALIZATION_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\bUnited States(?: of America)?\b", re.IGNORECASE), " unitedstates "),
+    (re.compile(r"\bAmerican(?:s)?\b", re.IGNORECASE), " unitedstates "),
+    (re.compile(r"\bUS\b"), " unitedstates "),
+    (re.compile(r"\bU\.S\.A?\.?\b"), " unitedstates "),
+    (re.compile(r"\bUSA\b"), " unitedstates "),
+    (re.compile(r"\bIranian(?:s)?\b", re.IGNORECASE), " iran "),
+    (re.compile(r"\bTehran\b", re.IGNORECASE), " iran "),
+    (re.compile(r"\bIsraeli(?:s)?\b", re.IGNORECASE), " israel "),
+    (re.compile(r"\bStrik(?:e|es|ing|ed)\b", re.IGNORECASE), " attack "),
+    (re.compile(r"\bAttack(?:s|ed|ing)?\b", re.IGNORECASE), " attack "),
+    (re.compile(r"\bNegotiat(?:e|es|ed|ing|ion|ions)\b", re.IGNORECASE), " talks "),
+    (re.compile(r"\bStraits\b", re.IGNORECASE), " strait "),
+    (re.compile(r"\bReopen(?:ed|ing)?\b", re.IGNORECASE), " open "),
 )
 COMMON_QUERY_STOPWORDS = {
     "a",
@@ -116,6 +157,7 @@ COMMON_QUERY_STOPWORDS = {
     "as",
     "at",
     "be",
+    "current",
     "did",
     "do",
     "does",
@@ -128,6 +170,10 @@ COMMON_QUERY_STOPWORDS = {
     "of",
     "on",
     "or",
+    "place",
+    "state",
+    "status",
+    "take",
     "the",
     "to",
     "took",
@@ -154,14 +200,22 @@ def _extract_domain(url: str) -> str:
     return urlsplit(url).hostname or "unknown"
 
 
+def _canonicalize_text_for_match(text: str) -> str:
+    normalized = text or ""
+    for pattern, replacement in TEXT_MATCH_CANONICALIZATION_RULES:
+        normalized = pattern.sub(replacement, normalized)
+    return normalized
+
+
 def _normalize_text_for_match(text: str) -> str:
-    return " ".join(QUERY_TOKEN_PATTERN.findall(text.lower()))
+    canonicalized = _canonicalize_text_for_match(text)
+    return " ".join(QUERY_TOKEN_PATTERN.findall(canonicalized.lower()))
 
 
 def _extract_query_terms(query: str) -> list[str]:
     seen_terms: set[str] = set()
     query_terms: list[str] = []
-    for token in QUERY_TOKEN_PATTERN.findall(query.lower()):
+    for token in _normalize_text_for_match(query).split():
         if token in COMMON_QUERY_STOPWORDS:
             continue
         if token not in seen_terms:
@@ -190,6 +244,27 @@ def _domain_matches_preference(domain: str, preferred_domains: list[str]) -> boo
         normalized_domain == preferred_domain or normalized_domain.endswith(f".{preferred_domain}")
         for preferred_domain in preferred_domains
     )
+
+
+def _is_definitional_query(query: str) -> bool:
+    return bool(DEFINITIONAL_QUERY_PATTERN.search(query or ""))
+
+
+def _is_status_query(query: str) -> bool:
+    normalized_query = query or ""
+    return bool(YES_NO_QUERY_PATTERN.search(normalized_query) or STATUS_QUERY_PATTERN.search(normalized_query))
+
+
+def _is_multi_part_query(query: str) -> bool:
+    return bool(MULTI_PART_QUERY_PATTERN.search(query or ""))
+
+
+def _has_strong_query_coverage(query_terms: list[str], matched_terms: set[str]) -> bool:
+    if not query_terms:
+        return True
+
+    required_terms = max(2, min(4, (len(query_terms) + 1) // 2))
+    return len(matched_terms) >= required_terms
 
 
 def _build_search_results(query_hits: list[SearchHit]) -> tuple[list[GroundingSearchResult], list[GroundingSelectedSource]]:
@@ -260,7 +335,11 @@ def _score_source(
     combined_match_text = " ".join(
         part for part in [title_match_text, snippet_match_text, _normalize_text_for_match(candidate.url)] if part
     )
+    raw_candidate_text = " ".join(part for part in [candidate.title, candidate.snippet] if part).strip()
     normalized_query = _normalize_text_for_match(query)
+    definitional_query = _is_definitional_query(query)
+    status_query = _is_status_query(query)
+    direct_date_query = bool(DIRECT_DATE_QUERY_PATTERN.search(query))
 
     title_terms = set(title_match_text.split())
     snippet_terms = set(snippet_match_text.split())
@@ -289,6 +368,23 @@ def _score_source(
         elif title_matches >= max(2, len(query_terms) // 2):
             score += 6.0
 
+    if direct_date_query:
+        if DATEISH_PATTERN.search(raw_candidate_text):
+            score += 16.0
+        if NUMBERISH_PATTERN.search(raw_candidate_text):
+            score += 6.0
+        if DIRECT_ANSWER_HINT_PATTERN.search(raw_candidate_text):
+            score += 8.0
+        if LIVE_COVERAGE_HINT_PATTERN.search(candidate.title) and not DATEISH_PATTERN.search(raw_candidate_text):
+            score -= 10.0
+    elif status_query:
+        if DIRECT_ANSWER_HINT_PATTERN.search(raw_candidate_text):
+            score += 8.0
+        if LIVE_COVERAGE_HINT_PATTERN.search(candidate.title):
+            score -= 4.0
+    elif definitional_query and DIRECT_ANSWER_HINT_PATTERN.search(raw_candidate_text):
+        score += 6.0
+
     if candidate.title.strip():
         score += 2.0
     if candidate.snippet.strip():
@@ -300,7 +396,10 @@ def _score_source(
         and _domain_matches_preference(candidate.domain, preferred_domains)
         and (combined_matches or (normalized_query and normalized_query in combined_match_text))
     ):
-        score += preferred_domain_boost
+        if definitional_query:
+            score += preferred_domain_boost
+        else:
+            score += min(preferred_domain_boost, 4.0)
 
     return score
 
@@ -381,6 +480,15 @@ def _chunk_context_passage(text: str, char_limit: int, overlap_chars: int) -> li
     return chunks
 
 
+def _split_context_sentences(text: str) -> list[str]:
+    normalized = " ".join(text.split()).strip()
+    if not normalized:
+        return []
+
+    sentences = [part.strip() for part in SENTENCE_SPLIT_PATTERN.split(normalized) if part.strip()]
+    return sentences or [normalized]
+
+
 def _build_context_candidates(text: str, candidate_chars: int) -> list[tuple[int, str]]:
     normalized = text.replace("\r\n", "\n").strip()
     if not normalized:
@@ -394,9 +502,26 @@ def _build_context_candidates(text: str, candidate_chars: int) -> list[tuple[int
     candidates: list[tuple[int, str]] = []
     position = 0
     for paragraph in paragraphs:
-        for chunk in _chunk_context_passage(paragraph, candidate_chars, overlap_chars):
-            candidates.append((position, chunk))
-            position += 1
+        sentences = _split_context_sentences(paragraph)
+        if len(sentences) <= 1:
+            for chunk in _chunk_context_passage(paragraph, candidate_chars, overlap_chars):
+                candidates.append((position, chunk))
+                position += 1
+            continue
+
+        for start_index in range(len(sentences)):
+            single_sentence = _trim_context_chunk(sentences[start_index], candidate_chars)
+            if single_sentence:
+                candidates.append((position + start_index, single_sentence))
+
+            for end_index in range(start_index + 1, min(len(sentences), start_index + 3)):
+                candidate_text = " ".join(sentences[start_index : end_index + 1]).strip()
+                if len(candidate_text) > candidate_chars and end_index > start_index + 1:
+                    break
+                trimmed_candidate = _trim_context_chunk(candidate_text, candidate_chars)
+                if trimmed_candidate:
+                    candidates.append((position + start_index, trimmed_candidate))
+        position += len(sentences)
     return candidates
 
 
@@ -412,14 +537,32 @@ def _score_context_candidate(query: str, query_terms: list[str], passage: str, p
     score = len(matched_terms) * 14.0
     if query_terms:
         score += (len(matched_terms) / len(query_terms)) * 26.0
+        if len(matched_terms) >= max(2, len(query_terms) // 2):
+            score += 10.0
     if normalized_query and normalized_query in normalized_passage:
         score += 34.0
     if DIRECT_DATE_QUERY_PATTERN.search(query) and DATEISH_PATTERN.search(passage):
         score += 10.0
+    elif _is_status_query(query) and DIRECT_ANSWER_HINT_PATTERN.search(passage):
+        score += 8.0
     elif DATEISH_PATTERN.search(passage):
         score += 2.0
-    score -= position * 0.35
+    score -= min(position * 0.18, 10.0)
     return score
+
+
+def _source_matches_query_strongly(query: str, source: GroundingSelectedSource) -> bool:
+    query_terms = _extract_query_terms(query)
+    if not query_terms:
+        return False
+
+    source_text = " ".join(part for part in [source.title, source.snippet, source.url] if part)
+    source_terms = set(_normalize_text_for_match(source_text).split())
+    matched_terms = {term for term in query_terms if term in source_terms}
+    coverage_ratio = len(matched_terms) / len(query_terms)
+    has_direct_signal = bool(DIRECT_ANSWER_HINT_PATTERN.search(source_text))
+
+    return has_direct_signal or coverage_ratio >= 0.5 or _has_strong_query_coverage(query_terms, matched_terms)
 
 
 def _select_context_excerpt(query: str, content_text: str, char_limit: int) -> str:
@@ -441,28 +584,55 @@ def _select_context_excerpt(query: str, content_text: str, char_limit: int) -> s
     ]
     scored_candidates.sort(key=lambda item: (-item[2], item[0]))
 
-    selected: list[tuple[int, str]] = []
-    selected_passages: set[str] = set()
-    used_chars = 0
+    if not scored_candidates:
+        return _trim_context_chunk(normalized, char_limit)
+
+    best_position, best_passage, best_score = scored_candidates[0]
+    if best_score <= 0:
+        return _trim_context_chunk(normalized, char_limit)
+
+    best_passage_terms = set(_normalize_text_for_match(best_passage).split())
+    best_matched_terms = {term for term in query_terms if term in best_passage_terms}
+
+    if (
+        DIRECT_DATE_QUERY_PATTERN.search(query)
+        and DATEISH_PATTERN.search(best_passage)
+        and _has_strong_query_coverage(query_terms, best_matched_terms)
+        and not _is_multi_part_query(query)
+    ):
+        return _trim_context_chunk(best_passage, char_limit)
+    if (
+        _is_status_query(query)
+        and DIRECT_ANSWER_HINT_PATTERN.search(best_passage)
+        and _has_strong_query_coverage(query_terms, best_matched_terms)
+        and not _is_multi_part_query(query)
+    ):
+        return _trim_context_chunk(best_passage, char_limit)
+
+    selected: list[tuple[int, str]] = [(best_position, best_passage)]
+    selected_passages: set[str] = {best_passage}
+    used_chars = len(best_passage)
+    covered_terms = set(best_matched_terms)
     joiner = "\n...\n"
 
-    for position, passage, score in scored_candidates:
-        if passage in selected_passages or (score <= 0 and selected):
+    for position, passage, score in scored_candidates[1:]:
+        if passage in selected_passages or score <= 0:
             continue
-        addition_cost = len(passage) + (len(joiner) if selected else 0)
-        if selected and used_chars + addition_cost > char_limit:
+
+        passage_terms = {term for term in query_terms if term in _normalize_text_for_match(passage).split()}
+        if covered_terms and not (passage_terms - covered_terms):
             continue
-        if not selected and len(passage) > char_limit:
-            passage = _trim_context_chunk(passage, char_limit)
-            addition_cost = len(passage)
+
+        addition_cost = len(passage) + len(joiner)
+        if used_chars + addition_cost > char_limit:
+            continue
+
         selected.append((position, passage))
         selected_passages.add(passage)
         used_chars += addition_cost
-        if used_chars >= char_limit or len(selected) >= 3:
+        covered_terms.update(passage_terms)
+        if len(selected) >= 2 or (query_terms and len(covered_terms) == len(query_terms)):
             break
-
-    if not selected:
-        return _trim_context_chunk(normalized, char_limit)
 
     selected.sort(key=lambda item: item[0])
     combined = joiner.join(passage for _, passage in selected)
@@ -649,6 +819,7 @@ def _compose_snippet_context(
 
 
 def _compose_failed_source_snippet_context(
+    query: str,
     fetch_results: list[tuple[GroundingSelectedSource, FetchDocument | None, GroundingError | None]],
     total_context_chars: int,
 ) -> tuple[str, int]:
@@ -657,9 +828,15 @@ def _compose_failed_source_snippet_context(
         for source, document, _ in fetch_results
         if document is None and source.snippet.strip()
     ]
+    ranked_failed_sources = _rank_sources(
+        query,
+        failed_sources_with_snippets,
+        preferred_domains=[],
+        preferred_domain_boost=0.0,
+    )
     return _compose_snippet_context(
-        selected_sources=failed_sources_with_snippets,
-        total_context_chars=total_context_chars,
+        selected_sources=[source for source in ranked_failed_sources if _source_matches_query_strongly(query, source)][:2],
+        total_context_chars=min(total_context_chars, 640),
         snippet_label="Search snippet fallback:",
     )
 
@@ -705,6 +882,7 @@ async def build_grounding_bundle(
         remaining_chars = max(0, total_context_chars - used_context_chars)
         if remaining_chars > 0:
             snippet_context, snippet_chars_used = _compose_failed_source_snippet_context(
+                query=query,
                 fetch_results=fetch_results,
                 total_context_chars=remaining_chars,
             )
@@ -766,6 +944,7 @@ def build_grounded_model_request(
             "Answer the question directly in the first sentence whenever the supplied material supports a direct answer.",
             "For yes-or-no questions, start with Yes, No, or Insufficient based only on the provided material.",
             "If the sources provide a concrete date, name, number, or event label, state it plainly before adding context.",
+            "Use the smallest sufficient set of sources. If one source directly answers the question, lead with that answer and use other sources only to confirm it or to describe a conflict.",
             "Every substantive factual claim must cite one or more supporting source IDs like [S1].",
             "Place citations at the end of the sentence they support using consecutive source IDs like [S1][S2]. Never group multiple source IDs inside one bracket, and never put citations on their own line.",
             "Do not answer from prior knowledge, training data, or unstated assumptions.",

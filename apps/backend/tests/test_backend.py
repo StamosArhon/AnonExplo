@@ -15,7 +15,12 @@ os.environ["SEARCH_BASE_URL"] = "http://search-provider:8080"
 os.environ["FETCH_BASE_URL"] = "http://fetcher:8081"
 
 from app.config import Settings
-from app.grounding import build_grounded_model_request, build_grounding_bundle, normalize_grounded_answer
+from app.grounding import (
+    _select_context_excerpt,
+    build_grounded_model_request,
+    build_grounding_bundle,
+    normalize_grounded_answer,
+)
 from app.main import app, build_model_provider, build_search_provider
 from app.providers import (
     FetchDocument,
@@ -1067,6 +1072,52 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bundle.fetched_sources[0].retrieval_method, "wikimedia_parse_api")
         self.assertIn("[S2]", context)
 
+    async def test_grounding_bundle_does_not_overweight_preferred_domains_for_non_definitional_queries(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Twelve-Day War - Wikipedia",
+                url="https://en.wikipedia.org/wiki/Twelve-Day_War",
+                snippet="Background on the wider conflict.",
+                engine="wikipedia",
+            ),
+            SearchHit(
+                title="First reported strike date",
+                url="https://alpha.example/report",
+                snippet="On February 28, 2026, the first reported strike began according to officials.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+        fetcher.fetch.return_value = FetchDocument(
+            requested_url="https://alpha.example/report",
+            final_url="https://alpha.example/report",
+            title="First reported strike date",
+            excerpt="Report excerpt",
+            content_text="On February 28, 2026, the first reported strike began according to officials.",
+            content_char_count=73,
+            word_count=12,
+            content_type="text/html",
+            retrieval_method="direct_html",
+        )
+
+        bundle, context = await build_grounding_bundle(
+            query="When did the first reported strike begin?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=2,
+            fetch_limit=1,
+            source_char_limit=320,
+            total_context_chars=640,
+            preview_chars=160,
+            preferred_domains="wikipedia.org,wikimedia.org",
+            preferred_domain_boost=14.0,
+        )
+
+        self.assertEqual(bundle.selected_sources[0].domain, "alpha.example")
+        self.assertIn("February 28, 2026", context)
+
     async def test_grounding_bundle_falls_back_to_search_snippets(self) -> None:
         search_provider = AsyncMock()
         search_provider.search.return_value = [
@@ -1239,6 +1290,71 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Search snippet fallback:", context)
         self.assertIn("Iran says talks can resume", context)
 
+    async def test_grounding_bundle_limits_hybrid_snippet_fallback_to_top_relevant_failed_sources(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Fetched report",
+                url="https://alpha.example/report",
+                snippet="Fetched report snippet.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Specific timeline",
+                url="https://bravo.example/timeline",
+                snippet="The first reported strike began on February 28, 2026, according to witnesses.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Live updates",
+                url="https://charlie.example/live",
+                snippet="Rolling updates and reactions from throughout the region.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Background",
+                url="https://delta.example/background",
+                snippet="Regional background and long-term context.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+
+        async def fetch_side_effect(url: str):
+            if url == "https://alpha.example/report":
+                return FetchDocument(
+                    requested_url=url,
+                    final_url=url,
+                    title="Fetched report",
+                    excerpt="Fetched report excerpt.",
+                    content_text="Officials say the first strike date remains disputed pending review.",
+                    content_char_count=66,
+                    word_count=11,
+                    content_type="text/html",
+                    retrieval_method="direct_html",
+                    content_quality="usable",
+                    warnings=[],
+                )
+            raise ProviderError("Fetch request failed: blocked")
+
+        fetcher.fetch.side_effect = fetch_side_effect
+
+        bundle, context = await build_grounding_bundle(
+            query="When did the first reported strike begin?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=4,
+            fetch_limit=2,
+            source_char_limit=320,
+            total_context_chars=900,
+            preview_chars=160,
+        )
+
+        self.assertEqual(bundle.summary.context_mode, "fetched_plus_snippets")
+        self.assertIn("February 28, 2026", context)
+        self.assertNotIn("Regional background and long-term context.", context)
+
     async def test_grounding_bundle_skips_later_candidates_from_blocked_domain(self) -> None:
         search_provider = AsyncMock()
         search_provider.search.return_value = [
@@ -1365,6 +1481,76 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("first reported strike began", bundle.fetched_sources[0].context_text)
         self.assertNotIn("Background context about regional tensions", bundle.fetched_sources[0].context_text)
 
+    async def test_grounding_bundle_prefers_matching_entity_variants_over_generic_talk_mentions(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Live analysis",
+                url="https://example.com/live-analysis",
+                snippet="Current shipping disruption and diplomacy update.",
+                engine="mock",
+            )
+        ]
+
+        fetcher = AsyncMock()
+        strait_status = (
+            "The Strait of Hormuz is not open to normal commercial traffic while the U.S. blockade remains in place, "
+            "and several vessels have been seized."
+        )
+        off_topic_talks = (
+            "A first round of peace talks between Lebanon and Israel took place at the State Department and focused on "
+            "border monitoring and local ceasefire arrangements."
+        )
+        relevant_talks = (
+            "Delegates from Iran and the United States could soon return to Pakistan for another round of peace talks, "
+            "but Reuters and the Associated Press report that no date has been decided."
+        )
+        tail = "Additional live updates and background reporting. " * 18
+        fetcher.fetch.return_value = FetchDocument(
+            requested_url="https://example.com/live-analysis",
+            final_url="https://example.com/live-analysis",
+            title="Live analysis",
+            excerpt="Current shipping disruption and diplomacy update.",
+            content_text=f"{strait_status}\n\n{off_topic_talks}\n\n{relevant_talks}\n\n{tail}",
+            content_char_count=len(strait_status) + len(off_topic_talks) + len(relevant_talks) + len(tail) + 6,
+            word_count=220,
+            content_type="text/html",
+            retrieval_method="direct_html",
+            content_quality="usable",
+            warnings=[],
+        )
+
+        bundle, context = await build_grounding_bundle(
+            query="Are the Straits of Hormuz open and what is the current state of the Iranian-American peace talks?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=1,
+            fetch_limit=1,
+            source_char_limit=520,
+            total_context_chars=720,
+            preview_chars=160,
+        )
+
+        self.assertEqual(bundle.summary.context_mode, "fetched_text")
+        self.assertIn("Strait of Hormuz is not open", context)
+        self.assertIn("Iran and the United States could soon return", context)
+        self.assertNotIn("Lebanon and Israel", bundle.fetched_sources[0].context_text)
+
+    def test_select_context_excerpt_respects_limit_for_status_queries(self) -> None:
+        content_text = (
+            "The Strait of Hormuz is not open to normal commercial traffic while the blockade remains in place. "
+            "Officials say Iran and the United States remain at odds over the terms for restarting talks. "
+        ) * 12
+
+        excerpt = _select_context_excerpt(
+            "Are the Straits of Hormuz open and are Iranian-American talks resuming?",
+            content_text,
+            220,
+        )
+
+        self.assertLessEqual(len(excerpt), 220)
+        self.assertIn("Strait of Hormuz", excerpt)
+
     def test_grounded_request_discourages_prior_knowledge_language(self) -> None:
         grounded_request = build_grounded_model_request(
             query="What happened?",
@@ -1389,6 +1575,7 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("start with Yes, No, or Insufficient", grounded_request.prompt)
         self.assertIn("consecutive source IDs like [S1][S2]", grounded_request.prompt)
         self.assertIn("Never group multiple source IDs inside one bracket", grounded_request.prompt)
+        self.assertIn("Use the smallest sufficient set of sources", grounded_request.prompt)
 
     def test_grounded_request_handles_snippet_context_mode(self) -> None:
         grounded_request = build_grounded_model_request(
