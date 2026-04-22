@@ -43,11 +43,11 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 ## Current Phase
 
 - Active phase: `post-roadmap-enhancement`
-- Goal: maintain the current baseline, validate regressions, and land tightly scoped improvements without reopening the completed core roadmap, with the current branch focused on live-source fetch resilience and current-events grounding quality
+- Goal: maintain the current baseline, validate regressions, and land tightly scoped improvements without reopening the completed core roadmap
 
 ## Active Branch
 
-- `stamos/live-source-fetch-tuning`
+- `main`
 
 ## Completed Work
 
@@ -130,7 +130,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## In-Progress Work
 
-- `stamos/live-source-fetch-tuning` is validated locally and ready for branch closeout review, push, diff, and merge.
+- None inside the repo contents. `stamos/live-source-fetch-tuning` is merged, and the repo is back on the post-roadmap enhancement baseline on `main`.
 
 ## Open Questions / Blockers
 
@@ -236,6 +236,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-22 during `stamos/live-source-fetch-tuning`
 - `scripts/ops-check.ps1`: passed on 2026-04-22 against the running local stack during `stamos/live-source-fetch-tuning`
 - `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/live-source-fetch-tuning`
+- `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/roadmap-closeout-sync`
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
@@ -271,8 +272,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Exact Next Steps
 
-1. Review and close out `stamos/live-source-fetch-tuning` through push, diff review against `main`, merge, and branch cleanup.
-2. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
+1. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
+2. Keep validating the current baseline against real live-news queries on the target hardware, especially large pages, slow publishers, and mixed multi-source questions.
 3. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
 3. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
 4. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
