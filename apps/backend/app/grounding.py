@@ -77,7 +77,7 @@ class GroundingSummary(BaseModel):
     fetched_sources: int
     failed_sources: int
     grounding_characters: int
-    context_mode: Literal["fetched_text", "search_snippets", "none"] = "none"
+    context_mode: Literal["fetched_text", "fetched_plus_snippets", "search_snippets", "none"] = "none"
 
 
 class GroundingBundle(BaseModel):
@@ -621,6 +621,7 @@ def _compose_context(
 def _compose_snippet_context(
     selected_sources: list[GroundingSelectedSource],
     total_context_chars: int,
+    snippet_label: str = "Search snippet:",
 ) -> tuple[str, int]:
     context_parts: list[str] = []
     used_context_chars = 0
@@ -638,13 +639,29 @@ def _compose_snippet_context(
                 [
                     f"[{source.source_id}] {source.title}",
                     f"URL: {source.url}",
-                    "Search snippet:",
+                    snippet_label,
                     snippet_text,
                 ]
             )
         )
 
     return "\n\n---\n\n".join(context_parts), used_context_chars
+
+
+def _compose_failed_source_snippet_context(
+    fetch_results: list[tuple[GroundingSelectedSource, FetchDocument | None, GroundingError | None]],
+    total_context_chars: int,
+) -> tuple[str, int]:
+    failed_sources_with_snippets = [
+        source
+        for source, document, _ in fetch_results
+        if document is None and source.snippet.strip()
+    ]
+    return _compose_snippet_context(
+        selected_sources=failed_sources_with_snippets,
+        total_context_chars=total_context_chars,
+        snippet_label="Search snippet fallback:",
+    )
 
 
 async def build_grounding_bundle(
@@ -682,9 +699,19 @@ async def build_grounding_bundle(
         total_context_chars=total_context_chars,
         preview_chars=preview_chars,
     )
-    context_mode: Literal["fetched_text", "search_snippets", "none"] = "none"
+    context_mode: Literal["fetched_text", "fetched_plus_snippets", "search_snippets", "none"] = "none"
     if grounding_context.strip():
         context_mode = "fetched_text"
+        remaining_chars = max(0, total_context_chars - used_context_chars)
+        if remaining_chars > 0:
+            snippet_context, snippet_chars_used = _compose_failed_source_snippet_context(
+                fetch_results=fetch_results,
+                total_context_chars=remaining_chars,
+            )
+            if snippet_context.strip():
+                grounding_context = "\n\n---\n\n".join([grounding_context, snippet_context])
+                used_context_chars += snippet_chars_used
+                context_mode = "fetched_plus_snippets"
     else:
         grounding_context, used_context_chars = _compose_snippet_context(
             selected_sources=selected_sources,
@@ -716,7 +743,7 @@ def build_grounded_model_request(
     query: str,
     grounding_context: str,
     temperature: float,
-    context_mode: Literal["fetched_text", "search_snippets", "none"] = "fetched_text",
+    context_mode: Literal["fetched_text", "fetched_plus_snippets", "search_snippets", "none"] = "fetched_text",
     additional_system_prompt: str | None = None,
 ) -> GroundedModelRequest:
     context_heading = "Grounded sources:"
@@ -726,6 +753,12 @@ def build_grounded_model_request(
         context_guidance = (
             "Answer the user's question using only the supporting search-result snippets below. "
             "Treat them as lower-confidence summaries because article fetches were unavailable."
+        )
+    elif context_mode == "fetched_plus_snippets":
+        context_heading = "Grounded sources and snippet fallbacks:"
+        context_guidance = (
+            "Answer the user's question using the grounded source text below. "
+            "Prefer fetched article text when it directly answers the question, and use labeled search-snippet fallbacks only when fetches were unavailable for some selected sources."
         )
     prompt = "\n\n".join(
         [
@@ -755,6 +788,14 @@ def build_grounded_model_request(
                 system_prompt,
                 "The current request is using search-result snippets because article fetches were unavailable. "
                 "Do not overclaim details that the snippets do not explicitly state.",
+            ]
+        )
+    elif context_mode == "fetched_plus_snippets":
+        system_prompt = "\n\n".join(
+            [
+                system_prompt,
+                "Some sources were fetched as article text, while other selected sources are available only as labeled search-result snippets. "
+                "Prefer fetched article text when possible, and treat snippet-backed details as lower-confidence summaries rather than full article extracts.",
             ]
         )
     if isinstance(additional_system_prompt, str) and additional_system_prompt.strip():

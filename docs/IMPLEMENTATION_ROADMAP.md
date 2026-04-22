@@ -47,7 +47,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Active Branch
 
-- `main`
+- `stamos/hybrid-grounding-context`
 
 ## Completed Work
 
@@ -117,10 +117,16 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Added backend-side grounded-answer citation normalization so grouped or repeated model citations are rewritten into a consistent `[S1][S2]` shape before any client renders them.
 - Hardened the UI citation renderer with the same canonicalization fallback so existing or drifted model outputs still render discreet superscript source pills consistently.
 - Restyled grounded source-tooltips into shorter anchored previews tied to the source pill instead of large centered popovers that fought with the reading column.
+- Added a hybrid grounding mode that keeps fetched article text primary while appending bounded snippet fallback context from selected sources whose fetches failed.
+- Updated the UI context labels and source-drawer copy so grounded answers can explicitly show `fetched_plus_snippets` instead of pretending every mixed-evidence answer is purely fetched or purely snippet-backed.
 
 ## In-Progress Work
 
-- None inside the repo contents. `stamos/grounded-answer-consistency` is merged, and the repo is back to the post-roadmap enhancement baseline on `main`.
+- `stamos/hybrid-grounding-context`
+  - implemented hybrid fetched-plus-snippet grounding context for partially failed source sets
+  - updated the UI to label mixed grounding context distinctly from pure fetched or pure snippet modes
+  - validated the behavior with targeted backend tests and a live repro query
+  - pending full branch validation, git review, merge, and cleanup workflow
 
 ## Open Questions / Blockers
 
@@ -139,6 +145,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Heavier grounded requests now survive the localhost gateway, but the repo still does not record performance baselines for search-plus-fetch-plus-model latency on the target hardware.
 - The citation and tooltip refinements now reduce formatting drift, but the repo still does not have browser-automation coverage for grounded-answer rendering regressions.
 - Ambiguous recency wording such as `latest phase` can still pull a mix of current-coverage and historical-timeline sources; future tuning may need stronger recency or event-disambiguation heuristics in the ranking layer.
+- Mixed fetched-plus-snippet context improves partial-evidence coverage, but live-news ranking can still surface contradictory or noisy sources, especially on evolving geopolitical topics.
 
 ## Decisions Made And Why
 
@@ -176,6 +183,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The UI should keep local-history actions and grounded-source controls structurally simple: grouped history controls in the sidebar, superscript source references in answers, and a single on-demand source drawer rather than duplicated source buttons across the workspace.
 - Grounded context selection should prefer query-relevant excerpts from fetched documents rather than blindly truncating from the top of each article, because small local models answer more directly when the supplied evidence is tighter.
 - Citation normalization belongs in the backend first, with a matching UI fallback, so every client benefits from consistent `[S1][S2]` rendering and the UI does not depend on one model's exact citation habits.
+- When some selected sources fetch cleanly and others fail, the backend should preserve the successful fetched text and append bounded snippet fallback from the failed sources instead of forcing an all-or-nothing choice between fetched-only and snippet-only grounding.
 
 ## Security / Privacy Assumptions
 
@@ -188,6 +196,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Browser-local direct chat history is an intentional workstation-local privacy tradeoff and must stay purgeable from the UI.
 - The host's primary exposure control is still localhost-only port binding plus Docker network separation; Windows Firewall is a supporting control rather than a replacement for that model.
 - Search-snippet fallback is acceptable only as an explicit, bounded grounded mode; it must not silently become unbounded web-search context or a hidden substitute for fetcher isolation.
+- Hybrid fetched-plus-snippet grounding is acceptable when it is explicit in `context_mode`, bounded by the same context limits, and keeps fetched text preferred over snippet summaries.
 
 ## Validation Status
 
@@ -203,6 +212,9 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-22 during `stamos/grounded-answer-consistency`
 - `python -m py_compile apps/ui/server.py`: passed on 2026-04-22 during `stamos/grounded-answer-consistency`
 - `node --check apps/ui/static/app.js`: passed on 2026-04-22 during `stamos/grounded-answer-consistency`
+- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-22 during `stamos/hybrid-grounding-context`
+- `node --check apps/ui/static/app.js`: passed on 2026-04-22 during `stamos/hybrid-grounding-context`
+- `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/hybrid-grounding-context`
 - `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`
@@ -230,6 +242,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `docker compose up -d --build host-gateway ui backend fetcher search-provider`: reached the UI on `http://127.0.0.1:3000`, the backend health endpoint on `http://127.0.0.1:8000/api/v1/health`, and the standalone SearXNG UI on `http://127.0.0.1:8085` from the Windows host on 2026-04-14 before the validation script's cleanup step
 - Manual live grounded-search check on 2026-04-14 for `What is the Twelve-Day War?`: selected `en.wikipedia.org` as `S1`, fetched it via `wikimedia_parse_api`, and returned `fetched_text` grounding context alongside other fetched sources
 - Manual live grounded-answer check on 2026-04-22 for `When did the latest phase of the Israel-Iran war begin?`: returned a direct first-sentence answer with canonicalized citations such as `[S4][S1][S2][S3]` and used query-relevant fetched excerpts from BBC, Wikimedia, and Britannica sources
+- Manual live grounded-answer check on 2026-04-22 for `Are the straits of hormuz open and what is happening with Iran-US negotiations for an ending to the war?`: reproduced the partial-fetch scenario, returned `fetched_plus_snippets`, and no longer fell back to the generic `insufficient_sources` path
 
 ## Exact Next Steps
 
@@ -238,7 +251,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 3. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
 4. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
 5. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
-6. Choose the next post-roadmap branch based on whether the priority is answer-quality disambiguation, browser-automation coverage for the UI, or the next provider-expansion milestone.
+6. Finish `stamos/hybrid-grounding-context` by running `scripts/validate.ps1`, reviewing the diff, and completing the repo's push, merge, and cleanup workflow.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -248,6 +261,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The grounding flow is intentionally bounded and transparent: search, source selection, fetch, source packaging, and model synthesis are all visible in the UI and backend responses.
 - Grounded-source selection can now apply a modest preferred-domain bias from config, with Wikipedia and Wikimedia as the default example in `.env.example`.
 - Grounding summaries now expose `context_mode`, and the UI uses it to distinguish fetched article text from explicit snippet-fallback grounding.
+- The current working branch extends that model with `fetched_plus_snippets`, which keeps fetched article text primary while carrying forward bounded snippet fallback from failed selected sources.
 - The backend and UI now expose model-runtime readiness separately from general backend health, which future branches should preserve.
 - The static UI now uses backend-provided runtime and model-catalog state to drive a browser-local model selector for chat and grounded-answer requests.
 - The UI shell now uses workspace navigation plus in-tab conversation-style rendering for direct chat and grounded answers.
@@ -255,6 +269,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Grounded answers now render source IDs as inline citation pills with hover tooltips and open a dedicated right-side source drawer for deeper inspection instead of using a large grounding-details block in the main thread.
 - Direct Chat does not call SearXNG or the fetcher. Grounded Answer is the explicit search plus fetch plus model workflow and should stay clearly documented in future branches.
 - Grounded Answer now ranks search results, retries later candidates after fetch failures, classifies thin page extractions, skips later URLs from domains that have already returned explicit robot-policy or similar blocking responses, and may fall back to search snippets when publishers block fetches. That fallback is intentional and must stay explicit in both API responses and UI copy.
+- The current working branch also keeps mixed evidence explicit by appending failed-source snippet fallback to fetched grounding context instead of discarding that snippet evidence when only part of the selected source set is fetchable.
 - The fetcher, backend, and UI now share structured fetch provenance such as `blocked_by_remote_policy`, `content_too_thin`, `upstream_status`, and retryability hints.
 - The most recently merged enhancement adds query-aware excerpt selection from fetched documents, direct-answer-first grounded prompting, and backend citation normalization with a matching UI fallback for grouped citations.
 - The repo now includes `docs/OPERATIONS_AND_MAINTENANCE.md` plus `scripts/ops-check.ps1` for local maintenance and recovery work.

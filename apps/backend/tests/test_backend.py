@@ -610,6 +610,102 @@ class BackendApiTests(unittest.TestCase):
         self.assertIn("February 28, 2026", prompt)
 
     @patch("app.main.build_model_provider")
+    @patch("app.main.build_fetcher_client")
+    @patch("app.main.build_search_provider")
+    def test_grounding_answer_uses_hybrid_context_when_some_fetches_fail(
+        self,
+        build_search_provider: AsyncMock,
+        build_fetcher_client: AsyncMock,
+        build_model_provider: AsyncMock,
+    ) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Fetched report",
+                url="https://example.com/fetched",
+                snippet="Fetched report snippet.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Blocked report",
+                url="https://example.com/blocked",
+                snippet="Negotiations may resume if the naval blockade ends.",
+                engine="mock",
+            ),
+        ]
+        build_search_provider.return_value = search_provider
+
+        fetcher = AsyncMock()
+
+        async def fetch_side_effect(url: str):
+            if url.endswith("/blocked"):
+                raise ProviderError("Fetch request failed: blocked")
+
+            return FetchDocument(
+                requested_url=url,
+                final_url=url,
+                title="Fetched report",
+                excerpt="Fetched report excerpt.",
+                content_text="The Strait of Hormuz remains contested after vessel attacks.",
+                content_char_count=59,
+                word_count=9,
+                content_type="text/html",
+            )
+
+        fetcher.fetch.side_effect = fetch_side_effect
+        build_fetcher_client.return_value = fetcher
+
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+        selection = type(
+            "Selection",
+            (),
+            {
+                "selected_model": "test-model",
+                "requested_model": None,
+                "selection_source": "configured_default",
+                "configured_model": "test-model",
+                "model_dump": lambda self=None: {
+                    "configured_model": "test-model",
+                    "selected_model": "test-model",
+                    "requested_model": None,
+                    "selection_source": "configured_default",
+                },
+            },
+        )()
+        model_provider = Mock()
+        model_provider.probe_runtime = AsyncMock(return_value=runtime)
+        model_provider.select_model = Mock(return_value=selection)
+        model_provider.chat = AsyncMock(return_value={
+            "model": "test-model",
+            "answer": "The Strait remains contested while talks are conditional. [S1][S2]",
+            "usage": {"total_tokens": 42},
+            "selected_model": "test-model",
+        })
+        build_model_provider.return_value = model_provider
+
+        response = self.client.post(
+            "/api/v1/grounding/answer",
+            json={"query": "Is the strait open and are talks resuming?"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["grounding"]["summary"]["context_mode"], "fetched_plus_snippets")
+        prompt = model_provider.chat.await_args.kwargs["prompt"]
+        system_prompt = model_provider.chat.await_args.kwargs["system_prompt"]
+        self.assertIn("Grounded sources and snippet fallbacks:", prompt)
+        self.assertIn("Source text:", prompt)
+        self.assertIn("Search snippet fallback:", prompt)
+        self.assertIn("Prefer fetched article text", system_prompt)
+
+    @patch("app.main.build_model_provider")
     def test_grounding_answer_rejects_unadvertised_model_override(self, build_model_provider: AsyncMock) -> None:
         provider = Mock()
         runtime = ModelRuntimeStatus(
@@ -911,11 +1007,12 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bundle.summary.selected_sources, 3)
         self.assertEqual(bundle.summary.fetched_sources, 2)
         self.assertEqual(bundle.summary.failed_sources, 1)
-        self.assertEqual(bundle.summary.context_mode, "fetched_text")
+        self.assertEqual(bundle.summary.context_mode, "fetched_plus_snippets")
         self.assertEqual(bundle.search_results[0].status, "unselected")
         self.assertEqual(bundle.search_results[1].status, "selected")
         self.assertIn("[S3]", context)
         self.assertIn("[S4]", context)
+        self.assertIn("Search snippet fallback:", context)
 
     async def test_grounding_bundle_prefers_configured_domains_when_relevant(self) -> None:
         search_provider = AsyncMock()
@@ -1071,13 +1168,76 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(bundle.summary.fetched_sources, 1)
         self.assertEqual(bundle.summary.failed_sources, 1)
-        self.assertEqual(bundle.summary.context_mode, "fetched_text")
+        self.assertEqual(bundle.summary.context_mode, "fetched_plus_snippets")
         self.assertEqual(bundle.errors[0].code, "content_too_thin")
         self.assertFalse(bundle.errors[0].retryable)
         self.assertEqual(bundle.fetched_sources[0].source_id, "S2")
         self.assertEqual(bundle.fetched_sources[0].retrieval_method, "direct_html")
         self.assertEqual(bundle.fetched_sources[0].content_quality, "usable")
         self.assertIn("[S2]", context)
+        self.assertIn("Search snippet fallback:", context)
+
+    async def test_grounding_bundle_uses_hybrid_context_when_failed_sources_have_snippets(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Fetched report",
+                url="https://alpha.example/report",
+                snippet="Fetched report snippet.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Blocked update",
+                url="https://bravo.example/update",
+                snippet="Iran says talks can resume after the blockade ends.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+
+        async def fetch_side_effect(url: str):
+            if url == "https://bravo.example/update":
+                raise FetcherRequestError(
+                    "Remote site denied the fetch request.",
+                    code="upstream_forbidden",
+                    upstream_status=403,
+                    retryable=False,
+                )
+
+            return FetchDocument(
+                requested_url=url,
+                final_url=url,
+                title="Fetched report",
+                excerpt="Fetched report excerpt.",
+                content_text="The Strait of Hormuz remains contested after vessel attacks.",
+                content_char_count=59,
+                word_count=9,
+                content_type="text/html",
+                retrieval_method="direct_html",
+                content_quality="usable",
+                warnings=[],
+            )
+
+        fetcher.fetch.side_effect = fetch_side_effect
+
+        bundle, context = await build_grounding_bundle(
+            query="Is the strait open and are talks resuming?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=2,
+            fetch_limit=2,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+        )
+
+        self.assertEqual(bundle.summary.context_mode, "fetched_plus_snippets")
+        self.assertEqual(bundle.summary.fetched_sources, 1)
+        self.assertEqual(bundle.summary.failed_sources, 1)
+        self.assertIn("Source text:", context)
+        self.assertIn("Search snippet fallback:", context)
+        self.assertIn("Iran says talks can resume", context)
 
     async def test_grounding_bundle_skips_later_candidates_from_blocked_domain(self) -> None:
         search_provider = AsyncMock()
@@ -1241,6 +1401,18 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("supporting search-result snippets", grounded_request.prompt)
         self.assertIn("Search result snippets:", grounded_request.prompt)
         self.assertIn("article fetches were unavailable", grounded_request.system_prompt)
+
+    def test_grounded_request_handles_hybrid_context_mode(self) -> None:
+        grounded_request = build_grounded_model_request(
+            query="What happened?",
+            grounding_context="[S1] Example fetched text.\n\n[S2] Example snippet fallback.",
+            temperature=0.1,
+            context_mode="fetched_plus_snippets",
+        )
+
+        self.assertIn("Grounded sources and snippet fallbacks:", grounded_request.prompt)
+        self.assertIn("Prefer fetched article text", grounded_request.prompt)
+        self.assertIn("available only as labeled search-result snippets", grounded_request.system_prompt)
 
     def test_normalize_grounded_answer_rewrites_grouped_and_repeated_citations(self) -> None:
         normalized = normalize_grounded_answer(

@@ -482,6 +482,19 @@ function buildGroundingSourceBundle(payload) {
   };
 }
 
+function getContextModeLabel(contextMode) {
+  if (contextMode === "fetched_text") {
+    return "Fetched article text";
+  }
+  if (contextMode === "fetched_plus_snippets") {
+    return "Fetched text + snippet fallback";
+  }
+  if (contextMode === "search_snippets") {
+    return "Snippet-backed context";
+  }
+  return "No source context";
+}
+
 function setContextChip(element, label, value, variant = "muted") {
   element.className = `context-chip chip-${variant}`;
   element.textContent = `${label} - ${value}`;
@@ -838,9 +851,7 @@ function renderGroundedMessageCopy(message) {
   rendered += `<span class="message-text-fragment">${escapeWithBreaks(content.slice(lastIndex))}</span>`;
 
   const footerNotes = [];
-  footerNotes.push(
-    bundle.contextMode === "fetched_text" ? "Fetched article text" : "Snippet-backed context",
-  );
+  footerNotes.push(getContextModeLabel(bundle.contextMode));
   if (bundle.failedCount) {
     footerNotes.push(bundle.failedCount === 1 ? "1 source issue" : `${bundle.failedCount} source issues`);
   }
@@ -917,6 +928,10 @@ function renderGroundingMeta(state, elements) {
     );
   }
 
+  if (bundle && bundle.contextMode === "fetched_plus_snippets") {
+    chips.push(buildChip("Context", "fetched + snippets", "warn"));
+  }
+
   if (bundle && bundle.failedCount) {
     chips.push(buildChip("Issues", String(bundle.failedCount), "warn"));
   }
@@ -967,12 +982,22 @@ function renderSourceDrawer(state, elements) {
 
   elements.sourceDrawerShell.hidden = false;
   elements.sourceDrawerTitle.textContent =
-    bundle.contextMode === "fetched_text" ? "Current answer sources" : "Current answer sources (snippet-backed)";
+    bundle.contextMode === "search_snippets"
+      ? "Current answer sources (snippet-backed)"
+      : bundle.contextMode === "fetched_plus_snippets"
+        ? "Current answer sources (fetched + snippets)"
+        : "Current answer sources";
   elements.sourceDrawerMeta.innerHTML = [
     buildChip("Sources", String(bundle.sourceCount), "muted"),
     buildChip(
       "Context",
-      bundle.contextMode === "fetched_text" ? "fetched text" : bundle.contextMode === "search_snippets" ? "snippets" : "none",
+      bundle.contextMode === "fetched_text"
+        ? "fetched text"
+        : bundle.contextMode === "fetched_plus_snippets"
+          ? "fetched + snippets"
+          : bundle.contextMode === "search_snippets"
+            ? "snippets"
+            : "none",
       bundle.contextMode === "fetched_text" ? "ok" : "warn",
     ),
     buildChip("Fetched", String(bundle.fetchedCount), bundle.fetchedCount ? "ok" : "warn"),
