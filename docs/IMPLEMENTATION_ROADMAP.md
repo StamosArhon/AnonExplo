@@ -47,7 +47,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Active Branch
 
-- `stamos/grounded-answer-consistency`
+- `main`
 
 ## Completed Work
 
@@ -120,11 +120,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## In-Progress Work
 
-- `stamos/grounded-answer-consistency`
-  - implemented query-aware excerpt selection for fetched grounding context
-  - implemented stricter direct-answer prompting and backend citation normalization
-  - implemented UI-side citation normalization fallback plus smaller anchored tooltips
-  - pending full branch validation, git review, merge, and cleanup workflow
+- None inside the repo contents. `stamos/grounded-answer-consistency` is merged, and the repo is back to the post-roadmap enhancement baseline on `main`.
 
 ## Open Questions / Blockers
 
@@ -242,7 +238,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 3. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
 4. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
 5. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
-6. Finish `stamos/grounded-answer-consistency` by reviewing the diff against `main`, committing, pushing, merging, and then resetting the roadmap back to the post-merge steady state on `main`.
+6. Choose the next post-roadmap branch based on whether the priority is answer-quality disambiguation, browser-automation coverage for the UI, or the next provider-expansion milestone.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -260,7 +256,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Direct Chat does not call SearXNG or the fetcher. Grounded Answer is the explicit search plus fetch plus model workflow and should stay clearly documented in future branches.
 - Grounded Answer now ranks search results, retries later candidates after fetch failures, classifies thin page extractions, skips later URLs from domains that have already returned explicit robot-policy or similar blocking responses, and may fall back to search snippets when publishers block fetches. That fallback is intentional and must stay explicit in both API responses and UI copy.
 - The fetcher, backend, and UI now share structured fetch provenance such as `blocked_by_remote_policy`, `content_too_thin`, `upstream_status`, and retryability hints.
-- The current working branch also adds query-aware excerpt selection from fetched documents, direct-answer-first grounded prompting, and backend citation normalization with a matching UI fallback for grouped citations.
+- The most recently merged enhancement adds query-aware excerpt selection from fetched documents, direct-answer-first grounded prompting, and backend citation normalization with a matching UI fallback for grouped citations.
 - The repo now includes `docs/OPERATIONS_AND_MAINTENANCE.md` plus `scripts/ops-check.ps1` for local maintenance and recovery work.
 - `scripts/validate.ps1` now enforces the intended Compose security model instead of treating it as documentation only.
 - Repo-managed services keep routine access logging quiet by default, so operators should use targeted `docker compose logs --tail=...` calls when they need deeper inspection.
