@@ -214,6 +214,11 @@ function summarizeText(value, maximumLength = 72) {
   return normalized.length > maximumLength ? `${normalized.slice(0, maximumLength - 3)}...` : normalized;
 }
 
+function getMessageCountLabel(count) {
+  const numericCount = Number(count) || 0;
+  return numericCount === 1 ? "1 message" : `${numericCount} messages`;
+}
+
 function createChatSession(title = "New chat") {
   const timestamp = getIsoTimestamp();
   return {
@@ -792,20 +797,26 @@ function renderGroundedMessageCopy(message) {
 
   rendered += `<span class="message-text-fragment">${escapeWithBreaks(content.slice(lastIndex))}</span>`;
 
+  const footerNotes = [];
+  footerNotes.push(
+    bundle.contextMode === "fetched_text" ? "Fetched article text" : "Snippet-backed context",
+  );
+  if (bundle.failedCount) {
+    footerNotes.push(bundle.failedCount === 1 ? "1 source issue" : `${bundle.failedCount} source issues`);
+  }
+
   return `
     <div class="message-copy message-copy-rich">${rendered}</div>
-    <div class="message-source-actions">
+    <div class="message-source-footer">
       <button
         type="button"
-        class="source-message-button"
+        class="source-summary-button"
         data-open-source-drawer="true"
         data-message-id="${escapeHtml(message.id)}"
       >
-        Open sources (${escapeHtml(String(bundle.sourceCount))})
+        Sources ${escapeHtml(String(bundle.sourceCount))}
       </button>
-      <span class="meta">
-        ${escapeHtml(bundle.contextMode === "fetched_text" ? "Fetched source text" : "Snippet-backed context")}
-      </span>
+      <span class="message-source-note">${escapeHtml(footerNotes.join(" · "))}</span>
     </div>
   `;
 }
@@ -816,7 +827,7 @@ function buildHistoryRows(state) {
       const hasMessages = chat.messages.length > 0;
       const previewSource = hasMessages
         ? summarizeText(chat.messages[chat.messages.length - 1]?.content || "", 72)
-        : "Start a direct chat here. Grounded answers stay transient in their own workspace.";
+        : "No direct-chat messages yet.";
       const activeClass = chat.id === state.activeChatId ? " active" : "";
       const stateLabel = chat.id === state.activeChatId ? "Current" : hasMessages ? "Saved" : "Empty";
       const stateClass = chat.id === state.activeChatId ? " history-state-active" : hasMessages ? " history-state-saved" : "";
@@ -828,7 +839,10 @@ function buildHistoryRows(state) {
               <span class="history-state${stateClass}">${escapeHtml(stateLabel)}</span>
             </span>
             <span class="history-preview">${escapeHtml(previewSource)}</span>
-            <span class="history-time">${escapeHtml(getHistoryLabel(chat.updatedAt))}</span>
+            <span class="history-footer">
+              <span class="history-time">${escapeHtml(getHistoryLabel(chat.updatedAt))}</span>
+              <span class="history-count">${escapeHtml(getMessageCountLabel(chat.messages.length))}</span>
+            </span>
           </button>
           <button
             type="button"
@@ -853,19 +867,18 @@ function renderGroundingMeta(state, elements) {
     chips.push(buildChip("Status", "searching and fetching", "warn"));
   }
 
-  if (bundle) {
+  if (bundle && bundle.contextMode === "search_snippets") {
     chips.push(
       buildChip(
         "Context",
-        bundle.contextMode === "fetched_text" ? "fetched text" : bundle.contextMode === "search_snippets" ? "snippets" : "none",
-        bundle.contextMode === "fetched_text" ? "ok" : "warn",
+        "snippet-backed",
+        "warn",
       ),
     );
-    chips.push(
-      `<button type="button" class="source-message-button" data-open-source-drawer="true" data-message-id="${escapeHtml(latestMessage.id)}">
-        Open sources (${escapeHtml(String(bundle.sourceCount))})
-      </button>`,
-    );
+  }
+
+  if (bundle && bundle.failedCount) {
+    chips.push(buildChip("Issues", String(bundle.failedCount), "warn"));
   }
 
   if (state.groundingStatus.kind === "error") {

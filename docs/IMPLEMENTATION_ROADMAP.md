@@ -111,6 +111,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Added an explicit opt-in Wikimedia fetch path that uses the official MediaWiki Parse API for supported Wikimedia article URLs instead of a hidden scraping workaround.
 - Added fetcher config scaffolding for `FETCH_WIKIMEDIA_API_ENABLED` and `FETCH_WIKIMEDIA_API_USER_AGENT` so Wikimedia support remains operator-controlled and reproducible across machines.
 - Added config-driven preferred-domain search ranking so grounded answers can modestly favor already-returned Wikipedia or Wikimedia results when they are relevant, without forcing a Wikipedia-only search mode.
+- Tightened the local UI polish pass so direct-chat history actions live together in the sidebar, history cards are more legible, and grounded-answer source controls stay quiet and non-duplicated.
 
 ## In-Progress Work
 
@@ -165,6 +166,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Wikimedia support should use the official Parse API for supported Wikimedia article URLs and must require an operator-supplied descriptive user-agent before the opt-in path is enabled.
 - Any future changes to the Wikimedia-specific path should keep it explicit, opt-in, and based on an official Wikimedia interface rather than a robot-policy bypass.
 - Preferred-domain search tuning should live in the backend's source-ranking stage and stay modest, config-driven, and optional rather than becoming a hidden second search path or a hard-coded encyclopedia mode.
+- The UI should keep local-history actions and grounded-source controls structurally simple: grouped history controls in the sidebar, superscript source references in answers, and a single on-demand source drawer rather than duplicated source buttons across the workspace.
 
 ## Security / Privacy Assumptions
 
@@ -187,6 +189,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `answer-surface-refresh` branch
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `wikimedia-official-api-path` branch
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `wikipedia-search-tuning` branch
+- `scripts/validate.ps1`: passed on 2026-04-22 during the `ui-polish-pass` branch
 - `scripts/ops-check.ps1`: last passed on 2026-04-13 against the running local stack
 - Validation included:
   - `docker compose config`

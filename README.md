@@ -24,6 +24,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - a calmer sidebar-and-editorial UI shell with settings and stack details moved into modals instead of the main chat area
 - browser-local direct chat history with per-entry delete and full purge controls
 - compact direct-chat history cards with integrated delete actions instead of a split or awkward sidebar row layout
+- direct-chat history actions now live inside the same sidebar history panel so `New`, `Purge`, and the local chat list read as one coherent browser-local area
 - stronger browser-local history labeling so it is clear that direct chat history is device-local, purgeable, and not synced or stored server-side
 - explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
 - superscript-style grounded source references with hover tooltips plus a retractable source drawer so provenance stays available without overwhelming the main answer surface
@@ -181,14 +182,14 @@ The local UI is still static and self-hosted, but it now behaves like a real wor
 
 - it loads provider, runtime, and model-catalog state from the backend
 - it uses a calmer sidebar-and-editorial shell with settings and stack details in dedicated modals
-- it keeps a browser-local direct chat history with a new-chat action, per-entry delete, and full purge
+- it keeps a browser-local direct chat history with `New`, per-entry delete, and full purge controls in the same sidebar history panel
 - it labels that history clearly as browser-local and device-local so it is not mistaken for synced or server-side storage
 - it lets you choose the requested model globally for direct-chat and grounded-answer requests
 - it stores the selected model plus saved direct-chat and grounded-answer instructions locally in the browser
 - it keeps grounded-answer transcripts, fetched source details, and fetch-inspector output transient in the current tab by default
 - it makes the mode boundary explicit: direct chat is model only, grounded answer is search plus fetch plus model
 - it surfaces runtime readiness, configured default vs. request override, and clearer failure cards without leaving stack diagnostics in the middle of the main chat surface
-- it embeds grounded citations as superscript-style source references with hover tooltips and opens a dedicated right-side source drawer when you want the fuller per-answer source list
+- it embeds grounded citations as superscript-style source references with hover tooltips and keeps the fuller source list behind one quiet per-answer source action plus a dedicated right-side drawer
 - it keeps grounded-answer context-mode visibility explicit so you can tell whether an answer used fetched article text or search-snippet fallback
 
 ## Llama.cpp Profile

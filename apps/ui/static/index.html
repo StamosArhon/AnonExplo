@@ -10,32 +10,33 @@
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand-row">
-          <div>
+          <div class="brand-copy">
             <p class="eyebrow">localhost</p>
             <h1>AnonExplo</h1>
+            <p class="sidebar-copy">
+              Local model chat, grounded answers, and direct search from one quiet workstation.
+            </p>
           </div>
-          <button id="new-chat" type="button" class="ghost-button">New</button>
         </div>
-
-        <p class="sidebar-copy">
-          Direct chat history is stored only in this browser on this device. Grounded answers and fetch
-          inspection stay transient unless you explicitly save something elsewhere.
-        </p>
 
         <section class="sidebar-panel">
           <div class="panel-head">
             <div>
-              <p class="section-label">Browser-local Direct Chat History</p>
-              <p class="panel-copy">Stored only in this browser on this device.</p>
+              <p class="section-label">Direct Chat History</p>
+              <p class="panel-copy">Browser-local only on this device.</p>
             </div>
-            <button id="purge-history" type="button" class="ghost-button ghost-button-small">Purge</button>
+            <div class="panel-actions">
+              <button id="new-chat" type="button" class="ghost-button ghost-button-small">New</button>
+              <button id="purge-history" type="button" class="ghost-button ghost-button-small">Purge</button>
+            </div>
           </div>
           <div id="chat-history-list" class="history-list"></div>
-          <p class="privacy-note">
-            Delete any entry or purge the whole list at any time. Nothing here is synced or stored as
-            server-side chat history.
-          </p>
         </section>
+
+        <div class="privacy-note">
+          Direct chat history stays in this browser only. Delete any entry or purge the whole list at any
+          time. Grounded answers and fetch inspection stay transient.
+        </div>
 
         <div class="sidebar-actions">
           <button id="open-settings" type="button" class="ghost-button ghost-button-wide">Settings</button>
