@@ -636,6 +636,7 @@ body::before {
 
 .message-copy-rich {
   display: block;
+  white-space: normal;
 }
 
 .message-text-fragment {
@@ -702,54 +703,37 @@ body::before {
 
 .source-chip-wrap {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
   vertical-align: super;
   margin-left: 0.08rem;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.source-tooltip-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
 }
 
 .source-tooltip {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 0.22rem);
-  transform: translateY(6px);
-  width: min(16.5rem, 68vw);
-  max-width: calc(100vw - 4rem);
+  position: fixed;
+  width: min(18rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
   padding: 0.78rem 0.84rem;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(7, 9, 12, 0.97);
   box-shadow: 0 22px 44px rgba(0, 0, 0, 0.34);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity 150ms ease,
-    transform 150ms ease;
-  z-index: 15;
-  white-space: normal;
-  overflow: hidden;
-}
-
-.source-chip-wrap:hover .source-tooltip,
-.source-chip-wrap:focus-within .source-tooltip {
-  opacity: 1;
-  visibility: visible;
+  backdrop-filter: blur(14px);
   pointer-events: auto;
-  transform: translateY(0);
+  white-space: normal;
+  box-sizing: border-box;
 }
 
 .source-tooltip::after {
-  content: "";
-  position: absolute;
-  left: 0.9rem;
-  top: 100%;
-  width: 0.9rem;
-  height: 0.9rem;
-  background: rgba(7, 9, 12, 0.97);
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  transform: rotate(45deg);
+  display: none;
 }
 
 .source-tooltip-label,
@@ -782,8 +766,10 @@ body::before {
   color: var(--text-soft);
   line-height: 1.58;
   font-size: 0.86rem;
-  max-height: 7.8rem;
-  overflow: hidden;
+  max-height: min(10rem, calc(100vh - 9rem));
+  overflow: auto;
+  padding-right: 0.18rem;
+  overscroll-behavior: contain;
 }
 
 .message-source-note {
