@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import httpx
 from fastapi.testclient import TestClient
 
 from app.main import (
@@ -25,17 +26,25 @@ class MockStreamResponse:
         url: str,
         headers: dict[str, str] | None = None,
         body: bytes = b"",
+        chunks: list[bytes] | None = None,
+        stream_error: Exception | None = None,
     ) -> None:
         self.status_code = status_code
         self.url = url
         self.headers = headers or {}
         self._body = body
+        self._chunks = chunks if chunks is not None else [body]
+        self._stream_error = stream_error
 
     async def aread(self) -> bytes:
         return self._body
 
     async def aiter_bytes(self):
-        yield self._body
+        for chunk in self._chunks:
+            if chunk:
+                yield chunk
+        if self._stream_error is not None:
+            raise self._stream_error
 
 
 class MockStreamContext:
@@ -151,6 +160,30 @@ class FetcherTests(unittest.TestCase):
         self.assertEqual(document["content_quality"], "usable")
         self.assertEqual(document["warnings"], [])
 
+    def test_extract_document_retains_head_and_tail_when_truncated(self) -> None:
+        settings = Settings(
+            FETCH_MAX_TEXT_CHARS=180,
+            FETCH_MIN_CONTENT_CHARS=20,
+            FETCH_MIN_WORD_COUNT=4,
+        )
+        html = """
+        <html>
+          <head><title>Example Article</title></head>
+          <body>
+            <article>
+              <p>Lead summary about the Strait of Hormuz staying closed while negotiations continue.</p>
+              <p>Middle background detail that should be omitted when the configured text budget is exceeded.</p>
+              <p>Late update says Iran and the United States may return to Pakistan for another round of talks.</p>
+            </article>
+          </body>
+        </html>
+        """
+
+        document = extract_document(html, "https://example.com/article", settings)
+        self.assertIn("Strait of Hormuz staying closed", document["content_text"])
+        self.assertIn("United States may return to Pakistan", document["content_text"])
+        self.assertIn("head-and-tail retention", " ".join(document["warnings"]))
+
     def test_validate_requested_url_blocks_localhost(self) -> None:
         with self.assertRaises(FetcherError):
             validate_requested_url("http://localhost:8000/private")
@@ -246,6 +279,78 @@ class FetcherTests(unittest.TestCase):
 
 
 class FetcherHttpBehaviorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetch_html_uses_partial_document_when_response_exceeds_size_limit(self) -> None:
+        settings = Settings(
+            FETCH_MAX_RESPONSE_BYTES=160,
+            FETCH_MAX_TEXT_CHARS=2000,
+            FETCH_MIN_CONTENT_CHARS=20,
+            FETCH_MIN_WORD_COUNT=4,
+        )
+        response = MockStreamResponse(
+            status_code=200,
+            url="https://example.com/live",
+            headers={"content-type": "text/html; charset=utf-8"},
+            chunks=[
+                (
+                    b"<html><body><article><p>The Strait of Hormuz remains closed to normal shipping while talks continue.</p>"
+                ),
+                (
+                    b"<p>Officials say another negotiation session is pending.</p><p>Additional live updates follow here.</p></article></body></html>"
+                ),
+            ],
+        )
+
+        with patch("app.main.httpx.AsyncClient", return_value=MockStreamingClient(response)):
+            document = await fetch_html("https://example.com/live", settings)
+
+        self.assertEqual(document["retrieval_method"], "direct_html_partial")
+        self.assertEqual(document["content_quality"], "usable")
+        self.assertIn("Strait of Hormuz remains closed", document["content_text"])
+        self.assertTrue(
+            any("configured response-size limit" in warning for warning in document["warnings"])
+        )
+
+    async def test_fetch_html_uses_partial_document_when_stream_errors_after_content(self) -> None:
+        settings = Settings(
+            FETCH_MAX_RESPONSE_BYTES=10_000,
+            FETCH_MAX_TEXT_CHARS=2000,
+            FETCH_MIN_CONTENT_CHARS=20,
+            FETCH_MIN_WORD_COUNT=4,
+        )
+        response = MockStreamResponse(
+            status_code=200,
+            url="https://example.com/live",
+            headers={"content-type": "text/html; charset=utf-8"},
+            chunks=[
+                b"<html><body><article><p>Officials say the ceasefire remains in place while the blockade continues.</p>"
+            ],
+            stream_error=httpx.ReadTimeout(""),
+        )
+
+        with patch("app.main.httpx.AsyncClient", return_value=MockStreamingClient(response)):
+            document = await fetch_html("https://example.com/live", settings)
+
+        self.assertEqual(document["retrieval_method"], "direct_html_partial")
+        self.assertEqual(document["content_quality"], "usable")
+        self.assertIn("ceasefire remains in place", document["content_text"])
+        self.assertTrue(any("transport error" in warning for warning in document["warnings"]))
+
+    async def test_fetch_html_raises_structured_timeout_when_no_content_is_received(self) -> None:
+        response = MockStreamResponse(
+            status_code=200,
+            url="https://example.com/live",
+            headers={"content-type": "text/html; charset=utf-8"},
+            chunks=[],
+            stream_error=httpx.ReadTimeout(""),
+        )
+
+        with patch("app.main.httpx.AsyncClient", return_value=MockStreamingClient(response)):
+            with self.assertRaises(FetcherError) as context:
+                await fetch_html("https://example.com/live", Settings())
+
+        self.assertEqual(context.exception.code, "upstream_timeout")
+        self.assertTrue(context.exception.retryable)
+
     async def test_fetch_document_prefers_wikimedia_api_when_enabled(self) -> None:
         settings = Settings(
             FETCH_WIKIMEDIA_API_ENABLED=True,
@@ -344,6 +449,27 @@ class FetcherHttpBehaviorTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(context.exception.code, "wikimedia_api_user_agent_required")
+
+    async def test_fetch_wikimedia_api_document_raises_structured_timeout(self) -> None:
+        settings = Settings(
+            FETCH_WIKIMEDIA_API_ENABLED=True,
+            FETCH_WIKIMEDIA_API_USER_AGENT="AnonExploFetcher/0.1 (mailto:test@example.com)",
+        )
+
+        timeout_client = AsyncMock()
+        timeout_client.__aenter__.return_value = timeout_client
+        timeout_client.__aexit__.return_value = False
+        timeout_client.get.side_effect = httpx.ReadTimeout("")
+
+        with patch("app.main.httpx.AsyncClient", return_value=timeout_client):
+            with self.assertRaises(FetcherError) as context:
+                await fetch_wikimedia_api_document(
+                    "https://en.wikipedia.org/wiki/Twelve-Day_War",
+                    settings,
+                )
+
+        self.assertEqual(context.exception.code, "wikimedia_api_timeout")
+        self.assertTrue(context.exception.retryable)
 
 
 if __name__ == "__main__":

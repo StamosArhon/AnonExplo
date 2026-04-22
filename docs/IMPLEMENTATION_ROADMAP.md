@@ -43,11 +43,11 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 ## Current Phase
 
 - Active phase: `post-roadmap-enhancement`
-- Goal: maintain the current baseline, validate regressions, and land tightly scoped improvements without reopening the completed core roadmap
+- Goal: maintain the current baseline, validate regressions, and land tightly scoped improvements without reopening the completed core roadmap, with the current branch focused on live-source fetch resilience and current-events grounding quality
 
 ## Active Branch
 
-- `main`
+- `stamos/live-source-fetch-tuning`
 
 ## Completed Work
 
@@ -123,10 +123,14 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Moved source-preview hover cards into a shared floating overlay outside the clipped scroll shell so previews stay readable near viewport edges instead of being cut off by container overflow.
 - Tightened grounded-answer quality for current-events prompts by normalizing query and source term variants symmetrically, reducing over-aggressive live-page head bias, and filtering failed-source snippet fallback down to strongly query-matched snippets only.
 - Updated excerpt assembly so clearly multi-part questions do not short-circuit to one high-scoring paragraph when separate passages are needed to answer both parts of the query.
+- Reworked the fetcher so oversized live pages can fall back to explicit bounded partial extraction instead of hard-failing at the raw response-size limit, with `direct_html_partial` and operator-visible warnings.
+- Changed long extracted documents to retain both the head and tail when truncation is required, which helps current-event pages whose most relevant updates sit later in the article.
+- Tightened current-events source ranking so snippet fallback is filtered through the same strong-query matching path and same-domain non-live coverage can outrank a live page when the scores are close and the query did not explicitly ask for live coverage.
+- Split the backend-to-fetcher timeout from the fetcher-to-publisher timeout through `FETCHER_CLIENT_TIMEOUT_SECONDS` so structured fetcher failures survive slow upstream requests instead of collapsing into an empty backend timeout message.
 
 ## In-Progress Work
 
-- None inside the repo contents. `stamos/citation-inline-layout-fix` is merged, and the repo is back to the post-roadmap enhancement baseline on `main`.
+- `stamos/live-source-fetch-tuning` is validated locally and ready for branch closeout review, push, diff, and merge.
 
 ## Open Questions / Blockers
 
@@ -147,6 +151,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Ambiguous recency wording such as `latest phase` can still pull a mix of current-coverage and historical-timeline sources; future tuning may need stronger recency or event-disambiguation heuristics in the ranking layer.
 - Mixed fetched-plus-snippet context improves partial-evidence coverage, but live-news ranking can still surface contradictory or noisy sources, especially on evolving geopolitical topics.
 - The grounded search and grounded answer endpoints still use env-backed context limits rather than per-request overrides, so live tuning remains an operator configuration task instead of a request-level control.
+- Multi-part grounded answers on fast-moving current-events topics are better than before, but the model can still sometimes under-answer the second clause of a compound question even when the fetched source set contains partial supporting material.
 
 ## Decisions Made And Why
 
@@ -187,6 +192,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - When some selected sources fetch cleanly and others fail, the backend should preserve the successful fetched text and append bounded snippet fallback from the failed sources instead of forcing an all-or-nothing choice between fetched-only and snippet-only grounding.
 - Query-term normalization should be symmetric between the user query and source text. Canonicalizing only one side led to weaker matching for variants such as `USA` versus `U.S.` or `Iranian-American` versus `Iran` and `United States`.
 - Multi-part grounded questions should prefer bounded multi-passage excerpts over a single-passage shortcut when one paragraph does not cover the full question.
+- The backend-to-fetcher timeout must stay separate from the fetcher-to-publisher timeout and should remain slightly higher, so the backend receives structured fetcher errors instead of masking them with a generic orchestration timeout.
+- For live current-events pages, bounded partial HTML extraction with explicit warnings is preferable to a hard failure when the page is already large enough to contain usable grounded text near the front of the document.
 
 ## Security / Privacy Assumptions
 
@@ -224,6 +231,11 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-22 during `stamos/grounded-answer-quality-pass`
 - `python -m py_compile apps/backend/app/grounding.py`: passed on 2026-04-22 during `stamos/grounded-answer-quality-pass`
 - `scripts/ops-check.ps1`: passed on 2026-04-22 against the running local stack during `stamos/grounded-answer-quality-pass`
+- `python -m py_compile apps/backend/app/config.py apps/backend/app/main.py apps/backend/app/providers.py`: passed on 2026-04-22 during `stamos/live-source-fetch-tuning`
+- `docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-22 during `stamos/live-source-fetch-tuning`
+- `docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"`: passed on 2026-04-22 during `stamos/live-source-fetch-tuning`
+- `scripts/ops-check.ps1`: passed on 2026-04-22 against the running local stack during `stamos/live-source-fetch-tuning`
+- `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/live-source-fetch-tuning`
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
@@ -253,11 +265,15 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Manual live grounded-answer check on 2026-04-22 for `Are the straits of hormuz open and what is happening with Iran-US negotiations for an ending to the war?`: reproduced the partial-fetch scenario, returned `fetched_plus_snippets`, and no longer fell back to the generic `insufficient_sources` path
 - Manual live grounded-search check on 2026-04-22 for `Are the Straits of Hormuz open? And what is the current state of the Iranian-American peace talks?`: after the quality pass, selected query-relevant NBC, CBS, and Democracy Now excerpts, kept total grounding context near 2k chars, and filtered failed-source snippet fallback to the stronger remaining evidence
 - Manual live grounded-answer check on 2026-04-22 for `Are the Straits of Hormuz open? And what is the current state of the Iranian-American peace talks?`: returned a direct sourced answer instead of the earlier vague fallback behavior, with runtime ready and `fetched_plus_snippets` grounding
+- Manual live fetch check on 2026-04-22 for `https://www.cnn.com/2026/04/22/world/live-news/iran-war-us-trump-blockade-ceasefire`: returned `direct_html_partial` with usable extracted text and an explicit configured-size-limit warning instead of failing with `response_too_large`
+- Manual live fetch check on 2026-04-22 for `https://www.npr.org/2026/04/22/nx-s1-5795405/iran-middle-east-updates`: returned a clear fetch timeout message through the backend path instead of the earlier empty `Fetch request failed:` error
+- Manual live grounded-answer check on 2026-04-22 for `Are the Straits of Hormuz open? And what is the current state of the Iranian-American peace talks?`: after the live-source tuning pass, returned `grounded` with `fetched_text`, selected three fetched live sources, and no fetch failures, though the answer still favored the first clause more strongly than the second
 
 ## Exact Next Steps
 
-1. Keep validating the current baseline against real queries and regressions on the target hardware.
-2. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
+1. Review and close out `stamos/live-source-fetch-tuning` through push, diff review against `main`, merge, and branch cleanup.
+2. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
+3. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
 3. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
 4. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
 5. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.

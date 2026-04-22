@@ -24,6 +24,11 @@ class FetcherRequestError(ProviderError):
         self.retryable = retryable
 
 
+def _describe_httpx_error(exc: Exception) -> str:
+    message = " ".join(str(exc).split())
+    return message or exc.__class__.__name__
+
+
 class UnsupportedModelError(ProviderError):
     pass
 
@@ -555,8 +560,14 @@ class FetcherClient:
                     retryable=detail.get("retryable"),
                 ) from exc
 
-            raise ProviderError(f"Fetch request failed: {exc}") from exc
+            raise ProviderError(
+                f"Fetch request failed with status {exc.response.status_code}: {_describe_httpx_error(exc)}"
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise ProviderError(
+                f"Fetcher service timed out before it returned a response: {_describe_httpx_error(exc)}"
+            ) from exc
         except (httpx.HTTPError, ValueError) as exc:
-            raise ProviderError(f"Fetch request failed: {exc}") from exc
+            raise ProviderError(f"Fetch request failed: {_describe_httpx_error(exc)}") from exc
 
         return FetchDocument.model_validate(data)

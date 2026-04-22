@@ -21,7 +21,7 @@ from app.grounding import (
     build_grounding_bundle,
     normalize_grounded_answer,
 )
-from app.main import app, build_model_provider, build_search_provider
+from app.main import app, build_fetcher_client, build_model_provider, build_search_provider
 from app.providers import (
     FetchDocument,
     FetcherClient,
@@ -757,6 +757,17 @@ class ProviderFactoryTests(unittest.TestCase):
         provider = build_search_provider(settings)
         self.assertIsInstance(provider, YacySearchProvider)
 
+    def test_build_fetcher_client_uses_dedicated_fetcher_timeout(self) -> None:
+        settings = Settings(
+            FETCH_BASE_URL="http://fetcher:8081",
+            FETCH_REQUEST_TIMEOUT_SECONDS=20,
+            FETCHER_CLIENT_TIMEOUT_SECONDS=35,
+        )
+
+        client = build_fetcher_client(settings)
+        self.assertIsInstance(client, FetcherClient)
+        self.assertEqual(client.timeout_seconds, 35.0)
+
 
 class ProviderClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_fetcher_client_raises_structured_fetcher_request_error(self) -> None:
@@ -784,6 +795,21 @@ class ProviderClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.exception.code, "blocked_by_remote_policy")
         self.assertEqual(context.exception.upstream_status, 403)
         self.assertFalse(context.exception.retryable)
+
+    async def test_fetcher_client_reports_backend_timeout_with_non_blank_message(self) -> None:
+        client = FetcherClient(base_url="http://fetcher:8081", timeout_seconds=20.0)
+
+        with patch(
+            "app.providers.httpx.AsyncClient",
+            return_value=MockAsyncClient(error=httpx.ReadTimeout("")),
+        ):
+            with self.assertRaises(ProviderError) as context:
+                await client.fetch("https://example.com/article")
+
+        self.assertEqual(
+            str(context.exception),
+            "Fetcher service timed out before it returned a response: ReadTimeout",
+        )
 
 
 class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
@@ -1007,7 +1033,7 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
             preview_chars=160,
         )
 
-        self.assertEqual([item.source_id for item in bundle.selected_sources], ["S3", "S2", "S4"])
+        self.assertEqual([item.source_id for item in bundle.selected_sources], ["S2", "S3", "S4"])
         self.assertEqual([item.source_id for item in bundle.fetched_sources], ["S3", "S4"])
         self.assertEqual(bundle.summary.selected_sources, 3)
         self.assertEqual(bundle.summary.fetched_sources, 2)
@@ -1154,6 +1180,48 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bundle.summary.failed_sources, 2)
         self.assertIn("Search snippet:", context)
         self.assertIn("February 28, 2026", context)
+
+    async def test_grounding_bundle_filters_off_topic_snippet_only_fallback_for_status_query(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Hormuz blockade update",
+                url="https://alpha.example/hormuz",
+                snippet="The Strait of Hormuz remains closed while Iran and the United States have not agreed on a date for renewed talks.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Regional talks update",
+                url="https://bravo.example/talks",
+                snippet="Lebanon and Israel continued separate peace talks after overnight shelling.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Background",
+                url="https://charlie.example/background",
+                snippet="Background context on the wider regional conflict.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+        fetcher.fetch.side_effect = ProviderError("Fetch request failed: blocked")
+
+        bundle, context = await build_grounding_bundle(
+            query="Are the Straits of Hormuz open and what is the current state of the Iranian-American peace talks?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=3,
+            fetch_limit=2,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+        )
+
+        self.assertEqual(bundle.summary.context_mode, "search_snippets")
+        self.assertIn("Strait of Hormuz remains closed", context)
+        self.assertNotIn("Lebanon and Israel", context)
+        self.assertNotIn("wider regional conflict", context)
 
     async def test_grounding_bundle_retries_after_thin_content(self) -> None:
         search_provider = AsyncMock()
@@ -1432,6 +1500,65 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(bundle.errors[0].retryable)
         self.assertEqual(bundle.search_results[2].status, "unselected")
         self.assertIn("[S2]", context)
+
+    async def test_grounding_bundle_prefers_same_domain_non_live_candidate_for_current_events_query(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="Live updates: Strait of Hormuz blockade",
+                url="https://example.com/live/hormuz",
+                snippet="Live updates on the blockade and peace talks.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="What to know: Strait of Hormuz blockade and Iran-U.S. talks",
+                url="https://example.com/analysis/hormuz-talks",
+                snippet="Explainer on whether the strait is open and whether talks are resuming.",
+                engine="mock",
+            ),
+            SearchHit(
+                title="Other publisher update",
+                url="https://other.example/update",
+                snippet="Another update on the same events.",
+                engine="mock",
+            ),
+        ]
+
+        fetcher = AsyncMock()
+
+        async def fetch_side_effect(url: str):
+            if url == "https://example.com/analysis/hormuz-talks":
+                return FetchDocument(
+                    requested_url=url,
+                    final_url=url,
+                    title="What to know",
+                    excerpt="Explainer excerpt.",
+                    content_text="The Strait of Hormuz is not open, and no date has been agreed for renewed Iran-U.S. talks.",
+                    content_char_count=90,
+                    word_count=16,
+                    content_type="text/html",
+                    retrieval_method="direct_html",
+                    content_quality="usable",
+                    warnings=[],
+                )
+            raise ProviderError("Fetch request failed: blocked")
+
+        fetcher.fetch.side_effect = fetch_side_effect
+
+        bundle, context = await build_grounding_bundle(
+            query="Are the Straits of Hormuz open and what is the current state of the Iranian-American peace talks?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=3,
+            fetch_limit=1,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+        )
+
+        self.assertEqual(bundle.selected_sources[0].source_id, "S2")
+        self.assertEqual(bundle.fetched_sources[0].source_id, "S2")
+        self.assertIn("Strait of Hormuz is not open", context)
 
     async def test_grounding_bundle_selects_query_relevant_excerpt_from_long_document(self) -> None:
         search_provider = AsyncMock()

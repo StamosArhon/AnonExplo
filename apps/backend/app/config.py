@@ -67,6 +67,10 @@ class Settings(BaseSettings):
         default=20.0,
         validation_alias="FETCH_REQUEST_TIMEOUT_SECONDS",
     )
+    fetcher_client_timeout_seconds: float = Field(
+        default=30.0,
+        validation_alias="FETCHER_CLIENT_TIMEOUT_SECONDS",
+    )
     grounding_source_char_limit: int = Field(
         default=3000,
         validation_alias="GROUNDING_SOURCE_CHAR_LIMIT",

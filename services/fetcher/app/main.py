@@ -149,6 +149,34 @@ def normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def describe_exception_message(exc: Exception) -> str:
+    message = normalize_text(str(exc))
+    return message or exc.__class__.__name__
+
+
+def build_transport_fetch_error(
+    exc: httpx.HTTPError,
+    *,
+    source_label: str = "Remote site",
+    timeout_code: str = "upstream_timeout",
+    transport_code: str = "upstream_transport_error",
+) -> FetcherError:
+    if isinstance(exc, httpx.TimeoutException):
+        return FetcherError(
+            f"{source_label} timed out before the fetch completed.",
+            code=timeout_code,
+            status_code=502,
+            retryable=True,
+        )
+
+    return FetcherError(
+        f"{source_label} transport error: {describe_exception_message(exc)}.",
+        code=transport_code,
+        status_code=502,
+        retryable=True,
+    )
+
+
 def _is_wikimedia_hostname(hostname: str | None) -> bool:
     if not hostname:
         return False
@@ -225,6 +253,67 @@ def _classify_content_quality(
     return "usable", warnings
 
 
+def build_bounded_content_text(
+    text_blocks: list[str],
+    max_chars: int,
+) -> tuple[str, list[str]]:
+    joined_text = "\n\n".join(text_blocks)
+    if len(joined_text) <= max_chars:
+        return joined_text, []
+
+    if not text_blocks:
+        return "", []
+
+    separator = "\n\n...\n\n"
+    head_budget = max(0, min(max_chars - len(separator), int(max_chars * 0.55)))
+    tail_budget = max(0, max_chars - len(separator) - head_budget)
+
+    head_blocks: list[str] = []
+    used_head = 0
+    head_index = -1
+    for index, block in enumerate(text_blocks):
+        block_cost = len(block) + (2 if head_blocks else 0)
+        if head_blocks and used_head + block_cost > head_budget:
+            break
+        if not head_blocks and len(block) > head_budget and head_budget > 0:
+            head_blocks.append(block[:head_budget].rstrip())
+            used_head = len(head_blocks[0])
+            head_index = index
+            break
+        if used_head + block_cost > max_chars:
+            break
+        head_blocks.append(block)
+        used_head += block_cost
+        head_index = index
+
+    tail_blocks: list[str] = []
+    used_tail = 0
+    for index in range(len(text_blocks) - 1, head_index, -1):
+        block = text_blocks[index]
+        block_cost = len(block) + (2 if tail_blocks else 0)
+        if tail_blocks and used_tail + block_cost > tail_budget:
+            break
+        if not tail_blocks and len(block) > tail_budget and tail_budget > 0:
+            tail_blocks.append(block[-tail_budget:].lstrip())
+            used_tail = len(tail_blocks[0])
+            break
+        if used_tail + block_cost > max_chars:
+            break
+        tail_blocks.append(block)
+        used_tail += block_cost
+
+    tail_blocks.reverse()
+    if not tail_blocks or head_index >= len(text_blocks) - len(tail_blocks) - 1:
+        return joined_text[:max_chars], [
+            "Extracted text was truncated to the configured text-character limit; middle or trailing sections may be missing."
+        ]
+
+    bounded_text = "\n\n".join(head_blocks) + separator + "\n\n".join(tail_blocks)
+    return bounded_text[:max_chars], [
+        "Extracted text was truncated to the configured text-character limit using head-and-tail retention; middle sections may be missing."
+    ]
+
+
 def extract_document(
     html: str,
     source_url: str,
@@ -252,10 +341,14 @@ def extract_document(
         if fallback:
             text_blocks.append(fallback)
 
-    content_text = "\n\n".join(text_blocks)[: settings.fetch_max_text_chars]
+    content_text, truncation_warnings = build_bounded_content_text(
+        text_blocks,
+        settings.fetch_max_text_chars,
+    )
     content_char_count = len(content_text)
     word_count = len([word for word in content_text.split(" ") if word])
     content_quality, warnings = _classify_content_quality(content_text, word_count, settings)
+    warnings = [*warnings, *truncation_warnings]
     excerpt = content_text[:400]
     return {
         "requested_url": source_url,
@@ -270,6 +363,30 @@ def extract_document(
         "content_quality": content_quality,
         "warnings": warnings,
     }
+
+
+def build_extracted_document(
+    html_bytes: bytes,
+    *,
+    source_url: str,
+    final_url: str,
+    content_type: str,
+    settings: Settings,
+    retrieval_method: str,
+    warnings: list[str] | None = None,
+) -> dict[str, str | int | list[str]]:
+    html = html_bytes.decode("utf-8", errors="replace")
+    document = extract_document(
+        html,
+        source_url,
+        settings,
+        retrieval_method=retrieval_method,
+    )
+    document["final_url"] = final_url
+    document["content_type"] = content_type
+    if warnings:
+        document["warnings"] = [*document["warnings"], *warnings]
+    return document
 
 
 async def _raise_for_upstream_failure(response: httpx.Response) -> None:
@@ -333,43 +450,56 @@ async def fetch_html(url: str, settings: Settings) -> dict[str, str | int | list
     }
     timeout = httpx.Timeout(settings.fetch_request_timeout_seconds)
 
-    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=True) as client:
-        async with client.stream("GET", url) as response:
-            if response.status_code >= 400:
-                await _raise_for_upstream_failure(response)
+    chunks = bytearray()
+    content_type = ""
+    final_url = url
+    retrieval_method = "direct_html"
+    partial_warnings: list[str] = []
 
-            content_type = response.headers.get("content-type", "")
-            if "html" not in content_type.lower():
-                raise FetcherError(
-                    "Only HTML pages are supported by the fetch pipeline.",
-                    code="unsupported_content_type",
-                    status_code=400,
-                    upstream_status=response.status_code,
-                    retryable=False,
-                )
+    try:
+        async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=True) as client:
+            async with client.stream("GET", url) as response:
+                if response.status_code >= 400:
+                    await _raise_for_upstream_failure(response)
 
-            chunks = bytearray()
-            async for chunk in response.aiter_bytes():
-                chunks.extend(chunk)
-                if len(chunks) > settings.fetch_max_response_bytes:
+                content_type = response.headers.get("content-type", "")
+                if "html" not in content_type.lower():
                     raise FetcherError(
-                        "Fetched page exceeded the configured size limit.",
-                        code="response_too_large",
+                        "Only HTML pages are supported by the fetch pipeline.",
+                        code="unsupported_content_type",
                         status_code=400,
                         upstream_status=response.status_code,
                         retryable=False,
                     )
 
-    html = chunks.decode("utf-8", errors="replace")
-    document = extract_document(
-        html,
-        url,
-        settings,
-        retrieval_method="direct_html",
+                final_url = str(response.url)
+                async for chunk in response.aiter_bytes():
+                    chunks.extend(chunk)
+                    if len(chunks) > settings.fetch_max_response_bytes:
+                        del chunks[settings.fetch_max_response_bytes :]
+                        retrieval_method = "direct_html_partial"
+                        partial_warnings.append(
+                            "Source HTML was truncated at the configured response-size limit; later page sections may be missing."
+                        )
+                        break
+    except httpx.HTTPError as exc:
+        if chunks:
+            retrieval_method = "direct_html_partial"
+            partial_warnings.append(
+                f"Source HTML stream ended early because of a transport error ({describe_exception_message(exc)}); extracted text may be incomplete."
+            )
+        else:
+            raise build_transport_fetch_error(exc) from exc
+
+    return build_extracted_document(
+        bytes(chunks),
+        source_url=url,
+        final_url=final_url,
+        content_type=content_type or "text/html",
+        settings=settings,
+        retrieval_method=retrieval_method,
+        warnings=partial_warnings,
     )
-    document["final_url"] = str(response.url)
-    document["content_type"] = content_type
-    return document
 
 
 async def fetch_wikimedia_api_document(url: str, settings: Settings) -> dict[str, str | int | list[str]]:
@@ -407,10 +537,18 @@ async def fetch_wikimedia_api_document(url: str, settings: Settings) -> dict[str
     }
     timeout = httpx.Timeout(settings.fetch_request_timeout_seconds)
 
-    async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=True) as client:
-        response = await client.get(api_url, params=params)
-        if response.status_code >= 400:
-            await _raise_for_upstream_failure(response)
+    try:
+        async with httpx.AsyncClient(headers=headers, timeout=timeout, follow_redirects=True) as client:
+            response = await client.get(api_url, params=params)
+            if response.status_code >= 400:
+                await _raise_for_upstream_failure(response)
+    except httpx.HTTPError as exc:
+        raise build_transport_fetch_error(
+            exc,
+            source_label="Wikimedia API",
+            timeout_code="wikimedia_api_timeout",
+            transport_code="wikimedia_api_transport_error",
+        ) from exc
 
     try:
         payload = response.json()
@@ -497,4 +635,4 @@ async def fetch(
     except httpx.HTTPStatusError as exc:
         raise HTTPException(status_code=502, detail=f"Upstream returned {exc.response.status_code}.") from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Fetch failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail=f"Fetch failed: {describe_exception_message(exc)}") from exc

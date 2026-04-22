@@ -52,8 +52,10 @@ The fetcher is the most sensitive service because it has egress. Current guardra
 - only `http` and `https` URLs are accepted
 - obvious localhost and private-address targets are rejected
 - response size is capped
+- the backend-to-fetcher timeout is kept separate from the fetcher-to-publisher timeout so structured fetcher failures can propagate instead of being hidden behind a generic orchestration timeout
 - non-HTML responses are rejected
 - extracted text is trimmed to a bounded size
+- oversized live pages may still produce bounded partial extracts with explicit warnings when the early portion of the document is already usable grounded material
 - thin page extractions are classified explicitly instead of being treated as trustworthy article text
 - blocked or rate-limited upstream responses are surfaced with structured failure codes so operators can tell why grounding degraded
 - grounded-answer prompts use only bounded excerpts of fetched source text

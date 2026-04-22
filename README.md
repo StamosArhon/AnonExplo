@@ -137,6 +137,7 @@ The repo treats provider choice as configuration:
   - `SEARCH_PREFERRED_DOMAIN_BOOST`
 - fetch service:
   - `FETCH_BASE_URL`
+  - `FETCHER_CLIENT_TIMEOUT_SECONDS`
   - `FETCH_MIN_CONTENT_CHARS`
   - `FETCH_MIN_WORD_COUNT`
   - `FETCH_ACCEPT_LANGUAGE`

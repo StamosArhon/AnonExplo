@@ -88,7 +88,7 @@ def build_search_provider(settings: Settings) -> SearchProvider:
 def build_fetcher_client(settings: Settings) -> FetcherClient:
     return FetcherClient(
         base_url=settings.fetch_base_url,
-        timeout_seconds=settings.fetch_request_timeout_seconds,
+        timeout_seconds=settings.fetcher_client_timeout_seconds,
     )
 
 

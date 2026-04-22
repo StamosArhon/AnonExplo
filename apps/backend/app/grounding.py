@@ -125,6 +125,11 @@ LIVE_COVERAGE_HINT_PATTERN = re.compile(
     r"\b(?:live|liveblog|updates?|rolling|as it happened)\b",
     re.IGNORECASE,
 )
+LIVE_URL_HINT_PATTERN = re.compile(r"/(?:live|liveblog|updates?)(?:[/?#-]|$)", re.IGNORECASE)
+STABLE_COVERAGE_HINT_PATTERN = re.compile(
+    r"\b(?:timeline|explainer|analysis|what to know|faq|questions|guide|overview)\b",
+    re.IGNORECASE,
+)
 DIRECT_ANSWER_HINT_PATTERN = re.compile(
     r"\b(?:timeline|date|dated|first reported|first strike|began|started|happened|occurred|phase|ceasefire|blockade|negotiations?|talks?|open|closed|resume|resumed|resuming|confirmed|denied)\b",
     re.IGNORECASE,
@@ -185,6 +190,18 @@ COMMON_QUERY_STOPWORDS = {
     "which",
     "who",
     "why",
+}
+GENERIC_STATUS_QUERY_TERMS = {
+    "blockade",
+    "ceasefire",
+    "closed",
+    "open",
+    "peace",
+    "phase",
+    "resume",
+    "resumed",
+    "resuming",
+    "talks",
 }
 
 
@@ -259,12 +276,39 @@ def _is_multi_part_query(query: str) -> bool:
     return bool(MULTI_PART_QUERY_PATTERN.search(query or ""))
 
 
+def _is_current_events_query(query: str) -> bool:
+    normalized_query = query or ""
+    return bool(
+        DIRECT_DATE_QUERY_PATTERN.search(normalized_query)
+        or _is_status_query(normalized_query)
+        or _is_multi_part_query(normalized_query)
+    )
+
+
+def _is_explicit_live_query(query: str) -> bool:
+    return bool(LIVE_COVERAGE_HINT_PATTERN.search(query or ""))
+
+
 def _has_strong_query_coverage(query_terms: list[str], matched_terms: set[str]) -> bool:
     if not query_terms:
         return True
 
     required_terms = max(2, min(4, (len(query_terms) + 1) // 2))
     return len(matched_terms) >= required_terms
+
+
+def _is_likely_live_candidate(candidate: GroundingSelectedSource) -> bool:
+    candidate_text = " ".join(part for part in [candidate.title, candidate.url] if part)
+    return bool(
+        LIVE_COVERAGE_HINT_PATTERN.search(candidate_text)
+        or LIVE_URL_HINT_PATTERN.search(candidate.url)
+    )
+
+
+def _extract_core_query_terms(query: str, query_terms: list[str]) -> set[str]:
+    if not (_is_status_query(query) or _is_multi_part_query(query)):
+        return set(query_terms)
+    return {term for term in query_terms if term not in GENERIC_STATUS_QUERY_TERMS}
 
 
 def _build_search_results(query_hits: list[SearchHit]) -> tuple[list[GroundingSearchResult], list[GroundingSelectedSource]]:
@@ -340,6 +384,10 @@ def _score_source(
     definitional_query = _is_definitional_query(query)
     status_query = _is_status_query(query)
     direct_date_query = bool(DIRECT_DATE_QUERY_PATTERN.search(query))
+    current_events_query = _is_current_events_query(query)
+    explicit_live_query = _is_explicit_live_query(query)
+    likely_live_candidate = _is_likely_live_candidate(candidate)
+    stable_candidate = bool(STABLE_COVERAGE_HINT_PATTERN.search(raw_candidate_text))
 
     title_terms = set(title_match_text.split())
     snippet_terms = set(snippet_match_text.split())
@@ -375,15 +423,21 @@ def _score_source(
             score += 6.0
         if DIRECT_ANSWER_HINT_PATTERN.search(raw_candidate_text):
             score += 8.0
-        if LIVE_COVERAGE_HINT_PATTERN.search(candidate.title) and not DATEISH_PATTERN.search(raw_candidate_text):
+        if likely_live_candidate and not DATEISH_PATTERN.search(raw_candidate_text):
             score -= 10.0
     elif status_query:
         if DIRECT_ANSWER_HINT_PATTERN.search(raw_candidate_text):
             score += 8.0
-        if LIVE_COVERAGE_HINT_PATTERN.search(candidate.title):
+        if likely_live_candidate:
             score -= 4.0
     elif definitional_query and DIRECT_ANSWER_HINT_PATTERN.search(raw_candidate_text):
         score += 6.0
+
+    if current_events_query and not explicit_live_query:
+        if stable_candidate:
+            score += 6.0
+        if likely_live_candidate:
+            score -= 8.0
 
     if candidate.title.strip():
         score += 2.0
@@ -425,17 +479,40 @@ def _rank_sources(
         for candidate in source_candidates
     ]
     scored_candidates.sort(key=lambda item: (-item[1], item[0].search_rank, item[0].domain, item[0].normalized_url))
+    candidates_by_domain: dict[str, list[tuple[GroundingSelectedSource, float]]] = {}
+    domain_order: list[str] = []
+    for candidate, score in scored_candidates:
+        if candidate.domain not in candidates_by_domain:
+            candidates_by_domain[candidate.domain] = []
+            domain_order.append(candidate.domain)
+        candidates_by_domain[candidate.domain].append((candidate, score))
 
-    ranked_candidates = [candidate for candidate, _ in scored_candidates]
     primary_pass: list[GroundingSelectedSource] = []
     fallback_pass: list[GroundingSelectedSource] = []
-    seen_domains: set[str] = set()
+    prefer_non_live = _is_current_events_query(query) and not _is_explicit_live_query(query) and not _is_definitional_query(query)
 
-    for candidate in ranked_candidates:
-        if candidate.domain not in seen_domains:
-            primary_pass.append(candidate)
-            seen_domains.add(candidate.domain)
-        else:
+    for domain in domain_order:
+        domain_candidates = candidates_by_domain[domain]
+        primary_candidate, primary_score = domain_candidates[0]
+        promoted_index: int | None = None
+
+        if prefer_non_live and _is_likely_live_candidate(primary_candidate):
+            for index, (candidate, score) in enumerate(domain_candidates[1:], start=1):
+                if _is_likely_live_candidate(candidate):
+                    continue
+                if primary_score - score <= 10.0:
+                    primary_candidate = candidate
+                    promoted_index = index
+                    break
+
+        primary_pass.append(primary_candidate)
+
+        for index, (candidate, _) in enumerate(domain_candidates):
+            if candidate.source_id == primary_candidate.source_id:
+                continue
+            if promoted_index is not None and index == 0:
+                fallback_pass.append(candidate)
+                continue
             fallback_pass.append(candidate)
 
     return primary_pass + fallback_pass
@@ -561,8 +638,38 @@ def _source_matches_query_strongly(query: str, source: GroundingSelectedSource) 
     matched_terms = {term for term in query_terms if term in source_terms}
     coverage_ratio = len(matched_terms) / len(query_terms)
     has_direct_signal = bool(DIRECT_ANSWER_HINT_PATTERN.search(source_text))
+    core_query_terms = _extract_core_query_terms(query, query_terms)
+    matched_core_terms = {term for term in core_query_terms if term in source_terms}
+
+    if _is_status_query(query) or _is_multi_part_query(query):
+        if not matched_core_terms:
+            return False
+        return (
+            coverage_ratio >= 0.4
+            or (_has_strong_query_coverage(query_terms, matched_terms) and has_direct_signal)
+            or len(matched_core_terms) >= 2
+        )
 
     return has_direct_signal or coverage_ratio >= 0.5 or _has_strong_query_coverage(query_terms, matched_terms)
+
+
+def _filter_snippet_sources_for_query(
+    query: str,
+    sources: list[GroundingSelectedSource],
+    *,
+    max_sources: int,
+) -> list[GroundingSelectedSource]:
+    snippet_sources = [source for source in sources if source.snippet.strip()]
+    ranked_sources = _rank_sources(
+        query,
+        snippet_sources,
+        preferred_domains=[],
+        preferred_domain_boost=0.0,
+    )
+    strong_sources = [source for source in ranked_sources if _source_matches_query_strongly(query, source)]
+    if strong_sources:
+        return strong_sources[:max_sources]
+    return ranked_sources[:max_sources]
 
 
 def _select_context_excerpt(query: str, content_text: str, char_limit: int) -> str:
@@ -828,14 +935,12 @@ def _compose_failed_source_snippet_context(
         for source, document, _ in fetch_results
         if document is None and source.snippet.strip()
     ]
-    ranked_failed_sources = _rank_sources(
-        query,
-        failed_sources_with_snippets,
-        preferred_domains=[],
-        preferred_domain_boost=0.0,
-    )
     return _compose_snippet_context(
-        selected_sources=[source for source in ranked_failed_sources if _source_matches_query_strongly(query, source)][:2],
+        selected_sources=_filter_snippet_sources_for_query(
+            query,
+            failed_sources_with_snippets,
+            max_sources=2,
+        ),
         total_context_chars=min(total_context_chars, 640),
         snippet_label="Search snippet fallback:",
     )
@@ -892,7 +997,11 @@ async def build_grounding_bundle(
                 context_mode = "fetched_plus_snippets"
     else:
         grounding_context, used_context_chars = _compose_snippet_context(
-            selected_sources=selected_sources,
+            selected_sources=_filter_snippet_sources_for_query(
+                query,
+                selected_sources,
+                max_sources=max(1, min(len(selected_sources), 3)),
+            ),
             total_context_chars=total_context_chars,
         )
         if grounding_context.strip():

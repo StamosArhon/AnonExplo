@@ -69,6 +69,8 @@
 - The grounding summary's `selected_sources` count is now effectively "selected or attempted" because the backend can try later ranked sources after early fetch failures.
 - The fetcher now exposes structured error details such as `blocked_by_remote_policy`, `upstream_forbidden`, `upstream_rate_limited`, and `content_too_thin`; keep those codes explicit in backend and UI surfaces instead of collapsing them into generic fetch failures.
 - Use the tracked fetcher knobs in `.env.example` when tuning extraction quality: `FETCH_MIN_CONTENT_CHARS`, `FETCH_MIN_WORD_COUNT`, and `FETCH_ACCEPT_LANGUAGE`.
+- Keep `FETCHER_CLIENT_TIMEOUT_SECONDS` slightly higher than `FETCH_REQUEST_TIMEOUT_SECONDS`. The backend-to-fetcher wait budget must outlast the fetcher-to-publisher wait budget so structured fetcher error details are not lost behind a blank orchestrator timeout.
+- Do not revert the fetcher to hard-fail immediately on oversized live pages when bounded partial HTML already contains usable text. The current baseline prefers explicit `direct_html_partial` warnings over unnecessary total failure.
 - Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` when you want grounded-source ranking to modestly favor trusted domains such as Wikipedia or Wikimedia. Keep that preference modest; it should bias ranking, not replace search relevance or domain diversity.
 - If Wikimedia API support is enabled, require a descriptive and contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` instead of relying on the generic fetch user-agent.
 - Request-level model selection should stay bounded to runtime-advertised models and should not mutate the backend's configured default model.
