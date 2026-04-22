@@ -47,7 +47,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Active Branch
 
-- `stamos/citation-inline-layout-fix`
+- `main`
 
 ## Completed Work
 
@@ -119,12 +119,12 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Restyled grounded source-tooltips into shorter anchored previews tied to the source pill instead of large centered popovers that fought with the reading column.
 - Added a hybrid grounding mode that keeps fetched article text primary while appending bounded snippet fallback context from selected sources whose fetches failed.
 - Updated the UI context labels and source-drawer copy so grounded answers can explicitly show `fetched_plus_snippets` instead of pretending every mixed-evidence answer is purely fetched or purely snippet-backed.
+- Kept grounded-answer citation pills visually inline by removing whitespace-driven layout drift from the rich-answer renderer.
+- Moved source-preview hover cards into a shared floating overlay outside the clipped scroll shell so previews stay readable near viewport edges instead of being cut off by container overflow.
 
 ## In-Progress Work
 
-- `stamos/citation-inline-layout-fix`
-  - keep grounded-answer source pills inline with the cited sentence instead of letting rich-message whitespace push them onto their own rows
-  - move source-preview tooltips into a shared floating overlay outside the clipped scroll shell so previews stay readable near viewport edges
+- None inside the repo contents. `stamos/citation-inline-layout-fix` is merged, and the repo is back to the post-roadmap enhancement baseline on `main`.
 
 ## Open Questions / Blockers
 
@@ -267,7 +267,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The UI shell now uses workspace navigation plus in-tab conversation-style rendering for direct chat and grounded answers.
 - Direct chat history, the selected model id, and saved direct-chat or grounded-answer instructions are now stored in browser local storage; grounded details and fetch results remain transient.
 - Grounded answers now render source IDs as inline citation pills with hover tooltips and open a dedicated right-side source drawer for deeper inspection instead of using a large grounding-details block in the main thread.
-- The current branch is a UI-only follow-up to that answer surface: the backend already returns normalized inline citations for the reported repro, so the remaining work is to keep those citations visually inline and to float source previews outside the clipped scroll shell.
+- The most recently merged enhancement is a UI-only follow-up to that answer surface: the backend already returned normalized inline citations for the reported repro, and the UI now keeps those citations visually inline while floating source previews outside the clipped scroll shell.
 - Direct Chat does not call SearXNG or the fetcher. Grounded Answer is the explicit search plus fetch plus model workflow and should stay clearly documented in future branches.
 - Grounded Answer now ranks search results, retries later candidates after fetch failures, classifies thin page extractions, skips later URLs from domains that have already returned explicit robot-policy or similar blocking responses, and may fall back to search snippets when publishers block fetches. That fallback is intentional and must stay explicit in both API responses and UI copy.
 - The most recently merged enhancement also keeps mixed evidence explicit by appending failed-source snippet fallback to fetched grounding context instead of discarding that snippet evidence when only part of the selected source set is fetchable.
