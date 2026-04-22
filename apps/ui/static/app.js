@@ -12,6 +12,10 @@ const DEFAULT_SETTINGS = {
   groundingFetchLimit: 3,
 };
 
+const SOURCE_TOOLTIP_HIDE_DELAY_MS = 120;
+const SOURCE_TOOLTIP_EDGE_GAP_PX = 16;
+const SOURCE_TOOLTIP_OFFSET_PX = 12;
+
 const WORKSPACES = {
   "workspace-chat": {
     eyebrow: "Direct Chat",
@@ -790,7 +794,7 @@ function getTooltipPreviewText(source) {
   return preview === "No messages yet." ? "No source preview available." : preview;
 }
 
-function buildCitationTooltip(source) {
+function legacyBuildCitationTooltip(source) {
   return `
     <span class="source-tooltip" role="tooltip">
       <p class="source-tooltip-label">${escapeHtml(source.sourceId)} · ${escapeHtml(source.statusLabel)}</p>
@@ -809,7 +813,7 @@ function getSourceReferenceLabel(sourceId) {
   return match ? match[1] : normalized;
 }
 
-function renderGroundedMessageCopy(message) {
+function legacyRenderGroundedMessageCopy(message) {
   const bundle = message?.sourceBundle;
   if (!bundle?.sources?.length) {
     return `<div class="message-copy">${escapeWithBreaks(message.content || "")}</div>`;
@@ -868,6 +872,68 @@ function renderGroundedMessageCopy(message) {
         Sources ${escapeHtml(String(bundle.sourceCount))}
       </button>
       <span class="message-source-note">${escapeHtml(footerNotes.join(" · "))}</span>
+    </div>
+  `;
+}
+
+function buildCitationTooltip(source) {
+  const statusLabel = `${source.sourceId} - ${source.statusLabel}`;
+  return `
+    <div class="source-tooltip" role="tooltip" data-placement="above">
+      <p class="source-tooltip-label">${escapeHtml(statusLabel)}</p>
+      <a class="source-tooltip-link" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">
+        ${escapeHtml(source.title)}
+      </a>
+      <p class="source-tooltip-meta">${escapeHtml(source.domain || "unknown domain")}</p>
+      <p class="source-tooltip-copy">${escapeHtml(getTooltipPreviewText(source))}</p>
+    </div>
+  `;
+}
+
+function renderGroundedMessageCopy(message) {
+  const bundle = message?.sourceBundle;
+  if (!bundle?.sources?.length) {
+    return `<div class="message-copy">${escapeWithBreaks(message.content || "")}</div>`;
+  }
+
+  const sourceMap = new Map(bundle.sources.map((item) => [item.sourceId, item]));
+  const content = normalizeCitationMarkup(String(message.content || ""));
+  const citationPattern = /\[(S\d+)\]/gi;
+  let lastIndex = 0;
+  let rendered = "";
+
+  for (const match of content.matchAll(citationPattern)) {
+    const sourceId = String(match[1] || "").toUpperCase();
+    const source = sourceMap.get(sourceId);
+    const matchIndex = match.index ?? 0;
+    rendered += `<span class="message-text-fragment">${escapeWithBreaks(content.slice(lastIndex, matchIndex))}</span>`;
+    if (source) {
+      rendered += `<sup class="source-chip-wrap"><button type="button" class="source-chip-button" data-source-tooltip-trigger="true" data-open-source-drawer="true" data-message-id="${escapeHtml(message.id)}" data-source-id="${escapeHtml(source.sourceId)}" aria-label="Open source ${escapeHtml(source.sourceId)}">${escapeHtml(getSourceReferenceLabel(source.sourceId))}</button></sup>`;
+    } else {
+      rendered += `<span class="message-text-fragment">${escapeHtml(match[0])}</span>`;
+    }
+    lastIndex = matchIndex + match[0].length;
+  }
+
+  rendered += `<span class="message-text-fragment">${escapeWithBreaks(content.slice(lastIndex))}</span>`;
+
+  const footerNotes = [getContextModeLabel(bundle.contextMode)];
+  if (bundle.failedCount) {
+    footerNotes.push(bundle.failedCount === 1 ? "1 source issue" : `${bundle.failedCount} source issues`);
+  }
+
+  return `
+    <div class="message-copy message-copy-rich">${rendered}</div>
+    <div class="message-source-footer">
+      <button
+        type="button"
+        class="source-summary-button"
+        data-open-source-drawer="true"
+        data-message-id="${escapeHtml(message.id)}"
+      >
+        Sources ${escapeHtml(String(bundle.sourceCount))}
+      </button>
+      <span class="message-source-note">${escapeHtml(footerNotes.join(" - "))}</span>
     </div>
   `;
 }
@@ -1213,12 +1279,14 @@ async function main() {
     groundingMeta: document.getElementById("grounding-meta"),
     fetchMeta: document.getElementById("fetch-meta"),
     fetchOutput: document.getElementById("fetch-output"),
+    mainScroll: document.getElementById("main-scroll"),
     sourceDrawerShell: document.getElementById("source-drawer-shell"),
     sourceDrawerBackdrop: document.getElementById("source-drawer-backdrop"),
     closeSourceDrawerButton: document.getElementById("close-source-drawer"),
     sourceDrawerTitle: document.getElementById("source-drawer-title"),
     sourceDrawerMeta: document.getElementById("source-drawer-meta"),
     sourceDrawerList: document.getElementById("source-drawer-list"),
+    sourceTooltipLayer: document.getElementById("source-tooltip-layer"),
     settingsModal: document.getElementById("settings-modal"),
     stackModal: document.getElementById("stack-modal"),
     settingsForm: document.getElementById("settings-form"),
@@ -1247,6 +1315,118 @@ async function main() {
   elements.openSearchLink.href = standaloneSearchUrl;
   elements.stackSearchLink.href = standaloneSearchUrl;
 
+  let activeTooltipTrigger = null;
+  let sourceTooltipHideTimer = null;
+
+  function clearSourceTooltipHideTimer() {
+    if (sourceTooltipHideTimer === null) {
+      return;
+    }
+    window.clearTimeout(sourceTooltipHideTimer);
+    sourceTooltipHideTimer = null;
+  }
+
+  function hideSourceTooltip() {
+    clearSourceTooltipHideTimer();
+    activeTooltipTrigger = null;
+    elements.sourceTooltipLayer.hidden = true;
+    elements.sourceTooltipLayer.innerHTML = "";
+  }
+
+  function scheduleHideSourceTooltip() {
+    clearSourceTooltipHideTimer();
+    sourceTooltipHideTimer = window.setTimeout(() => {
+      hideSourceTooltip();
+    }, SOURCE_TOOLTIP_HIDE_DELAY_MS);
+  }
+
+  function resolveTooltipSource(trigger) {
+    if (!trigger) {
+      return null;
+    }
+
+    const messageId = String(trigger.dataset.messageId || "").trim();
+    const sourceId = String(trigger.dataset.sourceId || "").trim().toUpperCase();
+    if (!messageId || !sourceId) {
+      return null;
+    }
+
+    const message = getGroundingMessageById(state, messageId);
+    const source = message?.sourceBundle?.sources?.find((item) => item.sourceId === sourceId) || null;
+    return source ? { source } : null;
+  }
+
+  function positionSourceTooltip(trigger) {
+    const tooltip = elements.sourceTooltipLayer.firstElementChild;
+    if (!trigger || !tooltip) {
+      return;
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let placement = "above";
+    let top = triggerRect.top - tooltipRect.height - SOURCE_TOOLTIP_OFFSET_PX;
+    if (top < SOURCE_TOOLTIP_EDGE_GAP_PX) {
+      placement = "below";
+      top = triggerRect.bottom + SOURCE_TOOLTIP_OFFSET_PX;
+    }
+
+    top = Math.min(
+      Math.max(top, SOURCE_TOOLTIP_EDGE_GAP_PX),
+      viewportHeight - tooltipRect.height - SOURCE_TOOLTIP_EDGE_GAP_PX,
+    );
+
+    let left = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
+    left = Math.min(
+      Math.max(left, SOURCE_TOOLTIP_EDGE_GAP_PX),
+      viewportWidth - tooltipRect.width - SOURCE_TOOLTIP_EDGE_GAP_PX,
+    );
+
+    tooltip.dataset.placement = placement;
+    tooltip.style.top = `${Math.round(top)}px`;
+    tooltip.style.left = `${Math.round(left)}px`;
+  }
+
+  function showSourceTooltip(trigger) {
+    const resolved = resolveTooltipSource(trigger);
+    if (!resolved) {
+      hideSourceTooltip();
+      return;
+    }
+
+    clearSourceTooltipHideTimer();
+    activeTooltipTrigger = trigger;
+    elements.sourceTooltipLayer.innerHTML = buildCitationTooltip(resolved.source);
+    elements.sourceTooltipLayer.hidden = false;
+    positionSourceTooltip(trigger);
+  }
+
+  function bindSourceTooltipTriggers() {
+    document.querySelectorAll("[data-source-tooltip-trigger='true']").forEach((trigger) => {
+      trigger.addEventListener("mouseenter", () => {
+        showSourceTooltip(trigger);
+      });
+      trigger.addEventListener("focus", () => {
+        showSourceTooltip(trigger);
+      });
+      trigger.addEventListener("mouseleave", (event) => {
+        if (elements.sourceTooltipLayer.contains(event.relatedTarget)) {
+          return;
+        }
+        scheduleHideSourceTooltip();
+      });
+      trigger.addEventListener("blur", (event) => {
+        if (elements.sourceTooltipLayer.contains(event.relatedTarget)) {
+          return;
+        }
+        scheduleHideSourceTooltip();
+      });
+    });
+  }
+
   function persistModelSelection() {
     if (state.selectedModel) {
       safeStorageSet(STORAGE_KEYS.selectedModel, state.selectedModel);
@@ -1256,7 +1436,9 @@ async function main() {
   }
 
   function rerender() {
+    hideSourceTooltip();
     renderApp(config, state, elements);
+    bindSourceTooltipTriggers();
   }
 
   function activateWorkspace(workspaceId) {
@@ -1370,6 +1552,33 @@ async function main() {
     rerender();
   });
 
+  elements.sourceTooltipLayer.addEventListener("mouseenter", () => {
+    clearSourceTooltipHideTimer();
+  });
+
+  elements.sourceTooltipLayer.addEventListener("mouseleave", (event) => {
+    if (activeTooltipTrigger?.contains(event.relatedTarget)) {
+      return;
+    }
+    scheduleHideSourceTooltip();
+  });
+
+  elements.mainScroll.addEventListener(
+    "scroll",
+    () => {
+      hideSourceTooltip();
+    },
+    { passive: true },
+  );
+
+  window.addEventListener("resize", () => {
+    if (!activeTooltipTrigger || elements.sourceTooltipLayer.hidden || !document.body.contains(activeTooltipTrigger)) {
+      hideSourceTooltip();
+      return;
+    }
+    positionSourceTooltip(activeTooltipTrigger);
+  });
+
   elements.openSettingsButtons.forEach((button) => {
     button.addEventListener("click", () => {
       renderSettingsForm(state, elements);
@@ -1400,6 +1609,10 @@ async function main() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") {
+      return;
+    }
+    if (!elements.sourceTooltipLayer.hidden) {
+      hideSourceTooltip();
       return;
     }
     if (!elements.sourceDrawerShell.hidden) {

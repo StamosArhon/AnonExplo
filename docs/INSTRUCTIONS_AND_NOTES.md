@@ -58,6 +58,7 @@
 - Grounded-answer transcripts, fetched source details, and fetch-inspector output must stay transient unless a later milestone adds a privacy-reviewed storage design first.
 - Keep `Direct Chat` and `Grounded Answer` semantically explicit in both code and copy. Direct Chat is model only; Grounded Answer is the search plus fetch plus model workflow.
 - Keep grounded-answer provenance discreet in the main thread. Superscript-style citation references, hover tooltips, and an on-demand source drawer are preferred over large in-line controls or a permanently expanded diagnostics block.
+- Keep source-preview hover cards in a floating overlay outside the scroll shell or other clipped containers. Do not render tooltip content directly inside the message markup if that would make it vulnerable to `overflow` clipping or whitespace-driven layout drift.
 - Avoid duplicating grounded-answer source controls across multiple surfaces. One quiet per-answer source action plus the source drawer is preferred over repeating large source buttons in both the thread and the workspace header.
 - Grounded Answer now prefers fetched article text but may fall back to bounded search snippets when fetches fail. Treat `grounding.summary.context_mode` as the source of truth for which path was used.
 - Mixed grounding is now valid too: `fetched_plus_snippets` means fetched article text was available for part of the source set and bounded snippet fallback was appended for selected sources whose fetches failed. Keep fetched text preferred in prompts, copy, and future logic.
