@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
-from app.grounding import build_grounded_model_request, build_grounding_bundle
+from app.grounding import build_grounded_model_request, build_grounding_bundle, normalize_grounded_answer
 from app.providers import (
     FetcherClient,
     ModelProvider,
@@ -350,12 +350,13 @@ def create_app() -> FastAPI:
                 temperature=grounded_request.temperature,
                 model_name=selection.selected_model,
             )
+            normalized_answer = normalize_grounded_answer(answer["answer"])
             answer_status = "grounded"
             if grounding.summary.context_mode == "search_snippets":
                 answer_status = "snippet_grounded"
             return {
                 "answer_status": answer_status,
-                "answer": answer["answer"],
+                "answer": normalized_answer,
                 "model": answer["model"],
                 "usage": answer["usage"],
                 "model_error": None,

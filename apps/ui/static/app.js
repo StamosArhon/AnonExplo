@@ -738,14 +738,54 @@ function getGroundingMessageById(state, messageId) {
   return state.groundingMessages.find((item) => item.id === messageId) || null;
 }
 
+function normalizeCitationMarkup(value) {
+  let normalized = String(value || "").replaceAll("\r\n", "\n").trim();
+  if (!normalized) {
+    return normalized;
+  }
+
+  const normalizeCitationGroup = (input) => {
+    const sourceIds = [];
+    const seenSourceIds = new Set();
+    for (const match of input.matchAll(/S\d+/gi)) {
+      const sourceId = String(match[0] || "").toUpperCase();
+      if (!sourceId || seenSourceIds.has(sourceId)) {
+        continue;
+      }
+      seenSourceIds.add(sourceId);
+      sourceIds.push(`[${sourceId}]`);
+    }
+    return sourceIds.join("");
+  };
+
+  normalized = normalized.replace(
+    /\[((?:\s*S\d+\s*(?:,|;|\/|\band\b)\s*)+\s*S\d+\s*)\]/gi,
+    (_, citationGroup) => normalizeCitationGroup(citationGroup),
+  );
+  normalized = normalized.replace(
+    /\[\s*S\d+\s*\](?:\s*(?:,|;|\/)?\s*(?:and|or)?\s*\[\s*S\d+\s*\])+/gi,
+    (citationGroup) => normalizeCitationGroup(citationGroup),
+  );
+  return normalized;
+}
+
+function getTooltipPreviewText(source) {
+  const preview = summarizeText(
+    source?.detailText || source?.snippet || source?.errorMessage || "No source preview available.",
+    220,
+  );
+  return preview === "No messages yet." ? "No source preview available." : preview;
+}
+
 function buildCitationTooltip(source) {
   return `
     <span class="source-tooltip" role="tooltip">
-      <p class="source-tooltip-label">${escapeHtml(source.sourceId)} - ${escapeHtml(source.statusLabel)}</p>
+      <p class="source-tooltip-label">${escapeHtml(source.sourceId)} · ${escapeHtml(source.statusLabel)}</p>
       <a class="source-tooltip-link" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">
         ${escapeHtml(source.title)}
       </a>
-      <p class="source-tooltip-copy">${escapeHtml(source.snippet || "No source snippet available.")}</p>
+      <p class="source-tooltip-meta">${escapeHtml(source.domain || "unknown domain")}</p>
+      <p class="source-tooltip-copy">${escapeHtml(getTooltipPreviewText(source))}</p>
     </span>
   `;
 }
@@ -763,13 +803,13 @@ function renderGroundedMessageCopy(message) {
   }
 
   const sourceMap = new Map(bundle.sources.map((item) => [item.sourceId, item]));
-  const content = String(message.content || "");
-  const citationPattern = /\[(S\d+)\]/g;
+  const content = normalizeCitationMarkup(String(message.content || ""));
+  const citationPattern = /\[(S\d+)\]/gi;
   let lastIndex = 0;
   let rendered = "";
 
   for (const match of content.matchAll(citationPattern)) {
-    const sourceId = match[1];
+    const sourceId = String(match[1] || "").toUpperCase();
     const source = sourceMap.get(sourceId);
     const matchIndex = match.index ?? 0;
     rendered += `<span class="message-text-fragment">${escapeWithBreaks(content.slice(lastIndex, matchIndex))}</span>`;
@@ -1080,7 +1120,7 @@ function closeModal(modal) {
 
 function buildGroundingAssistantText(payload) {
   if (payload.answer_status === "grounded" || payload.answer_status === "snippet_grounded") {
-    return payload.answer || "(empty grounded answer)";
+    return normalizeCitationMarkup(payload.answer || "(empty grounded answer)");
   }
   if (payload.answer_status === "insufficient_sources") {
     return "Search finished, but not enough fetched source text was available to answer from derived material only.";

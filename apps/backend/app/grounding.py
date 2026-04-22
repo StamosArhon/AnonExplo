@@ -90,6 +90,24 @@ class GroundingBundle(BaseModel):
 
 
 QUERY_TOKEN_PATTERN = re.compile(r"[a-z0-9]{2,}", re.IGNORECASE)
+SOURCE_ID_PATTERN = re.compile(r"S\d+", re.IGNORECASE)
+GROUPED_SOURCE_IDS_PATTERN = re.compile(
+    r"\[((?:\s*S\d+\s*(?:,|;|/|\band\b)\s*)+\s*S\d+\s*)\]",
+    re.IGNORECASE,
+)
+CITATION_SEQUENCE_PATTERN = re.compile(
+    r"\[\s*S\d+\s*\](?:\s*(?:,|;|/)?\s*(?:and|or)?\s*\[\s*S\d+\s*\])+",
+    re.IGNORECASE,
+)
+CONTEXT_PARAGRAPH_PATTERN = re.compile(r"\n\s*\n+")
+DATEISH_PATTERN = re.compile(
+    r"\b(?:\d{4}|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b",
+    re.IGNORECASE,
+)
+DIRECT_DATE_QUERY_PATTERN = re.compile(
+    r"\b(?:when|date|year|month|day|time|started|start|began|begin|happened|occurred|took place|first|latest|last)\b",
+    re.IGNORECASE,
+)
 COMMON_QUERY_STOPWORDS = {
     "a",
     "an",
@@ -324,6 +342,133 @@ def _rank_sources(
     return primary_pass + fallback_pass
 
 
+def _trim_context_chunk(text: str, char_limit: int) -> str:
+    if char_limit <= 0:
+        return ""
+    normalized = " ".join(text.split()).strip()
+    if len(normalized) <= char_limit:
+        return normalized
+    trimmed = normalized[:char_limit].rstrip()
+    last_space = trimmed.rfind(" ")
+    if last_space >= max(0, char_limit // 2):
+        trimmed = trimmed[:last_space]
+    return trimmed.rstrip(" ,;:")
+
+
+def _chunk_context_passage(text: str, char_limit: int, overlap_chars: int) -> list[str]:
+    normalized = " ".join(text.split()).strip()
+    if not normalized:
+        return []
+    if len(normalized) <= char_limit:
+        return [normalized]
+
+    chunks: list[str] = []
+    start = 0
+    while start < len(normalized):
+        end = min(len(normalized), start + char_limit)
+        if end < len(normalized):
+            split_at = normalized.rfind(" ", start + max(32, char_limit // 2), end)
+            if split_at > start:
+                end = split_at
+        chunk = normalized[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        if end >= len(normalized):
+            break
+        start = max(start + 1, end - overlap_chars)
+        while start < len(normalized) and normalized[start].isspace():
+            start += 1
+    return chunks
+
+
+def _build_context_candidates(text: str, candidate_chars: int) -> list[tuple[int, str]]:
+    normalized = text.replace("\r\n", "\n").strip()
+    if not normalized:
+        return []
+
+    paragraphs = [part.strip() for part in CONTEXT_PARAGRAPH_PATTERN.split(normalized) if part.strip()]
+    if not paragraphs:
+        paragraphs = [normalized]
+
+    overlap_chars = max(48, candidate_chars // 5)
+    candidates: list[tuple[int, str]] = []
+    position = 0
+    for paragraph in paragraphs:
+        for chunk in _chunk_context_passage(paragraph, candidate_chars, overlap_chars):
+            candidates.append((position, chunk))
+            position += 1
+    return candidates
+
+
+def _score_context_candidate(query: str, query_terms: list[str], passage: str, position: int) -> float:
+    normalized_passage = _normalize_text_for_match(passage)
+    if not normalized_passage:
+        return float("-inf")
+
+    passage_terms = set(normalized_passage.split())
+    matched_terms = {term for term in query_terms if term in passage_terms}
+    normalized_query = _normalize_text_for_match(query)
+
+    score = len(matched_terms) * 14.0
+    if query_terms:
+        score += (len(matched_terms) / len(query_terms)) * 26.0
+    if normalized_query and normalized_query in normalized_passage:
+        score += 34.0
+    if DIRECT_DATE_QUERY_PATTERN.search(query) and DATEISH_PATTERN.search(passage):
+        score += 10.0
+    elif DATEISH_PATTERN.search(passage):
+        score += 2.0
+    score -= position * 0.35
+    return score
+
+
+def _select_context_excerpt(query: str, content_text: str, char_limit: int) -> str:
+    normalized = content_text.replace("\r\n", "\n").strip()
+    if not normalized or char_limit <= 0:
+        return ""
+    if len(normalized) <= char_limit:
+        return normalized
+
+    candidate_chars = min(char_limit, max(260, min(680, char_limit // 2 or char_limit)))
+    query_terms = _extract_query_terms(query)
+    candidates = _build_context_candidates(normalized, candidate_chars)
+    if not candidates:
+        return _trim_context_chunk(normalized, char_limit)
+
+    scored_candidates = [
+        (position, passage, _score_context_candidate(query, query_terms, passage, position))
+        for position, passage in candidates
+    ]
+    scored_candidates.sort(key=lambda item: (-item[2], item[0]))
+
+    selected: list[tuple[int, str]] = []
+    selected_passages: set[str] = set()
+    used_chars = 0
+    joiner = "\n...\n"
+
+    for position, passage, score in scored_candidates:
+        if passage in selected_passages or (score <= 0 and selected):
+            continue
+        addition_cost = len(passage) + (len(joiner) if selected else 0)
+        if selected and used_chars + addition_cost > char_limit:
+            continue
+        if not selected and len(passage) > char_limit:
+            passage = _trim_context_chunk(passage, char_limit)
+            addition_cost = len(passage)
+        selected.append((position, passage))
+        selected_passages.add(passage)
+        used_chars += addition_cost
+        if used_chars >= char_limit or len(selected) >= 3:
+            break
+
+    if not selected:
+        return _trim_context_chunk(normalized, char_limit)
+
+    selected.sort(key=lambda item: item[0])
+    combined = joiner.join(passage for _, passage in selected)
+    return _trim_context_chunk(combined, char_limit) if len(combined) > char_limit else combined
+
+
 async def _fetch_selected_sources(
     ranked_candidates: list[GroundingSelectedSource],
     fetch_limit: int,
@@ -409,6 +554,7 @@ async def _fetch_source(source: GroundingSelectedSource, fetcher_client: Fetcher
 
 
 def _compose_context(
+    query: str,
     selected_sources: list[GroundingSelectedSource],
     fetch_results: list[tuple[GroundingSelectedSource, FetchDocument | None, GroundingError | None]],
     source_char_limit: int,
@@ -429,8 +575,9 @@ def _compose_context(
             context_chars_used = 0
         else:
             remaining_chars = total_context_chars - used_context_chars
-            context_chars_used = min(len(document.content_text), source_char_limit, remaining_chars)
-            context_text = document.content_text[:context_chars_used]
+            source_context_limit = min(source_char_limit, remaining_chars)
+            context_text = _select_context_excerpt(query, document.content_text, source_context_limit)
+            context_chars_used = len(context_text)
             used_context_chars += context_chars_used
 
         fetched_sources.append(
@@ -528,6 +675,7 @@ async def build_grounding_bundle(
     )
     search_results = _mark_selected_results(search_results, selected_sources)
     fetched_sources, errors, grounding_context, used_context_chars = _compose_context(
+        query=query,
         selected_sources=selected_sources,
         fetch_results=fetch_results,
         source_char_limit=source_char_limit,
@@ -582,10 +730,15 @@ def build_grounded_model_request(
     prompt = "\n\n".join(
         [
             context_guidance,
+            "Answer the question directly in the first sentence whenever the supplied material supports a direct answer.",
+            "For yes-or-no questions, start with Yes, No, or Insufficient based only on the provided material.",
+            "If the sources provide a concrete date, name, number, or event label, state it plainly before adding context.",
             "Every substantive factual claim must cite one or more supporting source IDs like [S1].",
+            "Place citations at the end of the sentence they support using consecutive source IDs like [S1][S2]. Never group multiple source IDs inside one bracket, and never put citations on their own line.",
             "Do not answer from prior knowledge, training data, or unstated assumptions.",
             "If the provided material does not establish an answer, say that the sourced material is insufficient.",
             "If the sources conflict, describe the conflict and cite the competing source IDs.",
+            "Keep the answer concise and specific. Do not hedge with phrases like 'the sourced material suggests' when the supplied text directly answers the question.",
             f"Question: {query}",
             context_heading,
             grounding_context,
@@ -613,3 +766,36 @@ def build_grounded_model_request(
             ]
         )
     return GroundedModelRequest(prompt=prompt, system_prompt=system_prompt, temperature=temperature)
+
+
+def _normalize_citation_match(match_text: str) -> str:
+    seen_ids: set[str] = set()
+    ordered_ids: list[str] = []
+    for source_id in SOURCE_ID_PATTERN.findall(match_text):
+        normalized_id = source_id.upper()
+        if normalized_id in seen_ids:
+            continue
+        seen_ids.add(normalized_id)
+        ordered_ids.append(normalized_id)
+    return "".join(f"[{source_id}]" for source_id in ordered_ids)
+
+
+def normalize_grounded_answer(answer: str) -> str:
+    normalized = str(answer or "").replace("\r\n", "\n").strip()
+    if not normalized:
+        return normalized
+
+    normalized = GROUPED_SOURCE_IDS_PATTERN.sub(
+        lambda match: _normalize_citation_match(match.group(1)),
+        normalized,
+    )
+    normalized = CITATION_SEQUENCE_PATTERN.sub(
+        lambda match: _normalize_citation_match(match.group(0)),
+        normalized,
+    )
+    normalized = re.sub(r"([,.;:!?])\s+(\[S\d+\])", r"\1\2", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"(\[S\d+\])\s+([,.;:!?])", r"\1\2", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"([^\n])\n([^\n])", r"\1 \2", normalized)
+    normalized = re.sub(r"[ \t]{2,}", " ", normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    return normalized.strip()

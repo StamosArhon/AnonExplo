@@ -15,7 +15,7 @@ os.environ["SEARCH_BASE_URL"] = "http://search-provider:8080"
 os.environ["FETCH_BASE_URL"] = "http://fetcher:8081"
 
 from app.config import Settings
-from app.grounding import build_grounded_model_request, build_grounding_bundle
+from app.grounding import build_grounded_model_request, build_grounding_bundle, normalize_grounded_answer
 from app.main import app, build_model_provider, build_search_provider
 from app.providers import (
     FetchDocument,
@@ -464,6 +464,81 @@ class BackendApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         system_prompt = model_provider.chat.await_args.kwargs["system_prompt"]
         self.assertIn("Do not guess and always cite sources.", system_prompt)
+
+    @patch("app.main.build_model_provider")
+    @patch("app.main.build_fetcher_client")
+    @patch("app.main.build_search_provider")
+    def test_grounding_answer_normalizes_grouped_citations(
+        self,
+        build_search_provider: AsyncMock,
+        build_fetcher_client: AsyncMock,
+        build_model_provider: AsyncMock,
+    ) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(title="Alpha", url="https://example.com/article-a", snippet="alpha", engine="mock"),
+            SearchHit(title="Bravo", url="https://example.com/article-b", snippet="bravo", engine="mock"),
+        ]
+        build_search_provider.return_value = search_provider
+
+        fetcher = AsyncMock()
+
+        async def fetch_side_effect(url: str) -> FetchDocument:
+            label = "Alpha" if url.endswith("article-a") else "Bravo"
+            return FetchDocument(
+                requested_url=url,
+                final_url=url,
+                title=f"{label} Title",
+                excerpt=f"{label} excerpt",
+                content_text=f"{label} content for the grounding path.",
+                content_char_count=37,
+                word_count=6,
+                content_type="text/html",
+            )
+
+        fetcher.fetch.side_effect = fetch_side_effect
+        build_fetcher_client.return_value = fetcher
+
+        runtime = ModelRuntimeStatus(
+            ready=True,
+            reachable=True,
+            status="ready",
+            configured_model="test-model",
+            checked_url="http://model-backend:8080/v1/models",
+            available_models=[ModelDescriptor(id="test-model", owned_by="local")],
+            error=None,
+        )
+        selection = type(
+            "Selection",
+            (),
+            {
+                "selected_model": "test-model",
+                "requested_model": None,
+                "selection_source": "configured_default",
+                "configured_model": "test-model",
+                "model_dump": lambda self=None: {
+                    "configured_model": "test-model",
+                    "selected_model": "test-model",
+                    "requested_model": None,
+                    "selection_source": "configured_default",
+                },
+            },
+        )()
+        model_provider = Mock()
+        model_provider.probe_runtime = AsyncMock(return_value=runtime)
+        model_provider.select_model = Mock(return_value=selection)
+        model_provider.chat = AsyncMock(return_value={
+            "model": "test-model",
+            "answer": "The answer is February 28, 2026 [S1, S2].",
+            "usage": {"total_tokens": 42},
+            "selected_model": "test-model",
+        })
+        build_model_provider.return_value = model_provider
+
+        response = self.client.post("/api/v1/grounding/answer", json={"query": "When did it happen?"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["answer"], "The answer is February 28, 2026 [S1][S2].")
 
     @patch("app.main.build_model_provider")
     @patch("app.main.build_fetcher_client")
@@ -1082,6 +1157,54 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bundle.search_results[2].status, "unselected")
         self.assertIn("[S2]", context)
 
+    async def test_grounding_bundle_selects_query_relevant_excerpt_from_long_document(self) -> None:
+        search_provider = AsyncMock()
+        search_provider.search.return_value = [
+            SearchHit(
+                title="War timeline",
+                url="https://example.com/timeline",
+                snippet="Timeline overview.",
+                engine="mock",
+            )
+        ]
+
+        fetcher = AsyncMock()
+        leading_background = "Background context about regional tensions and general reactions. " * 40
+        answer_passage = (
+            "On February 28, 2026, the first reported strike began according to the compiled timeline and witness accounts. "
+            "The same report describes the opening wave as the beginning of the latest phase."
+        )
+        trailing_notes = "Additional commentary and aftermath analysis. " * 20
+        fetcher.fetch.return_value = FetchDocument(
+            requested_url="https://example.com/timeline",
+            final_url="https://example.com/timeline",
+            title="War timeline",
+            excerpt="Timeline overview.",
+            content_text=f"{leading_background}\n\n{answer_passage}\n\n{trailing_notes}",
+            content_char_count=len(leading_background) + len(answer_passage) + len(trailing_notes) + 4,
+            word_count=220,
+            content_type="text/html",
+            retrieval_method="direct_html",
+            content_quality="usable",
+            warnings=[],
+        )
+
+        bundle, context = await build_grounding_bundle(
+            query="When did the first reported strike begin?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=1,
+            fetch_limit=1,
+            source_char_limit=320,
+            total_context_chars=600,
+            preview_chars=160,
+        )
+
+        self.assertEqual(bundle.summary.context_mode, "fetched_text")
+        self.assertIn("February 28, 2026", context)
+        self.assertIn("first reported strike began", bundle.fetched_sources[0].context_text)
+        self.assertNotIn("Background context about regional tensions", bundle.fetched_sources[0].context_text)
+
     def test_grounded_request_discourages_prior_knowledge_language(self) -> None:
         grounded_request = build_grounded_model_request(
             query="What happened?",
@@ -1095,6 +1218,18 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Do not mention your training data, knowledge cutoff, or prior knowledge", grounded_request.system_prompt)
         self.assertIn("Always cite sources.", grounded_request.system_prompt)
 
+    def test_grounded_request_prefers_direct_answers_and_consecutive_citations(self) -> None:
+        grounded_request = build_grounded_model_request(
+            query="When did it happen?",
+            grounding_context="[S1] Example source text.",
+            temperature=0.1,
+        )
+
+        self.assertIn("Answer the question directly in the first sentence", grounded_request.prompt)
+        self.assertIn("start with Yes, No, or Insufficient", grounded_request.prompt)
+        self.assertIn("consecutive source IDs like [S1][S2]", grounded_request.prompt)
+        self.assertIn("Never group multiple source IDs inside one bracket", grounded_request.prompt)
+
     def test_grounded_request_handles_snippet_context_mode(self) -> None:
         grounded_request = build_grounded_model_request(
             query="What happened?",
@@ -1106,6 +1241,16 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("supporting search-result snippets", grounded_request.prompt)
         self.assertIn("Search result snippets:", grounded_request.prompt)
         self.assertIn("article fetches were unavailable", grounded_request.system_prompt)
+
+    def test_normalize_grounded_answer_rewrites_grouped_and_repeated_citations(self) -> None:
+        normalized = normalize_grounded_answer(
+            "The sources [S1], [S4], and [S4] mention ongoing talks.\nThey also cite [S5, S6]."
+        )
+
+        self.assertEqual(
+            normalized,
+            "The sources [S1][S4] mention ongoing talks. They also cite [S5][S6].",
+        )
 
 
 class SearchProviderTests(unittest.IsolatedAsyncioTestCase):

@@ -671,10 +671,10 @@ body::before {
   min-height: auto;
   padding: 0;
   border-radius: 0;
-  font-size: 0.66rem;
+  font-size: 0.58rem;
   line-height: 1;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   color: rgba(241, 200, 127, 0.9);
   opacity: 0.86;
 }
@@ -702,20 +702,21 @@ body::before {
 
 .source-chip-wrap {
   position: relative;
-  display: inline-flex;
+  display: inline-block;
   vertical-align: super;
-  margin-left: 0.14rem;
-  line-height: 0;
+  margin-left: 0.08rem;
+  line-height: 1;
 }
 
 .source-tooltip {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 0.7rem);
-  transform: translateX(-50%) translateY(6px);
-  width: min(19rem, 72vw);
-  padding: 0.8rem 0.9rem;
-  border-radius: 16px;
+  left: 0;
+  bottom: calc(100% + 0.22rem);
+  transform: translateY(6px);
+  width: min(16.5rem, 68vw);
+  max-width: calc(100vw - 4rem);
+  padding: 0.78rem 0.84rem;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(7, 9, 12, 0.97);
   box-shadow: 0 22px 44px rgba(0, 0, 0, 0.34);
@@ -726,6 +727,8 @@ body::before {
     opacity 150ms ease,
     transform 150ms ease;
   z-index: 15;
+  white-space: normal;
+  overflow: hidden;
 }
 
 .source-chip-wrap:hover .source-tooltip,
@@ -733,20 +736,20 @@ body::before {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
 
 .source-tooltip::after {
   content: "";
   position: absolute;
-  left: 50%;
+  left: 0.9rem;
   top: 100%;
   width: 0.9rem;
   height: 0.9rem;
   background: rgba(7, 9, 12, 0.97);
   border-right: 1px solid rgba(255, 255, 255, 0.12);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  transform: translateX(-50%) rotate(45deg);
+  transform: rotate(45deg);
 }
 
 .source-tooltip-label,
@@ -759,11 +762,19 @@ body::before {
 }
 
 .source-tooltip-link {
-  display: inline-block;
+  display: block;
   margin-top: 0.4rem;
   color: var(--accent);
   text-decoration: none;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.source-tooltip-meta {
+  margin: 0.28rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .source-tooltip-copy {
@@ -771,6 +782,8 @@ body::before {
   color: var(--text-soft);
   line-height: 1.58;
   font-size: 0.86rem;
+  max-height: 7.8rem;
+  overflow: hidden;
 }
 
 .message-source-note {
