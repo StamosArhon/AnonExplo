@@ -43,11 +43,11 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 ## Current Phase
 
 - Active phase: `post-roadmap-enhancement`
-- Goal: maintain the current baseline, validate regressions, and land tightly scoped improvements without reopening the completed core roadmap
+- Goal: maintain the current baseline, validate regressions, and land tightly scoped improvements without reopening the completed core roadmap, while the current branch focuses on explicit machine-handoff documentation and remote-sync verification
 
 ## Active Branch
 
-- `main`
+- `stamos/repo-handoff-sync`
 
 ## Completed Work
 
@@ -127,10 +127,11 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Changed long extracted documents to retain both the head and tail when truncation is required, which helps current-event pages whose most relevant updates sit later in the article.
 - Tightened current-events source ranking so snippet fallback is filtered through the same strong-query matching path and same-domain non-live coverage can outrank a live page when the scores are close and the query did not explicitly ask for live coverage.
 - Split the backend-to-fetcher timeout from the fetcher-to-publisher timeout through `FETCHER_CLIENT_TIMEOUT_SECONDS` so structured fetcher failures survive slow upstream requests instead of collapsing into an empty backend timeout message.
+- Added a repo-root `HANDOFF.md` branch workflow document that records the audited Git baseline, local-only migration assumptions, and the exact next recommended project step for a machine transition without relying on chat history.
 
 ## In-Progress Work
 
-- None inside the repo contents. `stamos/live-source-fetch-tuning` is merged, and the repo is back on the post-roadmap enhancement baseline on `main`.
+- `stamos/repo-handoff-sync` is documenting the audited repo baseline for machine migration and preserving that handoff context in Git without merging it into `main`.
 
 ## Open Questions / Blockers
 
@@ -152,6 +153,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Mixed fetched-plus-snippet context improves partial-evidence coverage, but live-news ranking can still surface contradictory or noisy sources, especially on evolving geopolitical topics.
 - The grounded search and grounded answer endpoints still use env-backed context limits rather than per-request overrides, so live tuning remains an operator configuration task instead of a request-level control.
 - Multi-part grounded answers on fast-moving current-events topics are better than before, but the model can still sometimes under-answer the second clause of a compound question even when the fetched source set contains partial supporting material.
+- Machine migration still requires out-of-band handling for `.env`, local model files, Docker state, and browser-local UI history because those are intentionally not tracked by Git.
+- `scripts/validate.ps1` could not complete on 2026-04-27 during the handoff branch because Docker Desktop was not running on the current machine. The repo itself was still clean at audit time, but full Compose validation must be rerun on the next machine.
 
 ## Decisions Made And Why
 
@@ -237,6 +240,10 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - `scripts/ops-check.ps1`: passed on 2026-04-22 against the running local stack during `stamos/live-source-fetch-tuning`
 - `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/live-source-fetch-tuning`
 - `scripts/validate.ps1`: passed on 2026-04-22 during `stamos/roadmap-closeout-sync`
+- `git status --short --branch`: showed a clean `main...origin/main` baseline on 2026-04-27 before the handoff branch was created
+- `git branch -vv`: showed only `main` tracking `origin/main` on 2026-04-27 before the handoff branch was created
+- `git stash list`: empty on 2026-04-27 during the handoff audit
+- `scripts/validate.ps1`: attempted on 2026-04-27 during `stamos/repo-handoff-sync` but did not complete because the Docker daemon was unavailable on the current machine
 - Validation included:
   - `docker compose config`
   - `docker compose --profile llamacpp config`
@@ -272,14 +279,12 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Exact Next Steps
 
-1. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
-2. Keep validating the current baseline against real live-news queries on the target hardware, especially large pages, slow publishers, and mixed multi-source questions.
-3. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
-3. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
-4. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
-5. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
-6. Choose the next post-roadmap branch based on whether the priority is answer-quality disambiguation, browser-automation coverage for the UI, or the next provider-expansion milestone.
-7. If answer quality still needs more improvement after this pass, prioritize source-ranking disambiguation and fetch-path tuning before widening the prompt surface again.
+1. On the next machine, restore `.env` and the local GGUF model file out of band or recreate them from the repo-managed provisioning path.
+2. Validate the stack on the next machine with `scripts/validate.ps1`, and use `-RequireModelRuntime` if the model is already provisioned there.
+3. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
+4. Keep validating the current baseline against real live-news queries on the target hardware, especially large pages, slow publishers, and mixed multi-source questions.
+5. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
+6. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
 
 ## Handoff Notes For A Fresh Codex Thread
 

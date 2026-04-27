@@ -36,6 +36,7 @@
 - Model files are local assets and must not be committed.
 - The first concrete local model runtime profile is documented in `docs/LLAMA_CPP_RUNTIME_PROFILE.md`.
 - If `.env` predates the latest repo template, treat `.env.example` as the source of truth for new model-runtime keys and update the local file deliberately instead of relying on stale placeholders.
+- During machine migration, treat `.env`, `data/models/*`, Docker state, and browser-local UI state as intentional out-of-band artifacts. Git is the project source of truth, but not the transport for those local runtime assets.
 
 ## Branch / Merge Workflow
 
