@@ -36,7 +36,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - an opt-in official Wikimedia API fetch path for supported Wikimedia article URLs when direct HTML fetching is not the right fit
 - quieter default logging across the repo-managed UI, backend, fetcher, and localhost gateway services
 - an operations guide plus a lightweight stack health-check script for daily local maintenance
-- a browser search integration runbook for using the standalone SearXNG route as the default Chromium-family search engine with local DuckDuckGo fallback
+- a browser search integration setup script and runbook for using the standalone SearXNG route as the default Chromium-family search engine with local DuckDuckGo fallback
 
 ## Design Goals
 
@@ -110,6 +110,12 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 8. Optional: open the standalone SearXNG UI at `http://127.0.0.1:8085`.
 
    To make browser address-bar searches use this route through a local fallback redirector, see `docs/BROWSER_SEARCH_INTEGRATION.md`.
+
+   The one-command Windows setup path is:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/setup-browser-search.ps1
+   ```
 
 9. Use the local UI's workspaces to switch between direct chat, grounded answers, and fetch inspection.
    `Direct Chat` is model only. `Grounded Answer` is the mode that uses SearXNG, page fetches, and source-backed synthesis.

@@ -4,7 +4,46 @@
 
 This runbook documents the Windows host pipeline used to make browser address-bar search use the repo-managed standalone SearXNG route, with an automatic DuckDuckGo fallback when the local SearXNG route is unavailable.
 
-The setup is intentionally machine-local. It creates Windows scheduled tasks and helper scripts under the user's local profile, but it does not commit browser profiles, search history, prompts, fetched pages, cookies, or secrets into the repo.
+The setup is intentionally machine-local. It creates Windows startup entries and helper scripts under the user's local profile, but it does not commit browser profiles, search history, prompts, fetched pages, cookies, or secrets into the repo.
+
+## One-Command Setup
+
+The repo now includes a Windows setup script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-browser-search.ps1
+```
+
+Prerequisites:
+
+- Docker Desktop
+- Node.js with global `fetch` support for the redirector
+- Node.js 22 or newer for browser profile automation, because the Chromium DevTools helper uses global `WebSocket`
+
+Recommended fully automatic run when Brave or Helium may already be open:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-browser-search.ps1 -ForceCloseBrowsers
+```
+
+The script:
+
+1. Writes the machine-local helper files under `%LOCALAPPDATA%\AnonExplo\search-fallback`.
+2. Registers the startup task and redirector task when Task Scheduler permissions allow it.
+3. Falls back to current-user Startup folder launchers if scheduled-task creation is unavailable and no existing matching tasks are present.
+4. Discovers Brave and Helium profile directories from their local browser data.
+5. Configures each discovered Chromium profile to use `http://127.0.0.1:8095/search?q=%s`.
+6. Verifies each configured profile reports `AnonExplo SearXNG (Default)`.
+
+Useful options:
+
+- `-SkipBrowserConfiguration`: create or refresh the local helper files and startup entries without touching browser profiles.
+- `-ForceCloseBrowsers`: close matching Brave or Helium processes before profile automation.
+- `-NoDuckDuckGoFallback`: make the redirector return a local `503` instead of falling back to DuckDuckGo.
+- `-SkipBrave` or `-SkipHelium`: skip one browser family.
+- `-NoStartNow`: register startup behavior without starting the helpers immediately.
+- `-SkipTaskRegistration`: write helper files only.
+- `-NoStartupFolderFallback`: require scheduled-task registration and fail instead of creating Startup folder launchers.
 
 ## Target Behavior
 
@@ -37,9 +76,9 @@ Use these names for consistency across machines:
 - Local helper directory: `%LOCALAPPDATA%\AnonExplo\search-fallback`
 - Redirector script: `%LOCALAPPDATA%\AnonExplo\search-fallback\search-fallback.js`
 - Browser automation helper: `%LOCALAPPDATA%\AnonExplo\search-fallback\configure-chromium-search.js`
-- Existing-CDP helper, useful when a browser is already open for automation: `%LOCALAPPDATA%\AnonExplo\search-fallback\configure-existing-cdp-search.js`
+- Startup helper: `%LOCALAPPDATA%\AnonExplo\search-fallback\start-anonexplo-searxng.ps1`
 
-The helper scripts are machine-local operational files. Do not commit them unless a future branch deliberately converts this runbook into repo-managed setup scripts.
+The helper scripts are generated from `scripts/setup-browser-search.ps1` and remain machine-local operational files. Do not commit generated helper files, browser profiles, browser data, or Task Scheduler exports.
 
 ## Startup Task
 
@@ -253,5 +292,5 @@ Do not silently reuse a different port without also updating this runbook, the r
 Use a prompt like this after cloning the repo on the target Windows machine:
 
 ```text
-Read AGENTS.md and docs/BROWSER_SEARCH_INTEGRATION.md. Configure this Windows device so AnonExplo's SearXNG browser route starts at login, create the localhost search fallback redirector, and set the redirector as the default search engine for every Helium and Brave Chromium profile. Discover profile directories from each browser's Local State and Preferences files; do not hard-code the profile numbers from another machine. Use http://127.0.0.1:8095/search?q=%s as the browser search URL, verify each profile reports AnonExplo SearXNG (Default), and verify the redirector sends healthy searches to http://127.0.0.1:8085/search?q=... with DuckDuckGo fallback only when the local route is down. Do not commit browser profiles, helper scripts, search history, cookies, prompts, fetched pages, or secrets.
+Read AGENTS.md and docs/BROWSER_SEARCH_INTEGRATION.md. Run scripts/setup-browser-search.ps1 to configure this Windows device so AnonExplo's SearXNG browser route starts at login, create the localhost search fallback redirector, and set the redirector as the default search engine for every Helium and Brave Chromium profile. Discover profile directories from this machine; do not hard-code profile numbers from another machine. Use http://127.0.0.1:8095/search?q=%s as the browser search URL, verify each profile reports AnonExplo SearXNG (Default), and verify the redirector sends healthy searches to http://127.0.0.1:8085/search?q=... with DuckDuckGo fallback only when the local route is down. Do not commit browser profiles, generated helper scripts, search history, cookies, prompts, fetched pages, or secrets.
 ```
