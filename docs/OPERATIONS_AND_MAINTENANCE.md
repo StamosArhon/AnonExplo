@@ -56,7 +56,7 @@ Run the setup script:
 powershell -ExecutionPolicy Bypass -File scripts/setup-browser-search.ps1
 ```
 
-Use `-ForceCloseBrowsers` when you want the script to close Brave or Helium before profile automation. See `docs/BROWSER_SEARCH_INTEGRATION.md` for the full repeatable setup. The important operational conventions are:
+Use `-ForceCloseBrowsers` when you want the script to close Brave or Helium before profile automation. If a visible terminal or Docker Desktop dashboard appears at login, rerun the script with `-SkipBrowserConfiguration`; it repairs the startup entries to use hidden launchers. See `docs/BROWSER_SEARCH_INTEGRATION.md` for the full repeatable setup. The important operational conventions are:
 
 - SearXNG browser route: `http://127.0.0.1:8085`
 - fallback redirector route: `http://127.0.0.1:8095/search?q=...`

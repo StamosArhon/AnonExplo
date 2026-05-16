@@ -6,6 +6,8 @@ param(
     [switch]$SkipTaskRegistration,
     [switch]$NoStartupFolderFallback,
     [switch]$NoStartNow,
+    [switch]$NoDockerDesktopStart,
+    [switch]$SkipDockerRunEntryRepair,
     [switch]$NoDuckDuckGoFallback,
     [int]$RedirectorPort = 8095,
     [int]$SearxngPort = 8085,
@@ -26,6 +28,9 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $helperDir = Join-Path $env:LOCALAPPDATA "AnonExplo\search-fallback"
 $redirectorScript = Join-Path $helperDir "search-fallback.js"
 $startupScript = Join-Path $helperDir "start-anonexplo-searxng.ps1"
+$startupLauncher = Join-Path $helperDir "start-anonexplo-searxng.vbs"
+$redirectorLauncher = Join-Path $helperDir "start-search-fallback.vbs"
+$dockerDesktopLauncher = Join-Path $helperDir "start-docker-desktop-background.vbs"
 $configureScript = Join-Path $helperDir "configure-chromium-search.js"
 
 $searchName = "AnonExplo SearXNG"
@@ -191,14 +196,12 @@ server.listen(LISTEN_PORT, LISTEN_HOST, () => {
     Set-Content -LiteralPath $redirectorScript -Value $redirector -Encoding UTF8
 
     $escapedRoot = $root.Replace("'", "''")
+    $startDockerIfNeeded = if ($NoDockerDesktopStart) { '$false' } else { '$true' }
     $startupTemplate = @'
 $ErrorActionPreference = "SilentlyContinue"
 
 $repo = '__REPO_PATH__'
-$dockerDesktopCandidates = @(
-    "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
-    "${env:ProgramFiles(x86)}\Docker\Docker\Docker Desktop.exe"
-)
+$startDockerIfNeeded = __START_DOCKER_IF_NEEDED__
 
 function Test-LocalListenPort {
     param([int]$Port)
@@ -224,13 +227,8 @@ function Set-PortOrFallback {
 }
 
 & docker info *> $null
-if ($LASTEXITCODE -ne 0) {
-    foreach ($candidate in $dockerDesktopCandidates) {
-        if (Test-Path -LiteralPath $candidate) {
-            Start-Process -FilePath $candidate -WindowStyle Hidden
-            break
-        }
-    }
+if ($LASTEXITCODE -ne 0 -and $startDockerIfNeeded) {
+    & docker desktop start --detach --timeout 120 *> $null
 }
 
 $dockerReady = $false
@@ -262,8 +260,36 @@ exit $LASTEXITCODE
         -replace "__FALLBACK_UI_PORT__", [string]$FallbackUiPort `
         -replace "__PREFERRED_BACKEND_PORT__", [string]$PreferredBackendPort `
         -replace "__FALLBACK_BACKEND_PORT__", [string]$FallbackBackendPort `
-        -replace "__SEARXNG_PORT__", [string]$SearxngPort
+        -replace "__SEARXNG_PORT__", [string]$SearxngPort `
+        -replace "__START_DOCKER_IF_NEEDED__", $startDockerIfNeeded
     Set-Content -LiteralPath $startupScript -Value $startup -Encoding UTF8
+
+    $escapedStartupScript = $startupScript.Replace("""", """""")
+    $escapedNodePath = $NodePath.Replace("""", """""")
+    $escapedRedirectorScript = $redirectorScript.Replace("""", """""")
+
+    $startupLauncherContent = @"
+Set shell = CreateObject("WScript.Shell")
+shell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$escapedStartupScript""", 0, False
+"@
+
+    $redirectorLauncherContent = @"
+Set shell = CreateObject("WScript.Shell")
+shell.Run """$escapedNodePath"" ""$escapedRedirectorScript""", 0, False
+"@
+
+    Set-Content -LiteralPath $startupLauncher -Value $startupLauncherContent -Encoding ASCII
+    Set-Content -LiteralPath $redirectorLauncher -Value $redirectorLauncherContent -Encoding ASCII
+
+    $dockerCommand = Get-Command docker.exe -ErrorAction SilentlyContinue
+    if ($dockerCommand) {
+        $escapedDockerPath = $dockerCommand.Source.Replace("""", """""")
+        $dockerLauncherContent = @"
+Set shell = CreateObject("WScript.Shell")
+shell.Run """$escapedDockerPath"" desktop start --detach", 0, False
+"@
+        Set-Content -LiteralPath $dockerDesktopLauncher -Value $dockerLauncherContent -Encoding ASCII
+    }
 
     $configureHelper = @'
 const { spawn } = require("node:child_process");
@@ -542,11 +568,12 @@ function Register-LocalScheduledTasks {
     param([string]$NodePath)
 
     $startupAction = New-ScheduledTaskAction `
-        -Execute "powershell.exe" `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$startupScript`""
+        -Execute "wscript.exe" `
+        -Argument "`"$startupLauncher`""
     $startupTrigger = New-ScheduledTaskTrigger -AtLogOn
     $startupSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
     $startupSettings.ExecutionTimeLimit = "PT30M"
+    $startupSettings.Hidden = $true
 
     Register-ScheduledTask `
         -TaskName $startupTaskName `
@@ -557,11 +584,12 @@ function Register-LocalScheduledTasks {
         -Force | Out-Null
 
     $redirectorAction = New-ScheduledTaskAction `
-        -Execute $NodePath `
-        -Argument "`"$redirectorScript`""
+        -Execute "wscript.exe" `
+        -Argument "`"$redirectorLauncher`""
     $redirectorTrigger = New-ScheduledTaskTrigger -AtLogOn
     $redirectorSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
     $redirectorSettings.ExecutionTimeLimit = "PT0S"
+    $redirectorSettings.Hidden = $true
 
     Register-ScheduledTask `
         -TaskName $redirectorTaskName `
@@ -576,6 +604,57 @@ function Register-LocalScheduledTasks {
     Write-Host "  - $redirectorTaskName"
 }
 
+function Repair-DockerDesktopRunEntry {
+    if ($SkipDockerRunEntryRepair -or $NoDockerDesktopStart) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $dockerDesktopLauncher)) {
+        return
+    }
+
+    $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+    $currentValue = $null
+    try {
+        $currentValue = Get-ItemPropertyValue -Path $runKey -Name "Docker Desktop" -ErrorAction Stop
+    } catch {
+        return
+    }
+
+    if ($currentValue -and $currentValue -match "Docker Desktop\.exe") {
+        $newValue = "wscript.exe `"$dockerDesktopLauncher`""
+        Set-ItemProperty -Path $runKey -Name "Docker Desktop" -Value $newValue
+        Write-Host "Updated the Docker Desktop logon entry to use a hidden CLI launcher."
+    }
+}
+
+function Repair-ExistingScheduledTasks {
+    $startupTask = Get-ScheduledTask -TaskName $startupTaskName -ErrorAction SilentlyContinue
+    $redirectorTask = Get-ScheduledTask -TaskName $redirectorTaskName -ErrorAction SilentlyContinue
+    $startupActionText = if ($startupTask) { ($startupTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " | " } else { "" }
+    $redirectorActionText = if ($redirectorTask) { ($redirectorTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " | " } else { "" }
+
+    if ($startupActionText -like "*$startupLauncher*" -and $redirectorActionText -like "*$redirectorLauncher*") {
+        Write-Host "Existing scheduled tasks already use hidden launchers."
+        return
+    }
+
+    $startupTaskRun = "wscript.exe `"$startupLauncher`""
+    $redirectorTaskRun = "wscript.exe `"$redirectorLauncher`""
+
+    & schtasks.exe /Change /TN $startupTaskName /TR $startupTaskRun /ENABLE | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not repair existing scheduled task '$startupTaskName'."
+    }
+
+    & schtasks.exe /Change /TN $redirectorTaskName /TR $redirectorTaskRun /ENABLE | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not repair existing scheduled task '$redirectorTaskName'."
+    }
+
+    Write-Host "Updated existing scheduled tasks to use hidden launchers."
+}
+
 function Register-StartupFolderLaunchers {
     param([string]$NodePath)
 
@@ -584,29 +663,15 @@ function Register-StartupFolderLaunchers {
         throw "Could not resolve the current user's Startup folder."
     }
 
-    $stackLauncher = Join-Path $startupFolder "AnonExplo SearXNG Startup.vbs"
-    $redirectorLauncher = Join-Path $startupFolder "AnonExplo Search Fallback Redirector.vbs"
+    $startupFolderStackLauncher = Join-Path $startupFolder "AnonExplo SearXNG Startup.vbs"
+    $startupFolderRedirectorLauncher = Join-Path $startupFolder "AnonExplo Search Fallback Redirector.vbs"
 
-    $escapedStartupScript = $startupScript.Replace("""", """""")
-    $escapedNodePath = $NodePath.Replace("""", """""")
-    $escapedRedirectorScript = $redirectorScript.Replace("""", """""")
-
-    $stackLauncherContent = @"
-Set shell = CreateObject("WScript.Shell")
-shell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$escapedStartupScript""", 0, False
-"@
-
-    $redirectorLauncherContent = @"
-Set shell = CreateObject("WScript.Shell")
-shell.Run """$escapedNodePath"" ""$escapedRedirectorScript""", 0, False
-"@
-
-    Set-Content -LiteralPath $stackLauncher -Value $stackLauncherContent -Encoding ASCII
-    Set-Content -LiteralPath $redirectorLauncher -Value $redirectorLauncherContent -Encoding ASCII
+    Copy-Item -LiteralPath $startupLauncher -Destination $startupFolderStackLauncher -Force
+    Copy-Item -LiteralPath $redirectorLauncher -Destination $startupFolderRedirectorLauncher -Force
 
     Write-Host "Scheduled-task registration was not available, so Startup folder launchers were written:"
-    Write-Host "  - $stackLauncher"
-    Write-Host "  - $redirectorLauncher"
+    Write-Host "  - $startupFolderStackLauncher"
+    Write-Host "  - $startupFolderRedirectorLauncher"
 }
 
 function Stop-ManagedRedirectorIfRunning {
@@ -798,6 +863,7 @@ function Resolve-HeliumTarget {
 $nodePath = Get-NodePath
 Assert-NodeCapabilities -NodePath $nodePath -NeedsWebSocket:(-not $SkipBrowserConfiguration)
 Write-LocalHelperFiles -NodePath $nodePath
+Repair-DockerDesktopRunEntry
 
 if (-not $SkipTaskRegistration) {
     try {
@@ -808,7 +874,7 @@ if (-not $SkipTaskRegistration) {
         $existingRedirectorTask = Get-ScheduledTask -TaskName $redirectorTaskName -ErrorAction SilentlyContinue
         if ($existingStartupTask -and $existingRedirectorTask) {
             Write-Warning "Could not overwrite existing scheduled tasks: $($_.Exception.Message)"
-            Write-Warning "Leaving the existing scheduled tasks in place."
+            Repair-ExistingScheduledTasks
             $startupLaunchMode = "ExistingScheduledTask"
         } elseif ($NoStartupFolderFallback) {
             throw

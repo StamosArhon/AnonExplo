@@ -29,11 +29,14 @@ powershell -ExecutionPolicy Bypass -File scripts/setup-browser-search.ps1 -Force
 The script:
 
 1. Writes the machine-local helper files under `%LOCALAPPDATA%\AnonExplo\search-fallback`.
-2. Registers the startup task and redirector task when Task Scheduler permissions allow it.
-3. Falls back to current-user Startup folder launchers if scheduled-task creation is unavailable and no existing matching tasks are present.
-4. Discovers Brave and Helium profile directories from their local browser data.
-5. Configures each discovered Chromium profile to use `http://127.0.0.1:8095/search?q=%s`.
-6. Verifies each configured profile reports `AnonExplo SearXNG (Default)`.
+2. Uses hidden `wscript.exe` launchers so the redirector and stack starter do not show terminal windows at logon.
+3. Registers the startup task and redirector task when Task Scheduler permissions allow it.
+4. Repairs existing matching tasks to use hidden launchers when direct scheduled-task replacement is denied.
+5. Falls back to current-user Startup folder launchers if scheduled-task creation is unavailable and no existing matching tasks are present.
+6. Repoints the current user's Docker Desktop logon entry to a hidden `docker desktop start --detach` launcher when that entry directly launches `Docker Desktop.exe`.
+7. Discovers Brave and Helium profile directories from their local browser data.
+8. Configures each discovered Chromium profile to use `http://127.0.0.1:8095/search?q=%s`.
+9. Verifies each configured profile reports `AnonExplo SearXNG (Default)`.
 
 Useful options:
 
@@ -42,6 +45,8 @@ Useful options:
 - `-NoDuckDuckGoFallback`: make the redirector return a local `503` instead of falling back to DuckDuckGo.
 - `-SkipBrave` or `-SkipHelium`: skip one browser family.
 - `-NoStartNow`: register startup behavior without starting the helpers immediately.
+- `-NoDockerDesktopStart`: keep the AnonExplo startup helper from starting Docker Desktop if Docker is not already ready.
+- `-SkipDockerRunEntryRepair`: leave the current user's Docker Desktop logon entry unchanged.
 - `-SkipTaskRegistration`: write helper files only.
 - `-NoStartupFolderFallback`: require scheduled-task registration and fail instead of creating Startup folder launchers.
 
@@ -77,6 +82,9 @@ Use these names for consistency across machines:
 - Redirector script: `%LOCALAPPDATA%\AnonExplo\search-fallback\search-fallback.js`
 - Browser automation helper: `%LOCALAPPDATA%\AnonExplo\search-fallback\configure-chromium-search.js`
 - Startup helper: `%LOCALAPPDATA%\AnonExplo\search-fallback\start-anonexplo-searxng.ps1`
+- Hidden startup launcher: `%LOCALAPPDATA%\AnonExplo\search-fallback\start-anonexplo-searxng.vbs`
+- Hidden redirector launcher: `%LOCALAPPDATA%\AnonExplo\search-fallback\start-search-fallback.vbs`
+- Hidden Docker Desktop launcher: `%LOCALAPPDATA%\AnonExplo\search-fallback\start-docker-desktop-background.vbs`
 
 The helper scripts are generated from `scripts/setup-browser-search.ps1` and remain machine-local operational files. Do not commit generated helper files, browser profiles, browser data, or Task Scheduler exports.
 
@@ -87,7 +95,7 @@ The startup task should run at user logon with a hidden PowerShell action.
 The action should:
 
 1. Set the repo path for that device.
-2. Start Docker Desktop if `docker info` fails and Docker Desktop is installed.
+2. Start Docker Desktop with `docker desktop start --detach` if `docker info` fails, unless setup was run with `-NoDockerDesktopStart`.
 3. Wait for Docker to become ready.
 4. If `127.0.0.1:3000` is already occupied, set `UI_PORT=3001` for that run.
 5. If `127.0.0.1:8000` is already occupied, set `BACKEND_PORT=8001` for that run.
@@ -101,7 +109,7 @@ The task does not need to start the model runtime unless the device should also 
 
 ## Redirector Task
 
-The fallback redirector should be a small local Node.js service started by Task Scheduler at user logon.
+The fallback redirector should be a small local Node.js service started by Task Scheduler or a Startup folder launcher at user logon. It must be launched through the hidden VBS wrapper, not directly through `node.exe`, so closing a visible terminal can never stop browser search.
 
 Behavior:
 
@@ -257,6 +265,37 @@ The browser is probably pointed directly at `127.0.0.1:8085` instead of the redi
 
 ```text
 http://127.0.0.1:8095/search?q=%s
+```
+
+### A terminal window appears at login
+
+Rerun the setup script without browser profile changes:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-browser-search.ps1 -SkipBrowserConfiguration
+```
+
+Then confirm both scheduled tasks use `wscript.exe` actions:
+
+```powershell
+Get-ScheduledTask -TaskName "AnonExplo SearXNG Startup","AnonExplo Search Fallback Redirector" |
+  Select-Object TaskName,Actions
+```
+
+The redirector must not be launched directly as `node.exe`.
+
+### Docker Desktop opens in the foreground at login
+
+Rerun:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-browser-search.ps1 -SkipBrowserConfiguration
+```
+
+The setup repairs the current user's Docker Desktop logon entry when it directly launches `Docker Desktop.exe`, replacing it with a hidden launcher that calls:
+
+```powershell
+docker desktop start --detach
 ```
 
 ### Searches go to DuckDuckGo even though Docker is running
