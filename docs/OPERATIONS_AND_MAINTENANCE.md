@@ -46,6 +46,34 @@ Stop everything:
 docker compose --profile llamacpp down --remove-orphans
 ```
 
+## Browser Search Integration
+
+The optional browser search pipeline lets Chromium-family browsers use the standalone SearXNG route from the address bar while falling back to DuckDuckGo if the local route is unavailable.
+
+See `docs/BROWSER_SEARCH_INTEGRATION.md` for the full repeatable setup. The important operational conventions are:
+
+- SearXNG browser route: `http://127.0.0.1:8085`
+- fallback redirector route: `http://127.0.0.1:8095/search?q=...`
+- browser default search URL: `http://127.0.0.1:8095/search?q=%s`
+- startup task: `AnonExplo SearXNG Startup`
+- redirector task: `AnonExplo Search Fallback Redirector`
+
+Verify the local path with:
+
+```powershell
+Get-NetTCPConnection -LocalPort 8095,8085 -State Listen
+curl.exe -s -I "http://127.0.0.1:8095/search?q=ops-check"
+```
+
+The healthy redirect should point to `http://127.0.0.1:8085/search?q=ops-check`.
+
+If another local app already uses port `3000`, validation can follow the same alternate-port convention:
+
+```powershell
+$env:UI_PORT = "3001"
+powershell -ExecutionPolicy Bypass -File scripts/validate.ps1
+```
+
 ## Safe Update Workflow
 
 When the repo or pinned images change, prefer this order:

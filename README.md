@@ -36,6 +36,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - an opt-in official Wikimedia API fetch path for supported Wikimedia article URLs when direct HTML fetching is not the right fit
 - quieter default logging across the repo-managed UI, backend, fetcher, and localhost gateway services
 - an operations guide plus a lightweight stack health-check script for daily local maintenance
+- a browser search integration runbook for using the standalone SearXNG route as the default Chromium-family search engine with local DuckDuckGo fallback
 
 ## Design Goals
 
@@ -107,6 +108,8 @@ See `docs/ARCHITECTURE.md` for the fuller design.
    The localhost entrypoint is the dedicated `host-gateway` proxy. It exposes the UI on port `3000`, the backend API on port `8000`, and the bundled SearXNG web UI on port `8085` while the `ui`, `backend`, and `search-provider` containers themselves remain on internal Docker networks.
 
 8. Optional: open the standalone SearXNG UI at `http://127.0.0.1:8085`.
+
+   To make browser address-bar searches use this route through a local fallback redirector, see `docs/BROWSER_SEARCH_INTEGRATION.md`.
 
 9. Use the local UI's workspaces to switch between direct chat, grounded answers, and fetch inspection.
    `Direct Chat` is model only. `Grounded Answer` is the mode that uses SearXNG, page fetches, and source-backed synthesis.
@@ -217,7 +220,7 @@ For the full local-model path, require the runtime probe:
 powershell -ExecutionPolicy Bypass -File scripts/validate.ps1 -RequireModelRuntime
 ```
 
-For daily operations, see `docs/OPERATIONS_AND_MAINTENANCE.md`.
+For daily operations, see `docs/OPERATIONS_AND_MAINTENANCE.md`. For the optional Brave, Helium, or other Chromium-family browser search setup, see `docs/BROWSER_SEARCH_INTEGRATION.md`.
 
 ## Repository Layout
 

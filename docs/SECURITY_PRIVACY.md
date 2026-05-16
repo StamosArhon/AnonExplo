@@ -16,6 +16,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - The model backend stays on an internal-only Docker network.
 - Search and fetch services are the only default services that join the egress-capable network.
 - The bundled SearXNG web UI is reachable only through the localhost gateway; the search container itself is still not published directly to the host.
+- Optional browser address-bar integration should point browser profiles at a localhost-only redirector, not directly at SearXNG, when DuckDuckGo fallback is desired for local SearXNG outages.
 - Repo-managed services run as non-root where practical.
 - Capabilities are dropped and `no-new-privileges` is enabled where practical.
 - Compose validation now checks expected network membership, localhost-only publication, digest-pinned third-party images, and local-only CORS origins before a branch is declared ready.
@@ -44,6 +45,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Grounded-answer transcripts, fetched source details, and fetch-inspector output must remain non-persistent by default.
 - Because direct-chat history is now browser-local persistent state, the UI must keep explicit delete and purge controls, label that storage clearly as browser-local and device-local, and must not silently expand that storage to grounded searches or fetched page bodies.
 - If `MODEL_PROVIDER=ollama` is used, keep `MODEL_BASE_URL` on a local or otherwise trusted private endpoint; do not silently treat a hosted Ollama API as equivalent to a local runtime from a privacy perspective.
+- If the optional browser search redirector is configured with DuckDuckGo fallback, address-bar queries are sent to DuckDuckGo only when the local SearXNG route is unavailable. Disable or replace that fallback on devices that must never send browser search queries to an external provider.
 
 ## Fetcher Controls
 

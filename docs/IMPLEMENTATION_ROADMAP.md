@@ -127,10 +127,12 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Changed long extracted documents to retain both the head and tail when truncation is required, which helps current-event pages whose most relevant updates sit later in the article.
 - Tightened current-events source ranking so snippet fallback is filtered through the same strong-query matching path and same-domain non-live coverage can outrank a live page when the scores are close and the query did not explicitly ask for live coverage.
 - Split the backend-to-fetcher timeout from the fetcher-to-publisher timeout through `FETCHER_CLIENT_TIMEOUT_SECONDS` so structured fetcher failures survive slow upstream requests instead of collapsing into an empty backend timeout message.
+- Added `docs/BROWSER_SEARCH_INTEGRATION.md` to document the Windows browser-search pipeline that starts the SearXNG stack at login, runs a localhost fallback redirector, and configures Chromium-family browser profiles to use `AnonExplo SearXNG` as the default address-bar search engine.
+- Updated `scripts/validate.ps1` so process-level environment variables override `.env` values, matching Docker Compose behavior and allowing validation to use documented alternate host ports such as `UI_PORT=3001` when another local app is already on `3000`.
 
 ## In-Progress Work
 
-- None inside the repo contents. `stamos/live-source-fetch-tuning` is merged, and the repo is back on the post-roadmap enhancement baseline on `main`.
+- None inside the repo contents. `stamos/browser-search-integration-docs` is merged, and the repo is back on the post-roadmap enhancement baseline on `main`.
 
 ## Open Questions / Blockers
 
@@ -152,6 +154,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Mixed fetched-plus-snippet context improves partial-evidence coverage, but live-news ranking can still surface contradictory or noisy sources, especially on evolving geopolitical topics.
 - The grounded search and grounded answer endpoints still use env-backed context limits rather than per-request overrides, so live tuning remains an operator configuration task instead of a request-level control.
 - Multi-part grounded answers on fast-moving current-events topics are better than before, but the model can still sometimes under-answer the second clause of a compound question even when the fetched source set contains partial supporting material.
+- The browser search integration is documented as a per-machine operator pipeline, but it is not yet a repo-managed installer. Windows scheduled tasks and browser profile edits still need to be created locally on each target device.
 
 ## Decisions Made And Why
 
@@ -178,6 +181,10 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Grounded search quality should be improved first through config-driven provider tuning, ranked source selection, and better prompts before adding heavier architectural changes.
 - Fetched article text remains the preferred grounding source, but explicit bounded search-snippet fallback is acceptable when article fetches fail, as long as the response surface keeps that context mode visible.
 - The localhost gateway should tolerate longer-running grounded-answer calls so the proxy does not fail before the backend has finished search, fetch, and model synthesis.
+- Browser address-bar search should point at a localhost-only redirector on `127.0.0.1:8095` rather than directly at SearXNG on `127.0.0.1:8085`, because the redirector can fall back to DuckDuckGo instead of leaving the user on a local error page when SearXNG is unavailable.
+- Browser search setup helpers should remain machine-local unless a later branch deliberately turns them into repo-managed setup scripts; browser profiles, cookies, search history, and local helper output must not be committed.
+- Brave browser automation must verify that `AnonExplo SearXNG` becomes `AnonExplo SearXNG (Default)`. Adding the engine or calling the raw browser-proxy default setter can leave Google as the real top-level default in a profile.
+- Validation should treat process-level environment variables as the strongest local override, then `.env`, then `.env.example`, so checks and Compose agree when an operator deliberately runs on alternate localhost ports.
 - Fetch resilience should improve operator clarity first through structured failure classification, thin-content detection, and domain-aware retry behavior before the repo adds any privacy-altering secondary reader strategy.
 - Wikimedia or similarly protected publishers should not receive a hidden special-case bypass until the privacy and maintenance tradeoffs of that path are explicitly reviewed.
 - Browser-local direct chat history is considered sufficiently controlled in the baseline when it is clearly labeled as device-local and purgeable; opt-out or export should be treated as later convenience features, not core privacy fixes.
@@ -207,9 +214,12 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - The host's primary exposure control is still localhost-only port binding plus Docker network separation; Windows Firewall is a supporting control rather than a replacement for that model.
 - Search-snippet fallback is acceptable only as an explicit, bounded grounded mode; it must not silently become unbounded web-search context or a hidden substitute for fetcher isolation.
 - Hybrid fetched-plus-snippet grounding is acceptable when it is explicit in `context_mode`, bounded by the same context limits, and keeps fetched text preferred over snippet summaries.
+- DuckDuckGo browser-search fallback is an explicit operator convenience for address-bar searches when local SearXNG is unavailable; it sends the query to DuckDuckGo only on fallback and should be disabled or changed on devices that require no external fallback.
 
 ## Validation Status
 
+- `scripts/validate.ps1`: failed on 2026-05-16 during `stamos/browser-search-integration-docs` because another local app was already listening on `127.0.0.1:3000`; config checks, hardening checks, image builds, backend tests, fetcher tests, and syntax checks completed before the base-stack smoke test hit the host port conflict.
+- `$env:UI_PORT="3001"; scripts/validate.ps1`: passed on 2026-05-16 during `stamos/browser-search-integration-docs`; validation covered Compose config, `llama.cpp` profile config, Compose hardening policy, Docker image builds for `ui`, `backend`, and `fetcher`, backend unit tests, fetcher unit tests, UI server syntax, UI client syntax, and base-stack smoke/host reachability on UI `3001`, backend `8000`, and SearXNG `8085`; optional model-runtime probing was skipped because `Qwen2.5-7B-Instruct.Q4_K_M.gguf` was not present in `data\models`.
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `fetcher-resilience` branch
 - `scripts/validate.ps1 -RequireModelRuntime`: passed on 2026-04-14 during the `fetcher-resilience` branch
 - `scripts/validate.ps1`: passed on 2026-04-14 during the `roadmap-closeout` branch
@@ -280,6 +290,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 5. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
 6. Choose the next post-roadmap branch based on whether the priority is answer-quality disambiguation, browser-automation coverage for the UI, or the next provider-expansion milestone.
 7. If answer quality still needs more improvement after this pass, prioritize source-ranking disambiguation and fetch-path tuning before widening the prompt surface again.
+8. If the browser search integration should become one-command reproducible, convert `docs/BROWSER_SEARCH_INTEGRATION.md` into repo-managed setup scripts in a separate branch and keep profile discovery, localhost-only binding, and privacy constraints intact.
 
 ## Handoff Notes For A Fresh Codex Thread
 
@@ -307,6 +318,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Repo-managed services keep routine access logging quiet by default, so operators should use targeted `docker compose logs --tail=...` calls when they need deeper inspection.
 - The backend now supports `openai_compatible` and `ollama` model adapters plus `searxng` and `yacy` search adapters through env-driven factories.
 - The repo now supports two localhost-only browser modes at once: the main AnonExplo UI on port `3000` and the bundled standalone SearXNG UI on port `8085`, both through the same low-privilege host gateway.
+- The repo now documents an optional third local browser path: a host-only redirector on `127.0.0.1:8095` that browser profiles can use as their default search URL, routing healthy searches to the standalone SearXNG UI and falling back to DuckDuckGo only when the local route is down.
 - The localhost gateway now allows longer backend request times so heavier grounded calls do not fail at the proxy first.
 - This repo intentionally still does not add a hidden special-case Wikipedia or third-party reader bypass after earlier direct HTML Wikimedia fetch attempts returned robot-policy `403` responses from inside the fetcher container. Wikimedia support now uses an explicit opt-in Parse API path and requires an operator-supplied contactable user-agent string.
 - The initial roadmap is now complete on `main`.

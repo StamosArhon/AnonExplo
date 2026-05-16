@@ -13,6 +13,11 @@ function Get-EnvValue {
         [string]$DefaultValue = ""
     )
 
+    $processValue = [Environment]::GetEnvironmentVariable($Key, "Process")
+    if ($processValue -and -not $processValue.StartsWith("replace-with-")) {
+        return $processValue
+    }
+
     foreach ($path in @((Join-Path $root ".env"), (Join-Path $root ".env.example"))) {
         if (-not (Test-Path $path)) {
             continue

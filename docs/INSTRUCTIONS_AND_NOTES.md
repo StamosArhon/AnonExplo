@@ -77,6 +77,7 @@
 - Do not reintroduce a backend orchestration dependency on one hard-coded search service name; provider switching should remain env-driven at the backend boundary.
 - Keep the host-facing UI and backend access path behind the dedicated localhost gateway unless there is a documented reason to publish app containers directly.
 - If the bundled SearXNG web UI is exposed for standalone use, route it through the same localhost gateway rather than publishing the search container directly.
+- If a machine configures Brave, Helium, or another Chromium-family browser to use bundled SearXNG from the address bar, follow `docs/BROWSER_SEARCH_INTEGRATION.md`: browsers should point at the local fallback redirector on `127.0.0.1:8095`, not directly at `127.0.0.1:8085`, and Brave should be verified to show `AnonExplo SearXNG (Default)` because adding the engine alone may not make it the active default.
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.
 - `scripts/validate.ps1` now enforces the intended Compose hardening model, including localhost-only publication, expected network membership, digest-pinned third-party images, and local-only CORS origins.
 - Some publishers and Wikipedia paths can still block fetches from the container runtime. The current fallback is explicit snippet-grounding, not silent prior-knowledge answering.
