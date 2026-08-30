@@ -27,6 +27,10 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Preferred-domain ranking bias may influence which already-returned search results are fetched first, but it must not silently become a hidden second search provider or a provider-specific bypass path.
 - The current fetcher-resilience pass keeps direct HTML fetches only and does not add third-party reader proxies or hidden publisher-specific bypasses, because those would change the privacy and trust model.
 - The Wikimedia-specific route, when enabled, must stay explicit, documented, and based on an official interface rather than a stealthy robot-policy bypass.
+- The optional `docker-compose.proton-search.yml` overlay routes only the SearXNG/search-provider network namespace through a Proton WireGuard gateway. It does not become a host-wide VPN route, and it publishes no VPN or search-container port.
+- The VPN gateway is an intentional security exception: it requires `NET_ADMIN` and `/dev/net/tun` to establish the tunnel, while retaining `no-new-privileges` and a read-only root filesystem where compatible. The gateway firewall must stay enabled as the kill switch.
+- A separate Proton WireGuard configuration/private key must be generated for this PC. Do not reuse the homeserver's tunnel identity or commit the key. The same Proton account may be used if its simultaneous-connection allowance permits it.
+- A VPN changes the source IP seen by upstream search engines and hides the query from the ISP's traffic path, but it does not stop an upstream search engine from seeing or retaining the plaintext query. This overlay therefore improves egress separation and may improve or worsen upstream availability; it is not a zero-visibility search index.
 
 ## Secrets Handling
 
@@ -34,6 +38,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Never commit tokens, cookies, API keys, or private model access credentials.
 - Model files and fetched content are local assets, not Git assets.
 - The bootstrap flow generates a local `SEARXNG_SECRET` in `.env` for the default search-provider path.
+- The optional Proton search profile reads `PROTON_WIREGUARD_PRIVATE_KEY` from the untracked `.env`; it must never be copied into the repository, logs, Compose output, or documentation.
 - The default model provisioning flow downloads the GGUF on the host into `data/models/` and verifies it against a tracked SHA256 value; the model container itself does not fetch weights at runtime.
 
 ## Logging Guidance
@@ -41,6 +46,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Keep logs operational, not archival.
 - Do not add debug logging that dumps prompts, full fetched article bodies, headers, or provider payloads by default.
 - If deeper logging is ever added for troubleshooting, it must be temporary and documented.
+- VPN troubleshooting must not print the WireGuard private key, full `.env`, or provider configuration into command output or repository files.
 - Repo-managed UI, backend, fetcher, and localhost-gateway services suppress routine access logging where practical so request paths do not become default operational noise.
 - The local UI may remember the selected model id, saved local instruction text, and direct-chat history in browser local storage on the same workstation.
 - Grounded-answer transcripts, fetched source details, and fetch-inspector output must remain non-persistent by default.

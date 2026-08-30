@@ -81,6 +81,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - Added UI config support for the standalone SearXNG browser URL so the local shell does not hardcode that route.
 - Added a follow-on UI cleanup pass that moves optional instructions and stack diagnostics into dedicated modal surfaces instead of leaving them inside the main chat area.
 - Added browser-local direct chat history with a new-chat action, per-entry delete, and full purge controls.
+- Added an opt-in Proton WireGuard search-egress overlay that routes only the SearXNG/search-provider container through a kill-switched VPN namespace without changing the host's default route.
 - Made the UI mode boundary explicit so Direct Chat is clearly model only while Grounded Answer is the search plus fetch plus model path.
 - Extended grounded-answer requests to accept their own saved browser-local instruction block after the backend assembles grounded source context.
 - Added a stricter Compose-policy validation pass that checks localhost-only publication, expected network membership, digest-pinned third-party images, local-only CORS origins, and default container hardening settings before a branch is declared ready.
@@ -229,6 +230,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 ## Validation Status
 
 - `scripts/validate.ps1`: passed on 2026-08-30 during `stamos/search-engine-fallbacks`; Compose/config and hardening checks, repo-managed image builds, 51 backend tests, 19 fetcher tests, syntax checks, and base-stack smoke/localhost reachability all passed. The optional model-runtime probe remained skipped because the GGUF was not present. The validator cleaned up the temporary stack after completion.
+- `scripts/validate.ps1`: passed on 2026-08-30 during `stamos/proton-search-egress`; base Compose policy plus the Proton overlay configuration/security checks, repo-managed image builds, 51 backend tests, 19 fetcher tests, syntax checks, and base-stack smoke/localhost reachability all passed. The first sandboxed validator attempt could not access Docker's named pipe, so it was rerun with approved Docker access. The optional model-runtime probe remained skipped because the GGUF was not present. The Proton tunnel itself was not activated because no local WireGuard private key is configured yet.
 - Live container checks on 2026-08-30 during `stamos/search-engine-fallbacks`: the final browser-facing SearXNG route returned Bing results, and the backend search route returned a mixed Bing/Brave result set for `behance`; all five base-stack containers were healthy after the final reload. The candidate audit found Qwant access-denied, Mojeek and Google empty, and Yahoo protocol-failure responses, so those providers were excluded from the default profile.
 - `scripts/validate.ps1`: final run on 2026-08-30 during `stamos/search-quality-tuning` passed after the SearXNG keep-only profile, adaptive engine-routing, and explicit local-limiter changes; Compose/config and hardening checks, repo-managed image builds, 51 backend tests, 19 fetcher tests, syntax checks, and base-stack smoke/localhost reachability all passed. The optional model-runtime probe remained skipped because the GGUF was not present.
 - Manual live local search check on 2026-08-30 during `stamos/search-quality-tuning`: the backend returned results through the recreated profile, and the SearXNG startup log no longer showed the previously observed inherited-engine initialization failures after applying the focused keep-only catalogue. Brave generic and DuckDuckGo News/Reuters coverage were retained as explicit candidates, while previously observed DuckDuckGo generic and Startpage access/CAPTCHA failures were removed from the default profile.
@@ -305,15 +307,16 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Exact Next Steps
 
-1. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
-2. Keep validating the current baseline against real live-news queries on the target hardware, especially large pages, slow publishers, and mixed multi-source questions.
-3. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
-3. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
-4. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
-5. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
-6. Choose the next post-roadmap branch based on whether the priority is answer-quality disambiguation, browser-automation coverage for the UI, or the next provider-expansion milestone.
-7. If answer quality still needs more improvement after this pass, prioritize source-ranking disambiguation and fetch-path tuning before widening the prompt surface again.
-8. If the browser search integration needs more hardening, add explicit tests or richer diagnostics for Task Scheduler permissions, Startup folder fallback, and browser profile automation on a clean Windows machine.
+1. If search-only VPN egress is desired, generate a separate Proton WireGuard configuration for this PC, put only its private key in `.env`, start `scripts/start-proton-search.ps1`, and verify with `scripts/check-proton-search.ps1`.
+2. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
+3. Keep validating the current baseline against real live-news queries on the target hardware, especially large pages, slow publishers, and mixed multi-source questions.
+4. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
+5. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.
+6. Treat any future secondary reader, export, automation, benchmark, or UI-polish work as a new post-roadmap enhancement with its own scoped branch.
+7. If a future branch revisits browser-local history, treat export or opt-out as convenience features rather than unfinished core privacy work.
+8. Choose the next post-roadmap branch based on whether the priority is answer-quality disambiguation, browser-automation coverage for the UI, or the next provider-expansion milestone.
+9. If answer quality still needs more improvement after this pass, prioritize source-ranking disambiguation and fetch-path tuning before widening the prompt surface again.
+10. If the browser search integration needs more hardening, add explicit tests or richer diagnostics for Task Scheduler permissions, Startup folder fallback, and browser profile automation on a clean Windows machine.
 
 ## Handoff Notes For A Fresh Codex Thread
 

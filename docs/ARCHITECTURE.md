@@ -36,6 +36,23 @@ flowchart LR
     Fetcher --> Internet
 ```
 
+The optional `docker-compose.proton-search.yml` overlay inserts a local
+Proton WireGuard gateway only for the search path:
+
+```mermaid
+flowchart LR
+    Backend["Backend"] --> Search["SearXNG / search-provider"]
+    Search -. "shared network namespace" .-> VPN["search-vpn"]
+    VPN --> Proton["Proton VPN"]
+    Proton --> Internet["Search engines"]
+    UI["UI and browser"] --> Gateway["Host Gateway"]
+    Gateway --> Backend
+```
+
+The overlay does not change the host's default route. It changes only the
+outbound path used by `search-provider`; the UI, backend, fetcher, model
+runtime, browser, and other host applications keep their normal networking.
+
 ## Docker Networks
 
 - `core_internal`
@@ -63,6 +80,10 @@ flowchart LR
 - search-provider:
   - `core_internal`
   - `egress`
+- search-vpn (optional `proton-search` overlay):
+  - `core_internal`
+  - `egress`
+  - `search-provider` shares this service's network namespace when the overlay is active
 - model-backend:
   - `model_internal`
 
@@ -134,6 +155,13 @@ The validation path now treats that network and exposure model as enforceable po
 9. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
 10. UI shows the grounded answer with inline citation pills, a retractable source drawer, the selected or attempted sources, the current grounding mode, and any per-source fetch failures.
 11. Grounded-answer transcripts and source bundles remain transient in the current tab rather than persistent browser storage.
+
+When the optional Proton search overlay is active, steps 3 and the standalone
+SearXNG browser path still terminate at the same local `search-provider`
+service, but its public egress is supplied by the `search-vpn` WireGuard
+gateway. This changes the source IP visible to upstream search engines; it
+does not prevent those engines from receiving or potentially retaining the
+plaintext query.
 
 ## Why The Fetcher Is Separate
 

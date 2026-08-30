@@ -91,6 +91,20 @@ function Get-ComposeConfig {
     return $json | ConvertFrom-Json
 }
 
+function Get-ProtonSearchComposeConfig {
+    $json = docker compose `
+        -f docker-compose.yml `
+        -f docker-compose.proton-search.yml `
+        --profile proton-search `
+        config --format json
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Proton search Compose configuration failed."
+    }
+
+    return $json | ConvertFrom-Json
+}
+
 function Test-DigestPinnedImage {
     param([string]$ImageReference)
 
@@ -235,6 +249,67 @@ function Assert-ComposeHardeningPolicy {
     Assert-LocalOnlyCorsOrigins -Origins $backend.environment.CORS_ALLOWED_ORIGINS
 }
 
+function Assert-ProtonSearchComposePolicy {
+    param([object]$ComposeConfig)
+
+    $vpn = Get-NamedValue -Container $ComposeConfig.services -Name "search-vpn" -Kind "service"
+    if (-not (Test-DigestPinnedImage -ImageReference $vpn.image)) {
+        throw "Service 'search-vpn' must use a digest-pinned image reference."
+    }
+
+    if ($vpn.cap_add -notcontains "NET_ADMIN") {
+        throw "Service 'search-vpn' must have NET_ADMIN to establish the tunnel."
+    }
+
+    if ($vpn.cap_drop -notcontains "ALL") {
+        throw "Service 'search-vpn' must drop all capabilities before adding NET_ADMIN."
+    }
+
+    if (-not $vpn.read_only) {
+        throw "Service 'search-vpn' must use a read-only root filesystem."
+    }
+
+    if ($vpn.security_opt -notcontains "no-new-privileges:true") {
+        throw "Service 'search-vpn' must enable no-new-privileges."
+    }
+
+    if (($vpn.PSObject.Properties | Where-Object Name -eq "ports" | Select-Object -First 1) -and $vpn.ports) {
+        throw "Service 'search-vpn' must not publish a host port."
+    }
+
+    $tunDevice = @($vpn.devices | Where-Object { $_.target -eq "/dev/net/tun" }) | Select-Object -First 1
+    if (-not $tunDevice) {
+        throw "Service 'search-vpn' must expose /dev/net/tun."
+    }
+
+    Assert-SetEquality `
+        -Label "Service 'search-vpn' networks" `
+        -Actual (Get-NamedKeys -Container $vpn.networks) `
+        -Expected @("core_internal", "egress")
+
+    Assert-ServiceHasHealthcheck -ComposeConfig $ComposeConfig -ServiceName "search-vpn"
+
+    $searchProvider = Get-NamedValue -Container $ComposeConfig.services -Name "search-provider" -Kind "service"
+    if ($searchProvider.network_mode -ne "service:search-vpn") {
+        throw "The Proton search profile must place search-provider in the search-vpn network namespace."
+    }
+
+    if ($searchProvider.PSObject.Properties | Where-Object Name -eq "networks" | Select-Object -First 1) {
+        throw "The Proton search profile must remove direct network attachments from search-provider."
+    }
+
+    $backend = Get-NamedValue -Container $ComposeConfig.services -Name "backend" -Kind "service"
+    if ($backend.environment.SEARCH_BASE_URL -ne "http://search-vpn:8080") {
+        throw "The Proton search profile must route backend searches through search-vpn."
+    }
+
+    $gateway = Get-NamedValue -Container $ComposeConfig.services -Name "host-gateway" -Kind "service"
+    $gatewayConfig = @($gateway.volumes | Where-Object { $_.target -eq "/etc/nginx/nginx.conf" }) | Select-Object -First 1
+    if (-not $gatewayConfig -or $gatewayConfig.source -notmatch "nginx\.proton-search\.conf$") {
+        throw "The Proton search profile must use the VPN-aware localhost gateway configuration."
+    }
+}
+
 function Get-ServiceContainerId {
     param([string]$ServiceName)
 
@@ -320,6 +395,9 @@ try {
     Write-Host "Validating llama.cpp profile configuration..."
     $llamaComposeConfig = Get-ComposeConfig -UseLlamaCppProfile
 
+    Write-Host "Validating Proton search overlay configuration..."
+    $protonSearchComposeConfig = Get-ProtonSearchComposeConfig
+
     Write-Host "Checking compose hardening policy..."
     Assert-ComposeHardeningPolicy `
         -BaseComposeConfig $composeConfig `
@@ -327,6 +405,9 @@ try {
         -UiPort $uiPort `
         -BackendPort $backendPort `
         -SearxngUiPort $searxngUiPort
+
+    Write-Host "Checking Proton search overlay policy..."
+    Assert-ProtonSearchComposePolicy -ComposeConfig $protonSearchComposeConfig
 
     Write-Host "Building repo-managed images..."
     docker compose build ui backend fetcher

@@ -89,3 +89,6 @@
 - Do not add stealthy Wikipedia or publisher-specific robot-policy bypasses. Wikimedia support, when enabled, must use an explicit official API path, document the privacy and maintenance tradeoff, and remain opt-in.
 - The current fetcher-resilience pass does not add third-party reader proxies or special Wikipedia bypasses. If a future branch adds a secondary reader strategy, document the privacy tradeoff and make it opt-in.
 - The current baseline decision is to keep direct HTML fetch plus explicit snippet fallback as the steady-state design rather than adding a secondary reader path.
+- The optional Proton search profile lives in `docker-compose.proton-search.yml` and uses a container-scoped WireGuard sidecar. Start it with `scripts/start-proton-search.ps1`; never turn on a host-wide VPN just to protect AnonExplo search traffic.
+- Generate a separate Proton WireGuard configuration/private key for this PC even when the same Proton account is already used by the homeserver. Keep the key only in the untracked `.env`; the overlay's Gluetun firewall must remain the no-direct-egress kill switch.
+- The search-only VPN changes the egress IP and ISP visibility but does not prevent upstream search engines from receiving plaintext queries. Do not describe it as eliminating provider-side query visibility or retention.

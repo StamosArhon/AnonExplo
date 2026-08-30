@@ -1,0 +1,58 @@
+services:
+  search-vpn:
+    profiles:
+      - proton-search
+    image: ${SEARCH_VPN_IMAGE:-qmcgaw/gluetun:v3.40.0@sha256:2b42bfa046757145a5155acece417b65b4443c8033fb88661a8e9dcf7fda5a00}
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      VPN_SERVICE_PROVIDER: protonvpn
+      VPN_TYPE: wireguard
+      WIREGUARD_PRIVATE_KEY: ${PROTON_WIREGUARD_PRIVATE_KEY:-replace-with-local-proton-wireguard-private-key}
+      SERVER_COUNTRIES: ${PROTON_SERVER_COUNTRIES:-Switzerland}
+      FIREWALL_INPUT_PORTS: "8080"
+    networks:
+      core_internal: {}
+      egress: {}
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /gluetun
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null https://api.ipify.org",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  search-provider:
+    network_mode: "service:search-vpn"
+    networks: !reset []
+    depends_on:
+      search-vpn:
+        condition: service_healthy
+
+  backend:
+    environment:
+      SEARCH_BASE_URL: http://search-vpn:8080
+    depends_on:
+      search-vpn:
+        condition: service_healthy
+
+  host-gateway:
+    volumes:
+      - ./configs/localhost-gateway/nginx.proton-search.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      search-vpn:
+        condition: service_healthy

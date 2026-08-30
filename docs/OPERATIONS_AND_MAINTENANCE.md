@@ -46,6 +46,62 @@ Stop everything:
 docker compose --profile llamacpp down --remove-orphans
 ```
 
+### Optional Search-Only Proton VPN
+
+The repository includes a separate Compose overlay for routing only
+`search-provider` through Proton VPN. It does not change the Windows host
+route or send UI, backend, fetcher, model, browser, or other PC traffic
+through the VPN.
+
+Use the Proton account dashboard to create a separate WireGuard configuration
+for this PC (`Downloads` -> `WireGuard configuration`). Do not reuse the
+homeserver's private key/configuration. Copy only the generated `PrivateKey`
+value into the untracked `.env`:
+
+```text
+PROTON_WIREGUARD_PRIVATE_KEY=<local Proton WireGuard PrivateKey>
+PROTON_SERVER_COUNTRIES=Switzerland
+```
+
+Start the profile with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-proton-search.ps1
+```
+
+The profile uses a Gluetun WireGuard gateway with a firewall kill switch. If
+the tunnel is unavailable, the search-provider is not allowed to silently use
+the direct route. Verify the profile before relying on it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/check-proton-search.ps1
+```
+
+If the check fails, inspect the VPN and SearXNG logs:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.proton-search.yml --profile proton-search logs --tail=80 search-vpn search-provider
+```
+
+Stop the VPN profile with the same files:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.proton-search.yml --profile proton-search down --remove-orphans
+```
+
+The same Proton account can be used by the homeserver and this PC when the
+plan's simultaneous-connection allowance is not exceeded. Use a separate
+WireGuard configuration/private key for each machine. Proton states that its
+VPN service does not log traffic, visited websites, session lengths, or user
+IP addresses, but the account itself and ordinary account-management data
+still exist outside AnonExplo. A VPN also changes only the network identity:
+upstream search engines still receive the plaintext query and can apply their
+own retention policies.
+
+Reference material: [Proton WireGuard configuration instructions](https://protonvpn.com/support/wireguard-configurations),
+[Proton VPN plan connection limits](https://protonvpn.com/support/proton-vpn-plans), and
+[Gluetun's container network setup](https://github.com/qdm12/gluetun-wiki/blob/main/setup/connect-a-container-to-gluetun.md).
+
 ## Search Quality Tuning
 
 The default profile uses `SEARCH_CATEGORIES=auto`: ordinary questions use
@@ -138,6 +194,12 @@ When the repo or pinned images change, prefer this order:
 
    ```powershell
    docker compose pull host-gateway search-provider model-backend
+   ```
+
+   If the Proton search overlay is enabled, also pull its pinned gateway:
+
+   ```powershell
+   docker compose -f docker-compose.yml -f docker-compose.proton-search.yml --profile proton-search pull search-vpn
    ```
 
 4. Rebuild repo-managed services:

@@ -38,6 +38,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - quieter default logging across the repo-managed UI, backend, fetcher, and localhost gateway services
 - an operations guide plus a lightweight stack health-check script for daily local maintenance
 - a browser search integration setup script and runbook for using the standalone SearXNG route as the default Chromium-family search engine with local DuckDuckGo fallback
+- an opt-in Proton WireGuard search-egress overlay that affects only the SearXNG/search-provider container, not the rest of the PC
 
 ## Design Goals
 
@@ -128,6 +129,23 @@ See `docs/ARCHITECTURE.md` for the fuller design.
    powershell -ExecutionPolicy Bypass -File scripts/ops-check.ps1 -RequireModelRuntime
    ```
 
+11. Optional: route only AnonExplo search traffic through Proton VPN.
+
+   Generate a separate Proton WireGuard configuration for this PC from the
+   Proton account dashboard. Copy only its `PrivateKey` value into the
+   untracked `.env` as `PROTON_WIREGUARD_PRIVATE_KEY`, choose a country with
+   `PROTON_SERVER_COUNTRIES`, and start the opt-in profile:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/start-proton-search.ps1
+   ```
+
+   This uses the `docker-compose.proton-search.yml` overlay. Only
+   `search-provider` shares the `search-vpn` network namespace; the browser,
+   UI, backend, fetcher, model runtime, and other PC traffic keep their normal
+   routes. The VPN changes the search egress IP but does not stop upstream
+   search engines from seeing the plaintext query.
+
 ## Provider Switching
 
 The repo treats provider choice as configuration:
@@ -180,6 +198,12 @@ Recommended local examples:
 - `SEARCH_PROVIDER=yacy` with `SEARCH_BASE_URL=http://yacy-search:8090`
 
 For privacy-first deployments, keep Ollama pointed at a local or otherwise trusted private endpoint rather than a hosted cloud API, and review YaCy's own network/peer settings before treating it as equivalent to SearXNG from a privacy standpoint.
+
+The optional search-only VPN profile is an egress transport choice, not a
+search-provider adapter. It can be combined with SearXNG without adding API
+keys or external search accounts. It requires a separate local Proton
+WireGuard private key and the same Proton account may be used on another
+machine only within that account's simultaneous-connection allowance.
 
 ## Grounding Flow
 
