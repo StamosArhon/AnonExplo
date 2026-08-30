@@ -1,8 +1,21 @@
 import json
+import re
 from typing import Any, Protocol
 
 import httpx
 from pydantic import BaseModel, Field
+
+
+CURRENT_QUERY_PATTERN = re.compile(
+    r"\b(?:as of|breaking|ceasefire|current|developments?|happening|latest|live|news|now|ongoing|recent|situation|status|today|update|updates|war)\b",
+    re.IGNORECASE,
+)
+STATUS_QUERY_PATTERN = re.compile(r"\b(?:closed|open)\b", re.IGNORECASE)
+STATUS_CONTEXT_PATTERN = re.compile(
+    r"\b(?:airspace|border|ceasefire|crossing|port|route|strait|talks?)\b",
+    re.IGNORECASE,
+)
+NEWS_ENGINE_PATTERN = re.compile(r"(?:\.news$|\snews$|\breuters\b)", re.IGNORECASE)
 
 
 class ProviderError(RuntimeError):
@@ -449,39 +462,120 @@ class SearxngSearchProvider:
         self.time_range = time_range.strip()
         self.engines = engines.strip()
 
+    def _categories_for_query(self, query: str) -> str:
+        if self.categories.lower() not in {"auto", "adaptive"}:
+            return self.categories
+
+        return "general,news" if self._is_current_or_status_query(query) else "general"
+
+    def _is_current_or_status_query(self, query: str) -> bool:
+        is_current_query = bool(CURRENT_QUERY_PATTERN.search(query or ""))
+        is_status_query = bool(
+            STATUS_QUERY_PATTERN.search(query or "")
+            and STATUS_CONTEXT_PATTERN.search(query or "")
+        )
+        return is_current_query or is_status_query
+
+    def _engines_for_query(self, query: str) -> str:
+        configured_engines = [
+            engine.strip()
+            for engine in self.engines.split(",")
+            if engine.strip()
+        ]
+        if not configured_engines:
+            return ""
+        if self.categories.lower() not in {"auto", "adaptive"}:
+            return ",".join(configured_engines)
+        if self._is_current_or_status_query(query):
+            return ",".join(configured_engines)
+
+        general_engines = [
+            engine for engine in configured_engines if not NEWS_ENGINE_PATTERN.search(engine)
+        ]
+        return ",".join(general_engines or configured_engines)
+
     async def search(self, query: str, limit: int) -> list[SearchHit]:
         params = {
             "q": query,
             "format": "json",
             "pageno": 1,
         }
-        if self.categories:
-            params["categories"] = self.categories
+        categories = self._categories_for_query(query)
+        if categories:
+            params["categories"] = categories
         if self.language:
             params["language"] = self.language
         if self.time_range:
             params["time_range"] = self.time_range
-        if self.engines:
-            params["engines"] = self.engines
+        engines = self._engines_for_query(query)
+        if engines:
+            params["engines"] = engines
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 response = await client.get(f"{self.base_url}/search", params=params)
                 response.raise_for_status()
             data = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            raise ProviderError(f"Search request failed: {exc}") from exc
+        except httpx.HTTPStatusError as exc:
+            raise ProviderError(
+                f"SearXNG returned HTTP {exc.response.status_code} for the search request."
+            ) from exc
+        except httpx.RequestError as exc:
+            raise ProviderError(f"SearXNG request failed: {_describe_httpx_error(exc)}") from exc
+        except ValueError as exc:
+            raise ProviderError(f"SearXNG returned invalid JSON: {_describe_httpx_error(exc)}") from exc
+
+        if not isinstance(data, dict):
+            raise ProviderError("SearXNG returned an unexpected JSON payload.")
 
         items = data.get("results", [])
-        return [
-            SearchHit(
-                title=item.get("title") or item.get("url") or "Untitled result",
-                url=item["url"],
-                snippet=_normalize_search_snippet(item.get("content")),
-                engine=item.get("engine"),
+        if not isinstance(items, list):
+            items = []
+
+        results: list[SearchHit] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            url = item.get("url")
+            if not isinstance(url, str) or not url.strip():
+                continue
+            title = item.get("title")
+            if not isinstance(title, str) or not title.strip():
+                title = url
+            engine = item.get("engine")
+            if not isinstance(engine, str):
+                engine = None
+            results.append(
+                SearchHit(
+                    title=title,
+                    url=url,
+                    snippet=_normalize_search_snippet(item.get("content")),
+                    engine=engine,
+                )
             )
-            for item in items[:limit]
-            if item.get("url")
-        ]
+            if len(results) >= limit:
+                break
+
+        if not results:
+            unresponsive_engines = data.get("unresponsive_engines", [])
+            if isinstance(unresponsive_engines, list) and unresponsive_engines:
+                engine_names: list[str] = []
+                for item in unresponsive_engines:
+                    if isinstance(item, dict):
+                        name = item.get("name") or item.get("engine")
+                    elif isinstance(item, (list, tuple)) and item:
+                        name = item[0]
+                    else:
+                        name = item
+                    if name:
+                        engine_names.append(str(name))
+                if engine_names:
+                    raise ProviderError(
+                        "SearXNG returned no usable results; unresponsive engines: "
+                        + ", ".join(engine_names[:8])
+                        + "."
+                    )
+
+        return results
 
 
 class YacySearchProvider:

@@ -46,6 +46,48 @@ Stop everything:
 docker compose --profile llamacpp down --remove-orphans
 ```
 
+## Search Quality Tuning
+
+The default profile uses `SEARCH_CATEGORIES=auto`: ordinary questions use
+`general` plus the configured general engines, while current or news-like
+questions use `general,news` and add the configured news engines. It also uses
+a bounded curated engine list and can issue up to three SearXNG queries
+for a clearly multi-part grounded question. The original full question is
+always retained, and failed variants are reported as partial search issues.
+
+The main operator knobs are in `.env`:
+
+- `SEARCH_ENGINES`: keep the curated list for a quieter profile; clear it to
+  let the backend query every engine enabled in the bundled SearXNG profile,
+  accepting more upstream errors and outbound requests.
+- `SEARCH_LANGUAGE`: leave blank for SearXNG's automatic/default handling, or
+  set a language such as `en` or `el` when results should be pinned.
+- `SEARCH_TIME_RANGE`: set a SearXNG-supported range such as `day`, `week`,
+  `month`, or `year` for recency-sensitive searches.
+- `GROUNDING_MAX_QUERY_VARIANTS`: lower to `1` to disable fan-out, or keep the
+  default `3` for compound questions.
+
+After changing `.env` or `configs/searxng/settings.yml`, recreate the affected
+services so the settings are loaded:
+
+```powershell
+docker compose up -d --force-recreate search-provider backend
+```
+
+When results suddenly become empty or incomplete, inspect which upstreams are
+being rejected before changing ranking settings:
+
+```powershell
+docker compose logs --tail=120 search-provider
+```
+
+SearXNG cannot make a blocked, rate-limited, or CAPTCHA-protected upstream
+behave like Google or Brave. If that persists, the privacy-reviewed options
+are to keep only the healthy engines, use an explicitly configured official
+search API, or add a trusted egress/proxy route as a separately documented
+provider choice. Do not add stealth bypasses or hidden third-party reader
+proxies.
+
 ## Browser Search Integration
 
 The optional browser search pipeline lets Chromium-family browsers use the standalone SearXNG route from the address bar while falling back to DuckDuckGo if the local route is unavailable.

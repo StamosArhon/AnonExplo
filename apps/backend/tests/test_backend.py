@@ -16,6 +16,7 @@ os.environ["FETCH_BASE_URL"] = "http://fetcher:8081"
 
 from app.config import Settings
 from app.grounding import (
+    _build_search_query_variants,
     _select_context_excerpt,
     build_grounded_model_request,
     build_grounding_bundle,
@@ -32,6 +33,7 @@ from app.providers import (
     OllamaModelProvider,
     ProviderError,
     SearchHit,
+    SearxngSearchProvider,
     UnsupportedModelError,
     YacySearchProvider,
 )
@@ -126,9 +128,13 @@ class BackendApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["model"]["model_name"], "test-model")
         self.assertTrue(payload["search"]["base_url"].startswith("http://search-provider"))
-        self.assertEqual(payload["search"]["categories"], "general,news")
-        self.assertEqual(payload["search"]["language"], "all")
+        self.assertEqual(payload["search"]["categories"], "auto")
+        self.assertEqual(payload["search"]["language"], "instance-default")
         self.assertEqual(payload["search"]["time_range"], "none")
+        self.assertEqual(
+            payload["search"]["engines"],
+            "brave,wikipedia,duckduckgo news,google news,reuters",
+        )
         self.assertEqual(payload["search"]["preferred_domains"], "wikipedia.org,wikimedia.org")
         self.assertEqual(payload["search"]["preferred_domain_boost"], 14.0)
 
@@ -958,6 +964,65 @@ class ModelProviderProbeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
+    def test_multi_part_query_builds_original_and_clause_variants(self) -> None:
+        variants = _build_search_query_variants(
+            "Are the Straits of Hormuz open and what is the current state of the talks?"
+        )
+
+        self.assertEqual(
+            variants,
+            [
+                "Are the Straits of Hormuz open and what is the current state of the talks?",
+                "Are the Straits of Hormuz open",
+                "what is the current state of the talks",
+            ],
+        )
+
+    async def test_multi_part_search_keeps_successful_variants_when_one_fails(self) -> None:
+        search_provider = AsyncMock()
+
+        async def search_side_effect(query: str, limit: int):
+            if query.startswith("what is the current"):
+                raise ProviderError("SearXNG returned HTTP 503")
+            return [
+                SearchHit(
+                    title="Hormuz status",
+                    url=f"https://example.org/{'open' if query.startswith('Are') else 'combined'}",
+                    snippet="The Strait of Hormuz is open according to the latest report.",
+                    engine="mock",
+                )
+            ]
+
+        search_provider.search.side_effect = search_side_effect
+        fetcher = AsyncMock()
+        fetcher.fetch.return_value = FetchDocument(
+            requested_url="https://example.org/open",
+            final_url="https://example.org/open",
+            title="Hormuz status",
+            excerpt="The strait is open.",
+            content_text="The Strait of Hormuz is open according to the latest report.",
+            content_char_count=74,
+            word_count=11,
+            content_type="text/html",
+        )
+
+        bundle, context = await build_grounding_bundle(
+            query="Are the Straits of Hormuz open and what is the current state of the talks?",
+            search_provider=search_provider,
+            fetcher_client=fetcher,
+            search_limit=3,
+            fetch_limit=1,
+            source_char_limit=400,
+            total_context_chars=800,
+            preview_chars=160,
+        )
+
+        self.assertEqual(search_provider.search.await_count, 3)
+        self.assertEqual(bundle.summary.search_failures, 1)
+        self.assertEqual(bundle.summary.failed_sources, 0)
+        self.assertEqual(bundle.errors[0].code, "search_variant_failed")
+        self.assertIn("Hormuz is open", context)
+
     async def test_grounding_bundle_ranks_sources_and_retries_after_fetch_failures(self) -> None:
         search_provider = AsyncMock()
         search_provider.search.return_value = [
@@ -1740,6 +1805,94 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_searxng_auto_categories_separate_ordinary_and_current_queries(self) -> None:
+        provider = SearxngSearchProvider(
+            base_url="http://search-provider:8080",
+            timeout_seconds=20.0,
+            categories="auto",
+        )
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "http://search-provider:8080/search"),
+            content=json.dumps({"results": []}).encode("utf-8"),
+        )
+        client = MockAsyncClient(response=response)
+        with patch("app.providers.httpx.AsyncClient", return_value=client):
+            await provider.search("what is local inference", 5)
+            self.assertEqual(client.last_get_params["categories"], "general")
+
+            await provider.search("what is the current status of the ceasefire", 5)
+            self.assertEqual(client.last_get_params["categories"], "general,news")
+
+    async def test_searxng_auto_categories_do_not_treat_open_source_as_current_news(self) -> None:
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "http://search-provider:8080/search"),
+            json={"results": []},
+        )
+        client = MockAsyncClient(response=response)
+        provider = SearxngSearchProvider(
+            base_url="http://search-provider:8080",
+            categories="auto",
+            language="",
+            time_range="",
+            engines="",
+            timeout_seconds=20,
+        )
+
+        with patch("app.providers.httpx.AsyncClient", return_value=client):
+            await provider.search("What is open source software?", 8)
+
+        self.assertEqual(client.last_get_params["categories"], "general")
+
+    async def test_searxng_auto_engines_keep_news_out_of_ordinary_queries(self) -> None:
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "http://search-provider:8080/search"),
+            json={"results": []},
+        )
+        client = MockAsyncClient(response=response)
+        provider = SearxngSearchProvider(
+            base_url="http://search-provider:8080",
+            categories="auto",
+            language="",
+            time_range="",
+            engines="brave,wikipedia,duckduckgo news,google news,reuters",
+            timeout_seconds=20,
+        )
+
+        with patch("app.providers.httpx.AsyncClient", return_value=client):
+            await provider.search("What is local inference?", 8)
+            self.assertEqual(client.last_get_params["engines"], "brave,wikipedia")
+
+            await provider.search("What is the current state of the ceasefire?", 8)
+            self.assertEqual(
+                client.last_get_params["engines"],
+                "brave,wikipedia,duckduckgo news,google news,reuters",
+            )
+
+    async def test_searxng_reports_unresponsive_engines_when_no_results_are_usable(self) -> None:
+        provider = SearxngSearchProvider(
+            base_url="http://search-provider:8080",
+            timeout_seconds=20.0,
+        )
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "http://search-provider:8080/search"),
+            content=json.dumps(
+                {
+                    "results": [{"title": "missing url"}, {"url": ""}],
+                    "unresponsive_engines": [["brave", "timeout"], ["startpage", "403"]],
+                }
+            ).encode("utf-8"),
+        )
+        with patch(
+            "app.providers.httpx.AsyncClient",
+            return_value=MockAsyncClient(response=response),
+        ):
+            with self.assertRaisesRegex(ProviderError, "unresponsive engines: brave, startpage"):
+                await provider.search("privacy", 5)
+
     async def test_searxng_search_passes_tuned_query_parameters(self) -> None:
         provider = build_search_provider(
             Settings(

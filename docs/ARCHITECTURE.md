@@ -83,6 +83,8 @@ The backend uses environment-driven provider selection:
   - `SEARCH_ENGINES`
   - `SEARCH_PREFERRED_DOMAINS`
   - `SEARCH_PREFERRED_DOMAIN_BOOST`
+  - `GROUNDING_QUERY_EXPANSION_ENABLED`
+  - `GROUNDING_MAX_QUERY_VARIANTS`
 - fetch:
 - `FETCH_BASE_URL`
   - `FETCH_WIKIMEDIA_API_ENABLED`
@@ -123,7 +125,7 @@ The validation path now treats that network and exposure model as enforceable po
 
 1. UI submits a grounding query to the backend.
 2. UI may include grounded-answer-specific saved instructions plus default search and fetch limits from the browser-local settings modal.
-3. Backend calls the configured search provider with env-driven search tuning such as categories, language, and optional time-range or engine filters.
+3. Backend calls the configured search provider with env-driven search tuning such as adaptive categories, language, and optional time-range or engine filters. Clearly multi-part questions may be sent as a bounded set of parallel query variants, with the original query retained for broad coverage.
 4. Backend deduplicates results, ranks unique candidates by query relevance while preserving domain diversity, and can apply a modest config-driven preferred-domain bias before selecting the initial fetch batch.
 5. Backend calls the fetcher service for readable page text, classifies thin or blocked fetch outcomes explicitly, and keeps trying later-ranked sources when earlier fetches fail.
 6. When explicitly enabled, the fetcher may use the official Wikimedia Parse API for supported Wikimedia article URLs instead of the default direct HTML request path.

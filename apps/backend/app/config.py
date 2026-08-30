@@ -41,14 +41,22 @@ class Settings(BaseSettings):
         default="http://search-provider:8080",
         validation_alias="SEARCH_BASE_URL",
     )
-    search_result_limit: int = Field(default=8, validation_alias="SEARCH_RESULT_LIMIT")
+    search_result_limit: int = Field(
+        default=8,
+        ge=1,
+        le=10,
+        validation_alias="SEARCH_RESULT_LIMIT",
+    )
     search_categories: str = Field(
-        default="general,news",
+        default="auto",
         validation_alias="SEARCH_CATEGORIES",
     )
-    search_language: str = Field(default="all", validation_alias="SEARCH_LANGUAGE")
+    search_language: str = Field(default="", validation_alias="SEARCH_LANGUAGE")
     search_time_range: str = Field(default="", validation_alias="SEARCH_TIME_RANGE")
-    search_engines: str = Field(default="", validation_alias="SEARCH_ENGINES")
+    search_engines: str = Field(
+        default="brave,wikipedia,duckduckgo news,google news,reuters",
+        validation_alias="SEARCH_ENGINES",
+    )
     search_preferred_domains: str = Field(
         default="wikipedia.org,wikimedia.org",
         validation_alias="SEARCH_PREFERRED_DOMAINS",
@@ -60,6 +68,16 @@ class Settings(BaseSettings):
     search_request_timeout_seconds: float = Field(
         default=20.0,
         validation_alias="SEARCH_REQUEST_TIMEOUT_SECONDS",
+    )
+    grounding_query_expansion_enabled: bool = Field(
+        default=True,
+        validation_alias="GROUNDING_QUERY_EXPANSION_ENABLED",
+    )
+    grounding_max_query_variants: int = Field(
+        default=3,
+        ge=1,
+        le=3,
+        validation_alias="GROUNDING_MAX_QUERY_VARIANTS",
     )
 
     fetch_base_url: str = Field(default="http://fetcher:8081", validation_alias="FETCH_BASE_URL")

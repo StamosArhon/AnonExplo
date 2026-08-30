@@ -1,3 +1,4 @@
+import asyncio
 import re
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
@@ -77,6 +78,7 @@ class GroundingSummary(BaseModel):
     fetched_sources: int
     failed_sources: int
     grounding_characters: int
+    search_failures: int = 0
     context_mode: Literal["fetched_text", "fetched_plus_snippets", "search_snippets", "none"] = "none"
 
 
@@ -137,6 +139,11 @@ DIRECT_ANSWER_HINT_PATTERN = re.compile(
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+(?=(?:[\"'(\[]*[A-Z0-9]))")
 MULTI_PART_QUERY_PATTERN = re.compile(
     r"\band\s+(?:what|who|where|when|why|how|is|are|was|were|do|does|did|has|have|had|can|could|will|would|should)\b",
+    re.IGNORECASE,
+)
+MULTI_PART_QUERY_SPLIT_PATTERN = re.compile(
+    r"(?:\s+and\s+|\s*[?!.]\s*(?:and\s+)?)"
+    r"(?=(?:what|who|where|when|why|how|is|are|was|were|do|does|did|has|have|had|can|could|will|would|should)\b)",
     re.IGNORECASE,
 )
 TEXT_MATCH_CANONICALIZATION_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -274,6 +281,69 @@ def _is_status_query(query: str) -> bool:
 
 def _is_multi_part_query(query: str) -> bool:
     return bool(MULTI_PART_QUERY_PATTERN.search(query or ""))
+
+
+def _build_search_query_variants(query: str, max_variants: int = 3) -> list[str]:
+    normalized_query = " ".join((query or "").split()).strip()
+    if not normalized_query or max_variants <= 1 or not _is_multi_part_query(normalized_query):
+        return [normalized_query]
+
+    clauses = [
+        part.strip(" .?!")
+        for part in MULTI_PART_QUERY_SPLIT_PATTERN.split(normalized_query)
+        if part.strip()
+    ]
+    if len(clauses) <= 1:
+        return [normalized_query]
+
+    variants = [normalized_query]
+    variant_keys = {normalized_query.casefold()}
+    for clause in clauses:
+        clause_key = clause.casefold()
+        if clause_key in variant_keys:
+            continue
+        variants.append(clause)
+        variant_keys.add(clause_key)
+        if len(variants) >= max_variants:
+            break
+    return variants
+
+
+async def _search_query_variants(
+    query: str,
+    search_provider: SearchProvider,
+    search_limit: int,
+    *,
+    expansion_enabled: bool,
+    max_query_variants: int,
+) -> tuple[list[SearchHit], list[GroundingError]]:
+    variants = (
+        _build_search_query_variants(query, max_query_variants)
+        if expansion_enabled
+        else [query]
+    )
+    responses = await asyncio.gather(
+        *(search_provider.search(variant, search_limit) for variant in variants),
+        return_exceptions=True,
+    )
+
+    query_hits: list[SearchHit] = []
+    search_errors: list[GroundingError] = []
+    for variant, response in zip(variants, responses, strict=True):
+        if isinstance(response, Exception):
+            search_errors.append(
+                GroundingError(
+                    stage="search",
+                    message=f"Search variant failed for '{variant}': {response}",
+                    code="search_variant_failed",
+                )
+            )
+            continue
+        query_hits.extend(response)
+
+    if not query_hits and search_errors:
+        raise ProviderError(search_errors[0].message)
+    return query_hits, search_errors
 
 
 def _is_current_events_query(query: str) -> bool:
@@ -958,8 +1028,16 @@ async def build_grounding_bundle(
     preview_chars: int,
     preferred_domains: str = "",
     preferred_domain_boost: float = 0.0,
+    query_expansion_enabled: bool = True,
+    max_query_variants: int = 3,
 ) -> tuple[GroundingBundle, str]:
-    query_hits = await search_provider.search(query, search_limit)
+    query_hits, search_errors = await _search_query_variants(
+        query,
+        search_provider,
+        search_limit,
+        expansion_enabled=query_expansion_enabled,
+        max_query_variants=max_query_variants,
+    )
     search_results, source_candidates = _build_search_results(query_hits)
     ranked_candidates = _rank_sources(
         query,
@@ -973,7 +1051,7 @@ async def build_grounding_bundle(
         fetcher_client=fetcher_client,
     )
     search_results = _mark_selected_results(search_results, selected_sources)
-    fetched_sources, errors, grounding_context, used_context_chars = _compose_context(
+    fetched_sources, fetch_errors, grounding_context, used_context_chars = _compose_context(
         query=query,
         selected_sources=selected_sources,
         fetch_results=fetch_results,
@@ -1014,14 +1092,15 @@ async def build_grounding_bundle(
             unique_search_results=len(source_candidates),
             selected_sources=len(selected_sources),
             fetched_sources=len(fetched_sources),
-            failed_sources=len(errors),
+            failed_sources=len(fetch_errors),
+            search_failures=len(search_errors),
             grounding_characters=used_context_chars,
             context_mode=context_mode,
         ),
         search_results=search_results,
         selected_sources=selected_sources,
         fetched_sources=fetched_sources,
-        errors=errors,
+        errors=[*search_errors, *fetch_errors],
     )
     return bundle, grounding_context
 

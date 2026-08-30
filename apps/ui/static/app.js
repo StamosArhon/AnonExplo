@@ -8,7 +8,7 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS = {
   chatSystemPrompt: "",
   groundingSystemPrompt: "",
-  groundingSearchLimit: 6,
+  groundingSearchLimit: 8,
   groundingFetchLimit: 3,
 };
 
@@ -482,6 +482,9 @@ function buildGroundingSourceBundle(payload) {
     sourceCount: sources.length,
     fetchedCount: summary.fetched_sources || 0,
     failedCount: summary.failed_sources || 0,
+    searchFailureCount:
+      summary.search_failures || (grounding.errors || []).filter((item) => item.stage === "search").length,
+    searchErrors: (grounding.errors || []).filter((item) => item.stage === "search"),
     sources,
   };
 }
@@ -859,6 +862,9 @@ function legacyRenderGroundedMessageCopy(message) {
   if (bundle.failedCount) {
     footerNotes.push(bundle.failedCount === 1 ? "1 source issue" : `${bundle.failedCount} source issues`);
   }
+  if (bundle.searchFailureCount) {
+    footerNotes.push(bundle.searchFailureCount === 1 ? "1 search issue" : `${bundle.searchFailureCount} search issues`);
+  }
 
   return `
     <div class="message-copy message-copy-rich">${rendered}</div>
@@ -920,6 +926,9 @@ function renderGroundedMessageCopy(message) {
   const footerNotes = [getContextModeLabel(bundle.contextMode)];
   if (bundle.failedCount) {
     footerNotes.push(bundle.failedCount === 1 ? "1 source issue" : `${bundle.failedCount} source issues`);
+  }
+  if (bundle.searchFailureCount) {
+    footerNotes.push(bundle.searchFailureCount === 1 ? "1 search issue" : `${bundle.searchFailureCount} search issues`);
   }
 
   return `
@@ -1002,6 +1011,10 @@ function renderGroundingMeta(state, elements) {
     chips.push(buildChip("Issues", String(bundle.failedCount), "warn"));
   }
 
+  if (bundle && bundle.searchFailureCount) {
+    chips.push(buildChip("Search issues", String(bundle.searchFailureCount), "warn"));
+  }
+
   if (state.groundingStatus.kind === "error") {
     chips.push(buildChip("Status", "request failed", "error"));
   }
@@ -1068,6 +1081,11 @@ function renderSourceDrawer(state, elements) {
     ),
     buildChip("Fetched", String(bundle.fetchedCount), bundle.fetchedCount ? "ok" : "warn"),
     buildChip("Issues", String(bundle.failedCount), bundle.failedCount ? "warn" : "muted"),
+    buildChip(
+      "Search issues",
+      String(bundle.searchFailureCount),
+      bundle.searchFailureCount ? "warn" : "muted",
+    ),
   ].join("");
 
   elements.sourceDrawerList.innerHTML = bundle.sources
@@ -1115,6 +1133,23 @@ function renderSourceDrawer(state, elements) {
       `;
     })
     .join("");
+
+  if (bundle.searchErrors?.length) {
+    elements.sourceDrawerList.innerHTML += `
+      <article class="drawer-source-card">
+        <div class="status-line">
+          <strong>Search variant issues</strong>
+          <span class="status-badge status-failed">${escapeHtml(String(bundle.searchErrors.length))}</span>
+        </div>
+        ${bundle.searchErrors
+          .map(
+            (error) =>
+              `<p class="meta">${escapeHtml(error.message || "A search variant failed.")}</p>`,
+          )
+          .join("")}
+      </article>
+    `;
+  }
 
   const activeCard = elements.sourceDrawerList.querySelector(".drawer-source-card.active");
   if (activeCard) {
@@ -1214,7 +1249,11 @@ function buildGroundingAssistantText(payload) {
     return normalizeCitationMarkup(payload.answer || "(empty grounded answer)");
   }
   if (payload.answer_status === "insufficient_sources") {
-    return "Search finished, but not enough fetched source text was available to answer from derived material only.";
+    const searchFailureCount = Number(payload.grounding?.summary?.search_failures || 0);
+    const searchNote = searchFailureCount
+      ? ` ${searchFailureCount} search variant${searchFailureCount === 1 ? "" : "s"} also failed.`
+      : "";
+    return `Search finished, but not enough fetched source text was available to answer from derived material only.${searchNote}`;
   }
   if (payload.answer_status === "model_error") {
     return payload.model_error || "Source collection finished, but the local model failed while synthesizing an answer.";
@@ -1733,7 +1772,7 @@ async function main() {
         "assistant",
         buildGroundingAssistantText(payload),
         payload.answer_status === "model_error" ? "error" : "default",
-        sourceBundle.sources.length ? { sourceBundle } : {},
+        sourceBundle.sources.length || sourceBundle.searchFailureCount ? { sourceBundle } : {},
       );
       state.groundingStatus = { kind: "success", payload };
       rerender();

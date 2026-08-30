@@ -1,14 +1,56 @@
-use_default_settings: true
+use_default_settings:
+  engines:
+    keep_only:
+      - brave
+      - wikipedia
+      - duckduckgo news
+      - google news
+      - reuters
+      - arxiv
+      - pubmed
+      - crossref
 
 general:
   instance_name: "AnonExplo Local Search"
 
 search:
   autocomplete: ""
+  default_lang: "auto"
   safe_search: 0
   formats:
     - html
     - json
 
 server:
+  limiter: false
   public_instance: false
+
+# Keep the local instance responsive with a focused general/news/research
+# catalogue. Individual engine overrides below can be adjusted without
+# rewriting the engine implementations.
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 8.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+
+engines:
+  # Keep the local browser route and the backend's explicit engine list inside
+  # the same focused general/news/research profile.
+  - name: brave
+    timeout: 5.0
+  - name: wikipedia
+    timeout: 5.0
+  - name: duckduckgo news
+    timeout: 6.0
+  - name: google news
+    timeout: 6.0
+  - name: reuters
+    timeout: 6.0
+  - name: arxiv
+    timeout: 8.0
+  - name: pubmed
+    timeout: 8.0
+  - name: crossref
+    timeout: 8.0

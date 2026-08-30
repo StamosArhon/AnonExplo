@@ -30,7 +30,7 @@ class ChatRequest(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1)
-    limit: int = Field(default=8, ge=1, le=10)
+    limit: int | None = Field(default=None, ge=1, le=10)
 
 
 class FetchRequest(BaseModel):
@@ -39,8 +39,8 @@ class FetchRequest(BaseModel):
 
 class GroundingRequest(BaseModel):
     query: str = Field(min_length=1)
-    search_limit: int = Field(default=6, ge=1, le=10)
-    fetch_limit: int = Field(default=3, ge=1, le=5)
+    search_limit: int | None = Field(default=None, ge=1, le=10)
+    fetch_limit: int | None = Field(default=None, ge=1, le=5)
     system_prompt: str | None = None
     selected_model: str | None = Field(default=None, min_length=1)
 
@@ -171,6 +171,8 @@ def create_app() -> FastAPI:
                 "engines": current_settings.search_engines or "instance-default",
                 "preferred_domains": current_settings.search_preferred_domains or "none",
                 "preferred_domain_boost": current_settings.search_preferred_domain_boost,
+                "query_expansion_enabled": current_settings.grounding_query_expansion_enabled,
+                "max_query_variants": current_settings.grounding_max_query_variants,
             },
             "fetch": {
                 "base_url": current_settings.fetch_base_url,
@@ -241,7 +243,10 @@ def create_app() -> FastAPI:
     ) -> dict[str, object]:
         provider = build_search_provider(current_settings)
         try:
-            results = await provider.search(payload.query, payload.limit)
+            results = await provider.search(
+                payload.query,
+                payload.limit or current_settings.search_result_limit,
+            )
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "search"}) from exc
         return {"results": [item.model_dump() for item in results]}
@@ -271,13 +276,15 @@ def create_app() -> FastAPI:
                 query=payload.query,
                 search_provider=search_provider,
                 fetcher_client=fetch_client,
-                search_limit=payload.search_limit,
-                fetch_limit=payload.fetch_limit,
+                search_limit=payload.search_limit or current_settings.search_result_limit,
+                fetch_limit=payload.fetch_limit or 3,
                 source_char_limit=current_settings.grounding_source_char_limit,
                 total_context_chars=current_settings.grounding_total_context_chars,
                 preview_chars=current_settings.grounding_preview_chars,
                 preferred_domains=current_settings.search_preferred_domains,
                 preferred_domain_boost=current_settings.search_preferred_domain_boost,
+                query_expansion_enabled=current_settings.grounding_query_expansion_enabled,
+                max_query_variants=current_settings.grounding_max_query_variants,
             )
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "grounding"}) from exc
@@ -311,13 +318,15 @@ def create_app() -> FastAPI:
                 query=payload.query,
                 search_provider=search_provider,
                 fetcher_client=fetch_client,
-                search_limit=payload.search_limit,
-                fetch_limit=payload.fetch_limit,
+                search_limit=payload.search_limit or current_settings.search_result_limit,
+                fetch_limit=payload.fetch_limit or 3,
                 source_char_limit=current_settings.grounding_source_char_limit,
                 total_context_chars=current_settings.grounding_total_context_chars,
                 preview_chars=current_settings.grounding_preview_chars,
                 preferred_domains=current_settings.search_preferred_domains,
                 preferred_domain_boost=current_settings.search_preferred_domain_boost,
+                query_expansion_enabled=current_settings.grounding_query_expansion_enabled,
+                max_query_variants=current_settings.grounding_max_query_variants,
             )
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail={"message": str(exc), "provider": "grounding"}) from exc

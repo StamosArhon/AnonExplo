@@ -29,6 +29,7 @@ This repository is currently focused on turning the secure local stack into a pr
 - explicit workspace separation so `Direct Chat` stays model only while `Grounded Answer` is the path that uses SearXNG plus fetched source text
 - superscript-style grounded source references with hover tooltips plus a retractable source drawer so provenance stays available without overwhelming the main answer surface
 - config-driven SearXNG tuning defaults for broader current-events coverage, including categories, language, and optional engine or time-range controls
+- adaptive search categories and bounded multi-part query expansion so compound questions can gather evidence for each clause
 - config-driven preferred-domain ranking bias for grounded search, with Wikipedia and Wikimedia as the default example so encyclopedic sources surface more reliably when relevant
 - ranked grounded-source selection with retry behavior so later sources can still be fetched when early candidates fail
 - structured fetcher failure codes, thin-content detection, and domain-aware retry behavior so blocked publishers are easier to understand without silently degrading into generic errors
@@ -144,6 +145,8 @@ The repo treats provider choice as configuration:
   - `SEARCH_ENGINES`
   - `SEARCH_PREFERRED_DOMAINS`
   - `SEARCH_PREFERRED_DOMAIN_BOOST`
+  - `GROUNDING_QUERY_EXPANSION_ENABLED`
+  - `GROUNDING_MAX_QUERY_VARIANTS`
 - fetch service:
   - `FETCH_BASE_URL`
   - `FETCHER_CLIENT_TIMEOUT_SECONDS`
