@@ -47,7 +47,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Active Branch
 
-- `stamos/search-engine-fallbacks`
+- `main`
 
 ## Completed Work
 
@@ -137,7 +137,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## In-Progress Work
 
-- `stamos/search-engine-fallbacks`: repository validation and final diff review remain before merging the expanded general-engine profile.
+- None inside the repo contents. `stamos/search-engine-fallbacks` is merged, and the repo is back on the post-roadmap enhancement baseline on `main`.
 
 ## Open Questions / Blockers
 
