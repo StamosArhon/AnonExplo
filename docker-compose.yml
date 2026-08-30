@@ -92,7 +92,7 @@ services:
       SEARCH_CATEGORIES: ${SEARCH_CATEGORIES:-auto}
       SEARCH_LANGUAGE: ${SEARCH_LANGUAGE:-}
       SEARCH_TIME_RANGE: ${SEARCH_TIME_RANGE:-}
-      SEARCH_ENGINES: ${SEARCH_ENGINES:-brave,wikipedia,duckduckgo news,google news,reuters}
+      SEARCH_ENGINES: ${SEARCH_ENGINES:-brave,bing,wikipedia,duckduckgo news,google news,reuters}
       SEARCH_PREFERRED_DOMAINS: ${SEARCH_PREFERRED_DOMAINS-wikipedia.org,wikimedia.org}
       SEARCH_PREFERRED_DOMAIN_BOOST: ${SEARCH_PREFERRED_DOMAIN_BOOST:-14}
       SEARCH_REQUEST_TIMEOUT_SECONDS: ${SEARCH_REQUEST_TIMEOUT_SECONDS:-20}

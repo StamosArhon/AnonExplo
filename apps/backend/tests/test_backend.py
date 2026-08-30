@@ -133,7 +133,7 @@ class BackendApiTests(unittest.TestCase):
         self.assertEqual(payload["search"]["time_range"], "none")
         self.assertEqual(
             payload["search"]["engines"],
-            "brave,wikipedia,duckduckgo news,google news,reuters",
+            "brave,bing,wikipedia,duckduckgo news,google news,reuters",
         )
         self.assertEqual(payload["search"]["preferred_domains"], "wikipedia.org,wikimedia.org")
         self.assertEqual(payload["search"]["preferred_domain_boost"], 14.0)

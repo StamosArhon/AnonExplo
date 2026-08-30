@@ -2,6 +2,7 @@ use_default_settings:
   engines:
     keep_only:
       - brave
+      - bing
       - wikipedia
       - duckduckgo news
       - google news
@@ -36,10 +37,13 @@ outgoing:
   enable_http2: true
 
 engines:
-  # Keep the local browser route and the backend's explicit engine list inside
-  # the same focused general/news/research profile.
+  # Keep several general engines available so one upstream rate limit does not
+  # collapse ordinary searches to Wikipedia-only results.
   - name: brave
     timeout: 5.0
+  - name: bing
+    timeout: 5.0
+    disabled: false
   - name: wikipedia
     timeout: 5.0
   - name: duckduckgo news

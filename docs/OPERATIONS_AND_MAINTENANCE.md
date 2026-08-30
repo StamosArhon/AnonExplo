@@ -49,17 +49,19 @@ docker compose --profile llamacpp down --remove-orphans
 ## Search Quality Tuning
 
 The default profile uses `SEARCH_CATEGORIES=auto`: ordinary questions use
-`general` plus the configured general engines, while current or news-like
-questions use `general,news` and add the configured news engines. It also uses
-a bounded curated engine list and can issue up to three SearXNG queries
+`general` plus the configured general engines (`brave` and `bing`),
+while current or news-like questions use `general,news` and add the
+configured news engines. It also uses a bounded curated engine list and can
+issue up to three SearXNG queries
 for a clearly multi-part grounded question. The original full question is
 always retained, and failed variants are reported as partial search issues.
 
 The main operator knobs are in `.env`:
 
-- `SEARCH_ENGINES`: keep the curated list for a quieter profile; clear it to
-  let the backend query every engine enabled in the bundled SearXNG profile,
-  accepting more upstream errors and outbound requests.
+- `SEARCH_ENGINES`: keep the curated multi-engine list for general-search
+  redundancy; clear it to let the backend query every engine enabled in the
+  bundled SearXNG profile, accepting more upstream errors and outbound
+  requests.
 - `SEARCH_LANGUAGE`: leave blank for SearXNG's automatic/default handling, or
   set a language such as `en` or `el` when results should be pinned.
 - `SEARCH_TIME_RANGE`: set a SearXNG-supported range such as `day`, `week`,
@@ -71,8 +73,12 @@ After changing `.env` or `configs/searxng/settings.yml`, recreate the affected
 services so the settings are loaded:
 
 ```powershell
-docker compose up -d --force-recreate search-provider backend
+docker compose up -d --force-recreate search-provider backend host-gateway
 ```
+
+Include `host-gateway` when recreating `search-provider`: the Nginx gateway
+resolves the Docker service address when it starts and can otherwise retain a
+stale container IP and return `502 Bad Gateway` until it is recreated.
 
 When results suddenly become empty or incomplete, inspect which upstreams are
 being rejected before changing ranking settings:

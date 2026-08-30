@@ -147,6 +147,7 @@ The repo treats provider choice as configuration:
   - `SEARCH_PREFERRED_DOMAIN_BOOST`
   - `GROUNDING_QUERY_EXPANSION_ENABLED`
   - `GROUNDING_MAX_QUERY_VARIANTS`
+
 - fetch service:
   - `FETCH_BASE_URL`
   - `FETCHER_CLIENT_TIMEOUT_SECONDS`
@@ -155,6 +156,12 @@ The repo treats provider choice as configuration:
   - `FETCH_ACCEPT_LANGUAGE`
   - `FETCH_WIKIMEDIA_API_ENABLED`
   - `FETCH_WIKIMEDIA_API_USER_AGENT`
+
+The default general-search engine set is deliberately multi-engine:
+`brave` and `bing`. News and research engines are added for matching
+categories. Each enabled upstream receives the search query, so adding more
+engines improves resilience at the cost of more outbound exposure and request
+latency.
 
 The current implementation supports these provider adapters:
 

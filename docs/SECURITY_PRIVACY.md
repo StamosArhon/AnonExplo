@@ -16,7 +16,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - The model backend stays on an internal-only Docker network.
 - Search and fetch services are the only default services that join the egress-capable network.
 - The bundled SearXNG web UI is reachable only through the localhost gateway; the search container itself is still not published directly to the host.
-- The default SearXNG profile limits outbound searches to a curated engine set and uses bounded upstream timeouts; clearing `SEARCH_ENGINES` deliberately broadens outbound traffic and the resulting privacy/availability surface.
+- The default SearXNG profile uses a bounded curated multi-engine set (`brave`, `bing`, plus specialized sources) and bounded upstream timeouts; each enabled engine is a separate outbound recipient, and clearing or widening `SEARCH_ENGINES` deliberately increases both query exposure and availability variability.
 - Optional browser address-bar integration should point browser profiles at a localhost-only redirector, not directly at SearXNG, when DuckDuckGo fallback is desired for local SearXNG outages.
 - Repo-managed services run as non-root where practical.
 - Capabilities are dropped and `no-new-privileges` is enabled where practical.
