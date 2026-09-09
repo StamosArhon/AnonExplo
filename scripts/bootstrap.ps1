@@ -15,13 +15,12 @@ if (-not (Test-Path $envTarget)) {
     Write-Host ".env already exists; leaving it unchanged"
 }
 
-New-Item -ItemType Directory -Force -Path (Join-Path $root "data\models") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $root "data\searxng-cache") | Out-Null
 
 Write-Host "Bootstrap complete."
 Write-Host "Next steps:"
 Write-Host "  1. Review .env"
-Write-Host "  2. Run powershell -ExecutionPolicy Bypass -File scripts/provision-default-model.ps1 if you want the default GGUF path"
-Write-Host "  3. Start the model runtime only after the model file is present in data\models"
-Write-Host "  4. Run docker compose up --build host-gateway ui backend fetcher search-provider"
+Write-Host "  2. Import a separate Proton credential using scripts/import-proton-wireguard.ps1"
+Write-Host "  3. Run powershell -ExecutionPolicy Bypass -File scripts/validate.ps1"
+Write-Host "  4. Run powershell -ExecutionPolicy Bypass -File scripts/start-proton-search.ps1"
 Write-Host "  5. Run powershell -ExecutionPolicy Bypass -File scripts/ops-check.ps1 after the stack is up"

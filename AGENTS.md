@@ -12,7 +12,8 @@ Every new Codex thread must read these files in order before making changes:
 4. `docs/ARCHITECTURE.md`
 5. `docs/SECURITY_PRIVACY.md`
 
-If the task touches local model provisioning or runtime settings, also read `docs/LLAMA_CPP_RUNTIME_PROFILE.md`.
+Any future headless model/reranking experiment needs a separate scope and
+documented isolation, provisioning and relevance evaluation; no model is bundled.
 
 ## Branching Rules
 
@@ -42,13 +43,13 @@ If a remote is missing or remote operations fail, record that explicitly in the 
 - Run `powershell -ExecutionPolicy Bypass -File scripts/validate.ps1` before declaring a branch ready.
 - At minimum, validation must include:
   - `docker compose config`
-  - Docker image builds for repo-managed services
+  - Docker image builds for repo-managed services (record not applicable when no build contexts exist)
   - Unit or smoke tests for changed app code
 - If a validation step is skipped or fails, record that in `docs/IMPLEMENTATION_ROADMAP.md`.
 
 ## Security And Privacy Guardrails
 
-- Default to localhost-only exposure for UI and orchestrator ports.
+- Publish only the localhost SearXNG gateway port; no legacy UI/orchestrator ports.
 - Keep the model runtime off any egress-capable Docker network unless there is a documented reason not to.
 - Only services that truly need outbound internet access may join the egress network.
 - Do not add telemetry, remote fonts, CDNs, analytics, or third-party runtime calls unless explicitly approved and documented.
@@ -71,9 +72,10 @@ If a remote is missing or remote operations fail, record that explicitly in the 
   expansion without a demonstrated need and a separately scoped decision.
 - Tune browser results in SearXNG, not the legacy backend. Preserve engine
   cooldowns and use synthetic manual tests rather than user history.
-- Favor config-driven provider selection instead of hard-coding one model backend or one search provider.
-- Only the legacy chatbot UI talks to the orchestrator; native SearXNG does not.
-- Search and page-fetching remain separate concerns even when the backend offers a combined grounding endpoint.
+- Configure engines in SearXNG; the legacy chatbot UI, backend, fetcher and model
+  runtime have been removed. Do not resurrect them for browser search.
+- Future local result refinement may be headless; no separate AnonExplo UI needed.
+- Base Compose is offline/internal-only; production search requires the VPN overlay.
 - Prefer exact dependency versions where practical.
 - Use repo-managed scripts for repeatable setup and validation.
 
@@ -84,8 +86,5 @@ If a remote is missing or remote operations fail, record that explicitly in the 
 - Manual synthetic browser benchmark: `powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1`
 - Bootstrap local files: `powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1`
 - Check the running local stack: `powershell -ExecutionPolicy Bypass -File scripts/ops-check.ps1`
-- Provision the default GGUF locally: `powershell -ExecutionPolicy Bypass -File scripts/provision-default-model.ps1`
 - Validate the branch: `powershell -ExecutionPolicy Bypass -File scripts/validate.ps1`
-- Validate with the full model-runtime probe: `powershell -ExecutionPolicy Bypass -File scripts/validate.ps1 -RequireModelRuntime`
-- Start the base stack: `docker compose up --build host-gateway ui backend fetcher search-provider`
-- Start the pinned llama.cpp model profile: `docker compose --profile llamacpp up -d model-backend`
+- Retire old runtime components on an upgraded PC: `powershell -ExecutionPolicy Bypass -File scripts/remove-legacy-components.ps1`

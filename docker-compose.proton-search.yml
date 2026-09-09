@@ -63,16 +63,13 @@ services:
       search-vpn:
         condition: service_healthy
 
-  backend:
-    environment:
-      SEARCH_BASE_URL: http://search-vpn:8080
-    depends_on:
-      search-vpn:
-        condition: service_healthy
-
   host-gateway:
     volumes:
       - ./configs/localhost-gateway/nginx.proton-search.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       search-vpn:
         condition: service_healthy
+
+networks:
+  egress:
+    driver: bridge

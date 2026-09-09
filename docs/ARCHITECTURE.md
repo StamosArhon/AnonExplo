@@ -1,50 +1,43 @@
 # Architecture
 
-## Product Path
+## Production Search Path
 
-Brave address bar -> `127.0.0.1:8085/search?q=...` -> localhost nginx gateway ->
-SearXNG `search-provider` -> shared `search-vpn` namespace -> Proton WireGuard ->
-configured search engines. Results render in SearXNG's native UI.
+Brave -> 127.0.0.1:8085/search?q=... -> host-gateway -> SearXNG
+(search-provider in search-vpn's namespace) -> Proton WireGuard -> engines.
 
-The gateway's VPN configuration targets only `search-vpn:8080`; Docker DNS
-refreshes that fixed name every five seconds. It never chooses an upstream from
-the incoming Host/query. Proxy failures return a local 503, not an external
-provider redirect. This does not replace namespace-client recreation after
-replacing the VPN container; use `start-proton-search.ps1 -Recreate`.
+SearXNG's native UI is the only interface. No chatbot, orchestrator, page fetcher,
+local model or redirector participates in search or exists as a Compose service.
 
-SearXNG uses the VPN-local DNS resolver. No LLM, backend ranking, page fetcher,
-host redirector or automatic query expansion is on this browser path.
+## Boundaries
 
-## Network Boundaries
+- host-gateway: unprivileged nginx, core_internal + host_access; publishes only
+  localhost search port 8085. Dynamic Docker DNS resolves a fixed search-vpn
+  upstream, never a user-supplied hostname. No external outage redirect.
+- search-provider: read-only SearXNG with its own VPN-local resolver mount;
+  shares search-vpn's network namespace and publishes no host ports.
+- search-vpn: core_internal + egress; Proton WireGuard, encrypted DNS, firewall.
+  Only NET_ADMIN is added. Credential file is read-only, not environment metadata.
+- Browser/host traffic and clicked result websites keep their normal networking.
 
-- `host-gateway`: `host_access` and `core_internal`; only service publishing
-  host ports, all bound to 127.0.0.1. Search is port 8085.
-- `search-vpn`: `core_internal` and `egress`; kill-switched WireGuard and local
-  encrypted-DNS forwarding. Restricted key file, never environment metadata.
-- `search-provider`: shares VPN namespace and mounts its own read-only resolver.
-- Host/browser traffic, including clicked result websites, remains unchanged.
+Without the overlay, base Compose attaches search only to core_internal, so it
+is offline rather than a direct-egress fallback. Isolated validation uses this
+base plus docker-compose.validation.yml, a tmpfs cache and separate port/project.
+Normal startup explicitly selects the Proton overlay. A replaced VPN namespace
+still requires start-proton-search.ps1 -Recreate.
 
-The base Compose file still supports direct search egress for isolated validation
-and historical development. It is NOT the privacy deployment for this PC. The
-local `.env` selects the Proton overlay; scripts preserve that selection.
+## Configuration
 
-## Configuration Ownership
+- configs/searxng/settings.yml: engines, timeouts and native privacy defaults.
+- Native preferences/query syntax: language, engines, categories and appearance.
+- configs/localhost-gateway/nginx.proton-search.conf: production reverse proxy.
+- .env: project/port/image/VPN configuration and SearXNG secret only. Old unused
+  model/backend keys in pre-existing .env files have no consumers.
+- Windows startup task calls a hidden helper that starts the three services.
+  No Node daemon or fallback listener is needed.
 
-- `configs/searxng/settings.yml`: browser engines, timeouts and native UI defaults.
-- SearXNG preferences/query syntax: explicit language, categories and engines;
-  saved preferences may override defaults except locked privacy settings.
-- `configs/localhost-gateway/nginx.proton-search.conf`: actual PC browser gateway.
-- `scripts/test-browser-search.ps1`: manual fixed-fixture browser-route metrics.
-- `SEARCH_*` and `GROUNDING_*` environment settings: legacy backend only; they
-  do not tune the native SearXNG result list.
+## Future Local Refinement
 
-## Legacy Services Still Present
-
-`ui`, `backend`, and `fetcher` remain in the current Compose/startup dependency
-graph, with old UI/backend ports also published. The model is profile-gated and
-internal-only. Browser search does not use those services, but nginx startup and
-health still reference the old routes. Safely making deployment search-only
-requires updating this graph, health checks, startup and validation together.
-This is the next milestone, not an already completed migration.
-
-Historical interfaces and network details are in LEGACY_ARCHITECTURE.md.
+A future reranker may run as a headless internal-only service, consuming already
+returned results. It does not require the removed UI/backend/fetcher. Define its
+contract, privacy boundaries and benchmark before implementation; none is added
+or provisioned now. Historical architecture/code remains in Git and LEGACY docs.

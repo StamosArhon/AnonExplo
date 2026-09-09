@@ -1,136 +1,56 @@
 # Instructions And Notes
 
-## Current Product Rules (2026-09-10; supersede legacy notes below)
+## Current Product
 
-- SearXNG itself at localhost:8085 is the UI and Brave's direct search endpoint.
-  Do not change Brave to 8095 or build a replacement dashboard by default.
-- Native settings.yml and SearXNG preferences control browser search. Backend
-  SEARCH_/GROUNDING_ tuning has no effect on that native result list.
-- Keep account-free search through Proton, VPN-local DNS and no external fallback.
-  Engine cooldowns remain enabled; do not rotate exits or clear bans to retry.
-- Native privacy locks prevent saved cookies enabling autocomplete/favicons,
-  disabling the image proxy, or exposing the query in page titles. Engine,
-  language, SafeSearch and appearance controls remain user-selectable.
-- GET URLs can remain in Brave history/sync even with no-store. Never claim
-  no-retention guarantees for browser history or upstream search providers.
-- Use test-browser-search.ps1 for manual, paced public-fixture metrics on the
-  actual endpoint. Browser mode uses a fixed English Accept-Language header
-  and no cookies, not the user's private browser state. Explicit mode hints
-  each fixture's language; compare evidence before changing global defaults.
-- Never schedule provider searches without authorization. Keep deterministic
-  validation offline with respect to search queries. Preserve user data.
-- Legacy services currently remain running; making them opt-in is the next
-  deployment milestone. Model provisioning is not a current next step.
-- Historical LLM implementation advice below applies only to legacy components.
+- AnonExplo is SearXNG at localhost:8085. Brave uses /search?q=%s directly.
+- The legacy UI, orchestrator, fetcher, model runtime and provisioning scripts
+  are removed, not profile-gated. Recover historical code from Git if needed.
+- Future local result refinement can run headlessly. It needs its own relevance/
+  latency evaluation and internal-only model boundary, not a new interface.
+- Only three production services: host-gateway, search-provider and search-vpn.
+- Configure browser engines/language in configs/searxng/settings.yml and native
+  preferences. Old SEARCH_/MODEL_/GROUNDING_/FETCH_ .env keys are inert; existing
+  .env files are preserved rather than rewriting secrets during migration.
 
-## Coding Standards
+## Privacy And Operations
 
-- Keep services small and explicit.
-- Prefer standard library features unless a dependency clearly earns its place.
-- Keep provider integration behind narrow interfaces so future adapters can be added without reshaping the whole app.
-- Favor predictable error messages over clever abstractions.
+- Bind only the gateway search port to 127.0.0.1. No legacy app ports.
+- Base Compose search is internal-only/offline. The Proton overlay supplies the
+  sole supported search egress; startup never falls back to direct networking.
+- Preserve VPN-local DNS, firewall, dedicated read-only WireGuard credential,
+  dropped capabilities, read-only roots and localhost control API.
+- Missing credentials mean stop. After VPN replacement use
+  start-proton-search.ps1 -Recreate so namespace clients are recreated.
+- Native privacy locks keep autocomplete/favicons off, image proxy on, query
+  titles off. Engine/language/category/SafeSearch choices remain available.
+- No-store/no-referrer and quiet logs are not browser-history erasure or a
+  guarantee that upstream engines do not retain queries. Result clicks are direct.
+- Keep upstream cooldowns. Never clear bans, rotate VPN exits or poll providers
+  automatically to conceal errors. No telemetry, query database or remote NLP.
+- Use synthetic manual benchmarks, never private browser history/cookies.
 
-## Documentation Standards
+## Startup And Migration
 
-- Update `docs/IMPLEMENTATION_ROADMAP.md` whenever architecture, phase status, validation status, or next steps change.
-- Update `README.md` when setup steps or repo structure change.
-- Update `docs/ARCHITECTURE.md` and `docs/SECURITY_PRIVACY.md` when the effective design or threat assumptions change.
-- Update `docs/OPERATIONS_AND_MAINTENANCE.md` when startup, maintenance, recovery, or firewall guidance changes.
+- setup-browser-search.ps1 -SkipBrowserConfiguration refreshes hidden startup
+  without touching browser profiles or needing Node for normal startup.
+- Browser configuration remains available separately through the setup script;
+  only invoke it deliberately, with browsers closed. Do not force-close sessions.
+- remove-legacy-components.ps1 starts/verifies the reduced deployment, removes
+  only old service containers identified by project/service labels, and retires
+  the exact old redirector task/process. It leaves images, volumes and data.
+- If Windows denies deleting an admin-owned task, its exact user-owned launcher
+  is replaced with a backed-up no-op. Report the remaining task entry honestly.
+- Historical helper directory name search-fallback is retained to avoid breaking
+  existing startup-task actions; it does not imply a running fallback service.
 
-## Security Rules
+## Validation And Workflow
 
-- Localhost-only exposure is the baseline.
-- The model runtime must remain off egress-capable networks unless explicitly documented otherwise.
-- Do not add telemetry, analytics, or remote web assets.
-- Do not persist prompts, fetched article bodies, or search history unless a later milestone explicitly defines a privacy-reviewed storage policy.
-- Reject obvious localhost and private-address fetch targets in the fetcher to reduce SSRF-style misuse inside the local stack.
-
-## Local-Only Assumptions
-
-- This project is optimized for a single-user local workstation flow first.
-- Public reverse proxying, multi-user auth, and remote access are out of scope unless a later milestone introduces them deliberately.
-- The default hardware target is roughly an i7 CPU, 16 GB RAM, and an RTX 2070 Super.
-
-## Configuration Conventions
-
-- `.env.example` is the tracked configuration template.
-- `.env` is untracked and machine-specific.
-- Provider selection must be controlled through environment variables first, not code edits.
-- Model files are local assets and must not be committed.
-- The first concrete local model runtime profile is documented in `docs/LLAMA_CPP_RUNTIME_PROFILE.md`.
-- If `.env` predates the latest repo template, treat `.env.example` as the source of truth for new model-runtime keys and update the local file deliberately instead of relying on stale placeholders.
-
-## Branch / Merge Workflow
-
-- Always use `stamos/<branch-name>`.
-- Keep branches narrow.
-- After merge, delete the completed working branch locally and remotely.
-- If a branch changes recurring repo rules, update `AGENTS.md` in the same branch.
-
-## Practical Notes
-
-- Greek/multi-part relevance tuning lives in the backend, not the standalone
-  browser SearXNG UI. Match Unicode letters, accents/case/sigma consistently on
-  queries and sources; never strip Greek text or translate remotely. `SEARCH_LANGUAGE`
-  blank/auto permits the local Greek hint; explicit `en`, `el`, or `all` wins.
-- Keep clause recognition conservative: quoted/operator queries and detected
-  pronoun-dependent clauses retain the full query rather than guessing a subject.
-  Punctuation-separated English/Greek questions can expand within the existing
-  three-query cap. Prefer relevant coverage across clauses without inflating
-  query, fetch, or context limits. Reserve snippet space for a failed clause's
-  source instead of consuming the whole budget on successful first-clause text.
-- Unit fixtures cover Greek normalization, language overrides, recency signals,
-  bounded splitting, source/excerpt balance, and partial failures. They do not
-  prove generated-answer quality; without a provisioned GGUF, explicitly report
-  that live model-answer evaluation is skipped.
-- The first branch intentionally keeps the UI static and lightweight to avoid introducing a frontend toolchain before the architecture is stable.
-- The current model slot is a concrete `llama.cpp` CUDA profile, but the backend remains adapter-driven and should not be coupled to that runtime.
-- The default validated model path is `QuantFactory/Qwen2.5-7B-Instruct-GGUF` with the file `Qwen2.5-7B-Instruct.Q4_K_M.gguf` stored in `data/models/`.
-- The tracked checksum for that default file is `4e9221217000d0fc8f5ffdbae51a7201fcc3613de18ff1b1cd8c7c01f924437b`.
-- Use `scripts/provision-default-model.ps1` to populate `data/models/` and `scripts/validate.ps1 -RequireModelRuntime` to confirm the full path.
-- Use `scripts/ops-check.ps1` for lightweight checks on an already-running stack.
-- The current UI now stores browser-local direct chat history, the selected model id, and saved direct-chat or grounded-answer instructions in local storage on the same workstation.
-- Keep the UI explicit that direct-chat history is browser-local and device-local, not synced or server-side state.
-- Keep direct-chat history actions grouped with the history list in the sidebar so `New`, `Purge`, and per-entry delete controls read as one local-history surface instead of scattered controls.
-- Grounded-answer transcripts, fetched source details, and fetch-inspector output must stay transient unless a later milestone adds a privacy-reviewed storage design first.
-- Keep `Direct Chat` and `Grounded Answer` semantically explicit in both code and copy. Direct Chat is model only; Grounded Answer is the search plus fetch plus model workflow.
-- Keep grounded-answer provenance discreet in the main thread. Superscript-style citation references, hover tooltips, and an on-demand source drawer are preferred over large in-line controls or a permanently expanded diagnostics block.
-- Keep source-preview hover cards in a floating overlay outside the scroll shell or other clipped containers. Do not render tooltip content directly inside the message markup if that would make it vulnerable to `overflow` clipping or whitespace-driven layout drift.
-- Avoid duplicating grounded-answer source controls across multiple surfaces. One quiet per-answer source action plus the source drawer is preferred over repeating large source buttons in both the thread and the workspace header.
-- Grounded Answer now prefers fetched article text but may fall back to bounded search snippets when fetches fail. Treat `grounding.summary.context_mode` as the source of truth for which path was used.
-- Mixed grounding is now valid too: `fetched_plus_snippets` means fetched article text was available for part of the source set and bounded snippet fallback was appended for selected sources whose fetches failed. Keep fetched text preferred in prompts, copy, and future logic.
-- Keep query-term normalization symmetric between the query and the source text. If you tune grounded ranking or excerpt selection later, do not regress back to matching canonical variants on only one side.
-- Do not let single-passage excerpt shortcuts fire for clearly multi-part grounded questions. Smaller local models answer better when each major clause of the question is represented in the supplied evidence.
-- Keep grounded-answer citation syntax canonical as consecutive source IDs like `[S1][S2]`. Normalize that shape in the backend, and keep the UI tolerant of grouped or repeated citation formats as a rendering fallback rather than trusting raw model output.
-- Do not go back to naive head-only article truncation for grounded answers. Query-relevant excerpt selection from fetched pages is now part of answer quality, especially for smaller local models.
-- The grounding summary's `selected_sources` count is now effectively "selected or attempted" because the backend can try later ranked sources after early fetch failures.
-- The fetcher now exposes structured error details such as `blocked_by_remote_policy`, `upstream_forbidden`, `upstream_rate_limited`, and `content_too_thin`; keep those codes explicit in backend and UI surfaces instead of collapsing them into generic fetch failures.
-- Use the tracked fetcher knobs in `.env.example` when tuning extraction quality: `FETCH_MIN_CONTENT_CHARS`, `FETCH_MIN_WORD_COUNT`, and `FETCH_ACCEPT_LANGUAGE`.
-- The default SearXNG search profile uses `SEARCH_CATEGORIES=auto`: ordinary questions use `general`, while current/news-like questions use `general,news`. Keep `SEARCH_CATEGORIES=general,news` when an operator explicitly wants both categories for every query.
-- The default SearXNG engine list is intentionally curated through `SEARCH_ENGINES`. The September VPN audit with the updated pinned image supports `brave`, `bing`, and `yahoo`, plus Wikipedia info boxes; news uses `brave.news`, `duckduckgo news`, and `reuters`. DuckDuckGo web and Google web/news stay opt-in because of intermittent timeouts, empty responses, or CAPTCHA; Startpage, Mojeek, and Qwant also stay disabled. Historical April-image Yahoo failure is superseded by the successful new-image test. See `docs/SEARCH_ENGINE_COVERAGE.md` for evidence and limits.
-- Send either explicit `engines` or `categories` to SearXNG, never both: its API unions the selections. With `SEARCH_CATEGORIES=auto`, filter news names out of ordinary backend queries. An explicit engine list wins over category selection; an empty `SEARCH_ENGINES` uses categories and is preserved by Compose. Never widen the recipient list silently to improve results.
-- Use `scripts/test-search-coverage.ps1` for a small manual VPN-only synthetic benchmark. It prints aggregate metrics, not queries/results, stops testing an engine after a reported error, and does not reset suspensions. Do not put live provider tests in deterministic validation or schedule them without authorization. Small samples demonstrate current availability, not long-term uptime or universal relevance.
-- The SearXNG `outgoing.request_timeout` is deliberately moderate. Increasing it can improve coverage from slow upstreams but also increases search latency; keep the backend request timeout above the SearXNG budget.
-- Grounded search may issue up to `GROUNDING_MAX_QUERY_VARIANTS` bounded queries for clearly multi-part questions. The original query remains one variant, and the backend records partial variant failures instead of discarding successful results.
-- Keep `FETCHER_CLIENT_TIMEOUT_SECONDS` slightly higher than `FETCH_REQUEST_TIMEOUT_SECONDS`. The backend-to-fetcher wait budget must outlast the fetcher-to-publisher wait budget so structured fetcher error details are not lost behind a blank orchestrator timeout.
-- Do not revert the fetcher to hard-fail immediately on oversized live pages when bounded partial HTML already contains usable text. The current baseline prefers explicit `direct_html_partial` warnings over unnecessary total failure.
-- Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` when you want grounded-source ranking to modestly favor trusted domains such as Wikipedia or Wikimedia. Keep that preference modest; it should bias ranking, not replace search relevance or domain diversity.
-- If Wikimedia API support is enabled, require a descriptive and contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` instead of relying on the generic fetch user-agent.
-- Request-level model selection should stay bounded to runtime-advertised models and should not mutate the backend's configured default model.
-- Do not reintroduce a backend orchestration dependency on one hard-coded search service name; provider switching should remain env-driven at the backend boundary.
-- Keep the host-facing UI and backend access path behind the dedicated localhost gateway unless there is a documented reason to publish app containers directly.
-- If the bundled SearXNG web UI is exposed for standalone use, route it through the same localhost gateway rather than publishing the search container directly.
-- Browser setup now selects direct `127.0.0.1:8085/search?q=%s` and disables external fallback. Verify the intended profile shows `AnonExplo SearXNG (Default)`; do not edit profiles merely to refresh startup helpers.
-- Browser-search startup must stay non-disruptive: use hidden VBS launchers for the redirector and stack starter, and use `docker desktop start --detach` rather than foreground-launching `Docker Desktop.exe`.
-- Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.
-- `scripts/validate.ps1` now enforces the intended Compose hardening model, including localhost-only publication, expected network membership, digest-pinned third-party images, and local-only CORS origins.
-- Some publishers and Wikipedia paths can still block fetches from the container runtime. The current fallback is explicit snippet-grounding, not silent prior-knowledge answering.
-- Do not add stealthy Wikipedia or publisher-specific robot-policy bypasses. Wikimedia support, when enabled, must use an explicit official API path, document the privacy and maintenance tradeoff, and remain opt-in.
-- The current fetcher-resilience pass does not add third-party reader proxies or special Wikipedia bypasses. If a future branch adds a secondary reader strategy, document the privacy tradeoff and make it opt-in.
-- The current baseline decision is to keep direct HTML fetch plus explicit snippet fallback as the steady-state design rather than adding a secondary reader path.
-- The optional Proton search profile lives in `docker-compose.proton-search.yml` and uses a container-scoped WireGuard sidecar. Start it with `scripts/start-proton-search.ps1`; never turn on a host-wide VPN just to protect AnonExplo search traffic.
-- Generate a separate Proton WireGuard configuration/private key for this PC even when the same Proton account is already used by the homeserver. Use `scripts/import-proton-wireguard.ps1` to retain only client key/address in restricted, Git-ignored `data/proton/wireguard/wg0.conf`, mounted read-only. Never put the key into Compose environment metadata. The Gluetun firewall remains the no-direct-egress kill switch.
-- Keep SearXNG DNS pinned to the VPN-local resolver with the read-only `resolv.vpn.conf` mount. Do not use `DNS_KEEP_NAMESERVER` in this pinned Gluetun version. The VPN runs as its existing root identity with only NET_ADMIN, a read-only root, and explicit writable `/tmp`, `/run`, `/gluetun`, and resolver-file mounts.
-- On this Windows deployment `.env` selects both Compose files plus `proton-search`. Browser startup helpers must preserve VPN mode and disable direct DuckDuckGo fallback. After restarting the VPN namespace, use `start-proton-search.ps1 -Recreate`; verify `check-proton-search.ps1`, with `-TestKillSwitch` for a deliberate outage drill.
-- Validation runs in `anonexplo-validation` on ports 13000/18000/18085; never let validator cleanup or a base-profile test replace the live VPN stack. Live VPN and provider availability checks are separate from the deterministic baseline tests.
-- The search-only VPN changes the egress IP and ISP visibility but does not prevent upstream search engines from receiving plaintext queries. Do not describe it as eliminating provider-side query visibility or retention.
+- Branch per scope: stamos/<name>; update roadmap, validate, review, commit/push,
+  merge only ready work, delete completed branch. No desktop release applies.
+- validate.ps1 uses project anonexplo-validation, port 18085, and tmpfs cache.
+  It neither mounts the VPN credential nor shares the live search cache.
+- Validate Compose policy including negative fixtures, script syntax, offline
+  helper/benchmark tests, native UI/settings/headers and outage/recovery.
+- No custom image build contexts remain. Compose build is checked but reports
+  no services to build; do not pretend deleted application tests/builds ran.
+- ops-check.ps1 verifies the three-service live topology and VPN isolation.

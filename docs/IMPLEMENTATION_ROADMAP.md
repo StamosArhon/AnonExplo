@@ -16,12 +16,53 @@ resolver; no host-wide VPN or direct-provider outage fallback. Preserve the
 restricted, ignored per-PC credential. Upstreams still receive plaintext
 queries and can potentially retain them. Browser clicks remain outside this VPN.
 
-The old `ui`, `backend`, and `fetcher` still exist and start with the current
-Compose/startup definitions. They are legacy, not part of Brave search. Their
-removal from default startup is a separate dependency-aware milestone. Do not
-claim that backend language/ranking improvements affect SearXNG's native UI.
+The old UI, backend, fetcher, model runtime and provisioner are now removed from
+source and deployment. Only host-gateway, search-provider and search-vpn remain.
+User explicitly chose removal, not opt-in legacy profiles. Future local result
+refinement may be headless and does not require a separate AnonExplo interface.
+Code before removal remains recoverable at bdb14ad in Git; no local user data
+or cached Docker images are deleted by this migration.
 
-## Branch Handoff And Scope
+## Current Removal Scope (2026-09-10)
+
+- Branch: stamos/remove-legacy-stack; handoff target main.
+- Removed 20 tracked legacy app/runtime/provisioner files, legacy Compose
+  services/network, UI/API gateway listeners, obsolete model/backend .env.example
+  keys and startup dependencies. Existing .env and credentials are untouched.
+- Base Compose search is now internal-only/offline; Proton overlay is the only
+  supported production egress. Validator uses its own tmpfs cache, not live data.
+- Reworked validation/ops to assert exactly three production services and one
+  localhost port. Fourteen negative Compose policy tests cover legacy-service/
+  port reintroduction, direct egress and VPN security regressions. Ten offline
+  benchmark tests remain; deleted app tests are not claimed as current tests.
+- Generated-startup tests cover script syntax, quoted paths, hidden launchers,
+  Docker-start switch, VPN-only dispatch and preserved browser-helper JS syntax.
+- Startup refreshed without browser profile changes. Hidden task completed with
+  result 0. Migration removed the exact UI/backend/fetcher containers, unused
+  model network and old redirector task/process. No model container was running.
+  Ports 3001, 8001 and 8095 closed; only localhost 8085 remains published.
+- Live ops check passed: three healthy services, native UI/privacy headers and
+  VPN namespace/DNS/distinct egress. No browser storage or search cache erased.
+- First validator attempt caught a leftover model-network YAML block; corrected.
+  Subsequent validation passed. Expanded startup test initially false-matched
+  SEARXNG_UI_PORT as the removed UI_PORT; corrected to whole-token matching.
+  Final expanded validation passed: 14 negative policy cases, 10 benchmark unit
+  tests, generated startup/browser-helper checks, Compose config, native UI,
+  settings/headers/catalogue, offline direct-egress blocking and outage recovery.
+- Live VPN-stop drill passed: direct-IP HTTPS, direct public DNS and IPv6 were
+  blocked. Recovery recreated only the three intended services and passed
+  namespace/DNS/distinct-egress checks. Post-recovery six-fixture browser run:
+  6/6 expected hosts rank 1, no engine errors, mean 1.15s. This is a limited
+  navigation smoke baseline, not proof of general relevance or improved speed.
+- Reviewed removal/config/scripts/docs against main; whitespace checks passed.
+  Credential files are not tracked. No browser profile automation, reboot or
+  sleep/resume drill ran; hidden startup was exercised through Task Scheduler.
+  Cached images and inert helper files remain intentionally; no broad pruning.
+- Build check now reports no services to build: no custom build contexts remain.
+  All three production services retain existing digest-pinned upstream images.
+  No desktop installer/release applies. No LLM installed or benchmarked.
+
+## Previous Browser Baseline Handoff (historical)
 
 - Implementation branch: `stamos/browser-search-baseline`; verified handoff target: `main`.
 - Implementation commit `f48458b` was pushed successfully to origin; the final
@@ -37,9 +78,9 @@ claim that backend language/ranking improvements affect SearXNG's native UI.
 1. `browser-search-baseline` (implemented and validated): document the real product; safeguard
    the native UI; recover gracefully from search-container address changes;
    test instance-default Greek/English search without the legacy backend.
-2. `search-only-deployment`: make legacy services opt-in; reduce published ports
-   and startup dependencies; update startup, health checks, recovery and validation
-   together. Preserve legacy code/data and the existing 8085 URL.
+2. `search-only-deployment`: remove legacy services/code by user decision; reduce
+   published ports/startup dependencies; update health/recovery/validation together.
+   Preserve user data and port 8085. Implemented, migrated and validated.
 3. `relevance-and-coverage`: expand the synthetic suite with manual relevance
    judgements for informational/news queries; compare language and engine choices;
    tune only when evidence supports it. Evaluate image/video coverage separately
@@ -47,7 +88,7 @@ claim that backend language/ranking improvements affect SearXNG's native UI.
 4. `reliability-maintenance`: validate reboot/sleep/resume and VPN interruption;
    keep digest-pinned update/rollback procedures and local aggregate diagnostics.
 
-## Current Findings And Validation
+## Previous Browser Baseline Findings And Validation (historical)
 
 - Initial six-query benchmark through 8085 with no cookies/engine overrides and
   an English browser locale: six expected domains at rank 1, no engine errors,
@@ -82,7 +123,7 @@ claim that backend language/ranking improvements affect SearXNG's native UI.
 - Reviewed code/config/docs against main; remote main synchronized; whitespace
   check passed; no .env or Proton credential files tracked or modified.
 
-## Current Implementation
+## Previous Browser Baseline Implementation (historical)
 
 - Native SearXNG preferences lock autocomplete/favicons off, image proxy on,
   query-in-title off, so stale preference cookies cannot weaken those defaults.
@@ -111,8 +152,9 @@ claim that backend language/ranking improvements affect SearXNG's native UI.
 ## Exact Next Steps
 
 1. Preserve port 8085, privacy safeguards, engine choices and the VPN profile.
-2. Recommend `search-only-deployment`; ask before starting another scope. Keep
-   legacy data/code while removing unnecessary default service dependencies.
+2. Finish removal closeout/review/push/merge/branch cleanup. Next scope should be
+   relevance-and-coverage with richer informational/news fixtures and manual
+   judgements, not restoration of a chatbot. Ask before starting that milestone.
 3. Later quality work needs richer informational/news fixtures and manual
    judgements, not global language/weight changes based on six navigation cases.
 

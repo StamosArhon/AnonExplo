@@ -31,9 +31,6 @@ try {
 
     $composeArgs += @(
         "host-gateway",
-        "ui",
-        "backend",
-        "fetcher",
         "search-provider",
         "search-vpn"
     )

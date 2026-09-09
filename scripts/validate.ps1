@@ -1,666 +1,96 @@
-param(
-    [switch]$RequireModelRuntime
-)
-
-$ErrorActionPreference = "Stop"
-
-$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$ErrorActionPreference = 'Stop'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $root
-
-# Never replace or tear down the operator's VPN deployment while testing the
-# base profile. Explicit files and a separate project/ports isolate validation.
-$validationSavedEnv = @{}
-foreach ($key in @('COMPOSE_FILE', 'COMPOSE_PROFILES', 'COMPOSE_PROJECT_NAME', 'UI_PORT', 'BACKEND_PORT', 'SEARXNG_UI_PORT')) {
-    $validationSavedEnv[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
+$saved = @{}
+foreach ($key in @('COMPOSE_FILE','COMPOSE_PROFILES','COMPOSE_PROJECT_NAME','SEARXNG_UI_PORT')) {
+    $saved[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
 }
-$env:COMPOSE_FILE = Join-Path $root 'docker-compose.yml'
+$env:COMPOSE_FILE = (Join-Path $root 'docker-compose.yml') + ';' + (Join-Path $root 'docker-compose.validation.yml')
 $env:COMPOSE_PROFILES = ''
 $env:COMPOSE_PROJECT_NAME = 'anonexplo-validation'
-$env:UI_PORT = '13000'
-$env:BACKEND_PORT = '18000'
 $env:SEARXNG_UI_PORT = '18085'
+. (Join-Path $PSScriptRoot 'compose-policy.ps1')
 
-function Get-EnvValue {
-    param(
-        [string]$Key,
-        [string]$DefaultValue = ""
-    )
-
-    $processValue = [Environment]::GetEnvironmentVariable($Key, "Process")
-    if ($processValue -and -not $processValue.StartsWith("replace-with-")) {
-        return $processValue
-    }
-
-    foreach ($path in @((Join-Path $root ".env"), (Join-Path $root ".env.example"))) {
-        if (-not (Test-Path $path)) {
-            continue
-        }
-
-        $match = Get-Content -LiteralPath $path | Where-Object { $_ -match "^\s*$([regex]::Escape($Key))=(.*)$" } | Select-Object -First 1
-        if ($match) {
-            $value = ($match -replace "^\s*$([regex]::Escape($Key))=", "").Trim()
-            if ($value -and -not $value.StartsWith("replace-with-")) {
-                return $value
-            }
-        }
-    }
-
-    return $DefaultValue
+function Assert-HttpPrivacy([string]$Path) {
+    $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:18085$Path" -TimeoutSec 15
+    if ($response.StatusCode -ne 200 -or $response.Headers['Cache-Control'] -ne 'no-store' -or
+        $response.Headers['Referrer-Policy'] -ne 'no-referrer') { throw 'Search privacy headers or HTTP health failed.' }
 }
-
-function Get-NamedValue {
-    param(
-        [object]$Container,
-        [string]$Name,
-        [string]$Kind
-    )
-
-    $property = $Container.PSObject.Properties | Where-Object Name -eq $Name | Select-Object -First 1
-    if (-not $property) {
-        throw "Missing $Kind '$Name' in the compose configuration."
-    }
-
-    return $property.Value
-}
-
-function Get-NamedKeys {
-    param([object]$Container)
-
-    if ($null -eq $Container) {
-        return @()
-    }
-
-    return @($Container.PSObject.Properties | ForEach-Object { $_.Name })
-}
-
-function Assert-SetEquality {
-    param(
-        [string]$Label,
-        [string[]]$Actual,
-        [string[]]$Expected
-    )
-
-    $normalizedActual = @($Actual | Sort-Object -Unique)
-    $normalizedExpected = @($Expected | Sort-Object -Unique)
-
-    if (($normalizedActual -join ",") -ne ($normalizedExpected -join ",")) {
-        throw "$Label did not match. Expected '$($normalizedExpected -join ", ")' but found '$($normalizedActual -join ", ")'."
-    }
-}
-
-function Get-ComposeConfig {
-    param([switch]$UseLlamaCppProfile)
-
-    if ($UseLlamaCppProfile) {
-        $json = docker compose --profile llamacpp config --format json
-    } else {
-        $json = docker compose config --format json
-    }
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "docker compose config failed."
-    }
-
-    return $json | ConvertFrom-Json
-}
-
-function Get-ProtonSearchComposeConfig {
-    $json = docker compose `
-        -f docker-compose.yml `
-        -f docker-compose.proton-search.yml `
-        --profile proton-search `
-        config --format json
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "Proton search Compose configuration failed."
-    }
-
-    return $json | ConvertFrom-Json
-}
-
-function Test-DigestPinnedImage {
-    param([string]$ImageReference)
-
-    return $ImageReference -match "@sha256:[0-9a-f]{64}$"
-}
-
-function Assert-LocalOnlyCorsOrigins {
-    param([string]$Origins)
-
-    foreach ($origin in ($Origins -split "," | Where-Object { $_.Trim() })) {
-        $uri = $null
-        if (-not [Uri]::TryCreate($origin.Trim(), [UriKind]::Absolute, [ref]$uri)) {
-            throw "CORS origin '$origin' is not a valid absolute URI."
-        }
-
-        if ($uri.Host -notin @("127.0.0.1", "localhost")) {
-            throw "CORS origin '$origin' is not localhost-only."
-        }
-    }
-}
-
-function Assert-ServiceHasHealthcheck {
-    param(
-        [object]$ComposeConfig,
-        [string]$ServiceName
-    )
-
-    $service = Get-NamedValue -Container $ComposeConfig.services -Name $ServiceName -Kind "service"
-    $hasHealthcheck = $service.PSObject.Properties | Where-Object Name -eq "healthcheck" | Select-Object -First 1
-    if (-not $hasHealthcheck) {
-        throw "Service '$ServiceName' is missing a healthcheck."
-    }
-}
-
-function Assert-ServiceSecurityDefaults {
-    param(
-        [object]$ComposeConfig,
-        [string]$ServiceName
-    )
-
-    $service = Get-NamedValue -Container $ComposeConfig.services -Name $ServiceName -Kind "service"
-
-    if (-not $service.read_only) {
-        throw "Service '$ServiceName' must be read-only by default."
-    }
-
-    if ($service.cap_drop -notcontains "ALL") {
-        throw "Service '$ServiceName' must drop all Linux capabilities by default."
-    }
-
-    if ($service.security_opt -notcontains "no-new-privileges:true") {
-        throw "Service '$ServiceName' must enable no-new-privileges."
-    }
-}
-
-function Assert-ComposeHardeningPolicy {
-    param(
-        [object]$BaseComposeConfig,
-        [object]$LlamaComposeConfig,
-        [string]$UiPort,
-        [string]$BackendPort,
-        [string]$SearxngUiPort
-    )
-
-    $coreInternal = Get-NamedValue -Container $BaseComposeConfig.networks -Name "core_internal" -Kind "network"
-    if (-not $coreInternal.internal) {
-        throw "The core_internal network must remain internal."
-    }
-
-    $modelInternal = Get-NamedValue -Container $LlamaComposeConfig.networks -Name "model_internal" -Kind "network"
-    if (-not $modelInternal.internal) {
-        throw "The model_internal network must remain internal."
-    }
-
-    $servicesWithPorts = @(
-        $BaseComposeConfig.services.PSObject.Properties |
-            Where-Object {
-                ($_.Value.PSObject.Properties | Where-Object Name -eq "ports" | Select-Object -First 1) -and $_.Value.ports
-            } |
-            ForEach-Object { $_.Name }
-    )
-    Assert-SetEquality -Label "Services with published ports" -Actual $servicesWithPorts -Expected @("host-gateway")
-
-    $hostGateway = Get-NamedValue -Container $BaseComposeConfig.services -Name "host-gateway" -Kind "service"
-    $expectedPublishedPorts = @{
-        3000 = $UiPort
-        8000 = $BackendPort
-        8085 = $SearxngUiPort
-    }
-
-    if (@($hostGateway.ports).Count -ne $expectedPublishedPorts.Count) {
-        throw "The host-gateway service published an unexpected number of ports."
-    }
-
-    foreach ($targetPort in $expectedPublishedPorts.Keys) {
-        $portBinding = @($hostGateway.ports | Where-Object { $_.target -eq [int]$targetPort }) | Select-Object -First 1
-        if (-not $portBinding) {
-            throw "The host-gateway service is missing the published port for target $targetPort."
-        }
-
-        if ($portBinding.host_ip -ne "127.0.0.1") {
-            throw "Published port $targetPort must bind to 127.0.0.1."
-        }
-
-        if ($portBinding.published -ne [string]$expectedPublishedPorts[$targetPort]) {
-            throw "Published port $targetPort did not match the expected host port $($expectedPublishedPorts[$targetPort])."
-        }
-    }
-
-    $expectedNetworks = @{
-        "host-gateway"   = @("core_internal", "host_access")
-        "ui"             = @("core_internal")
-        "backend"        = @("core_internal", "model_internal")
-        "fetcher"        = @("core_internal", "egress")
-        "search-provider" = @("core_internal", "egress")
-    }
-
-    foreach ($serviceName in $expectedNetworks.Keys) {
-        $service = Get-NamedValue -Container $BaseComposeConfig.services -Name $serviceName -Kind "service"
-        Assert-SetEquality -Label "Service '$serviceName' networks" -Actual (Get-NamedKeys -Container $service.networks) -Expected $expectedNetworks[$serviceName]
-        Assert-ServiceSecurityDefaults -ComposeConfig $BaseComposeConfig -ServiceName $serviceName
-        Assert-ServiceHasHealthcheck -ComposeConfig $BaseComposeConfig -ServiceName $serviceName
-    }
-
-    $modelBackend = Get-NamedValue -Container $LlamaComposeConfig.services -Name "model-backend" -Kind "service"
-    Assert-SetEquality -Label "Service 'model-backend' networks" -Actual (Get-NamedKeys -Container $modelBackend.networks) -Expected @("model_internal")
-    Assert-ServiceSecurityDefaults -ComposeConfig $LlamaComposeConfig -ServiceName "model-backend"
-    Assert-ServiceHasHealthcheck -ComposeConfig $LlamaComposeConfig -ServiceName "model-backend"
-
-    foreach ($serviceName in @("host-gateway", "search-provider")) {
-        $service = Get-NamedValue -Container $BaseComposeConfig.services -Name $serviceName -Kind "service"
-        if (-not (Test-DigestPinnedImage -ImageReference $service.image)) {
-            throw "Service '$serviceName' must use a digest-pinned image reference."
-        }
-    }
-
-    if (-not (Test-DigestPinnedImage -ImageReference $modelBackend.image)) {
-        throw "Service 'model-backend' must use a digest-pinned image reference."
-    }
-
-    $backend = Get-NamedValue -Container $BaseComposeConfig.services -Name "backend" -Kind "service"
-    Assert-LocalOnlyCorsOrigins -Origins $backend.environment.CORS_ALLOWED_ORIGINS
-}
-
-function Assert-ProtonSearchComposePolicy {
-    param([object]$ComposeConfig)
-
-    $vpn = Get-NamedValue -Container $ComposeConfig.services -Name "search-vpn" -Kind "service"
-    if (-not (Test-DigestPinnedImage -ImageReference $vpn.image)) {
-        throw "Service 'search-vpn' must use a digest-pinned image reference."
-    }
-
-    if ($vpn.cap_add -notcontains "NET_ADMIN") {
-        throw "Service 'search-vpn' must have NET_ADMIN to establish the tunnel."
-    }
-
-    if ($vpn.cap_drop -notcontains "ALL") {
-        throw "Service 'search-vpn' must drop all capabilities before adding NET_ADMIN."
-    }
-
-    if (-not $vpn.read_only) {
-        throw "Service 'search-vpn' must use a read-only root filesystem."
-    }
-
-    if ($vpn.security_opt -notcontains "no-new-privileges:true") {
-        throw "Service 'search-vpn' must enable no-new-privileges."
-    }
-
-    if (($vpn.PSObject.Properties | Where-Object Name -eq "ports" | Select-Object -First 1) -and $vpn.ports) {
-        throw "Service 'search-vpn' must not publish a host port."
-    }
-
-    $tunDevice = @($vpn.devices | Where-Object { $_.target -eq "/dev/net/tun" }) | Select-Object -First 1
-    if (-not $tunDevice) {
-        throw "Service 'search-vpn' must expose /dev/net/tun."
-    }
-
-    Assert-SetEquality `
-        -Label "Service 'search-vpn' networks" `
-        -Actual (Get-NamedKeys -Container $vpn.networks) `
-        -Expected @("core_internal", "egress")
-
-    Assert-ServiceHasHealthcheck -ComposeConfig $ComposeConfig -ServiceName "search-vpn"
-    if (($vpn.healthcheck.test -join ' ') -notmatch 'healthcheck && nslookup example.com 127.0.0.1') {
-        throw 'VPN health must check both the tunnel and VPN-local DNS.'
-    }
-    if ($vpn.environment.HTTP_CONTROL_SERVER_ADDRESS -ne '127.0.0.1:8000') {
-        throw 'VPN control API must listen only inside the shared namespace.'
-    }
-    if ($vpn.environment.PSObject.Properties.Name -contains 'WIREGUARD_PRIVATE_KEY') {
-        throw 'VPN credentials must not be present in Compose environment metadata.'
-    }
-    $keyMount = @($vpn.volumes | Where-Object target -eq '/gluetun/wireguard/wg0.conf')
-    if ($keyMount.Count -ne 1 -or -not $keyMount[0].read_only -or $keyMount[0].bind.create_host_path) {
-        throw 'VPN must use a read-only, explicitly provisioned credential file.'
-    }
-
-    $searchProvider = Get-NamedValue -Container $ComposeConfig.services -Name "search-provider" -Kind "service"
-    $dnsMount = @($searchProvider.volumes | Where-Object target -eq '/etc/resolv.conf')
-    if ($dnsMount.Count -ne 1 -or -not $dnsMount[0].read_only -or $dnsMount[0].source -notmatch 'resolv\.vpn\.conf$') {
-        throw 'Search DNS must be pinned to the VPN-local resolver, not Docker DNS.'
-    }
-    if ($searchProvider.network_mode -ne "service:search-vpn") {
-        throw "The Proton search profile must place search-provider in the search-vpn network namespace."
-    }
-
-    if ($searchProvider.PSObject.Properties | Where-Object Name -eq "networks" | Select-Object -First 1) {
-        throw "The Proton search profile must remove direct network attachments from search-provider."
-    }
-
-    $backend = Get-NamedValue -Container $ComposeConfig.services -Name "backend" -Kind "service"
-    if ($backend.environment.SEARCH_BASE_URL -ne "http://search-vpn:8080") {
-        throw "The Proton search profile must route backend searches through search-vpn."
-    }
-
-    $gateway = Get-NamedValue -Container $ComposeConfig.services -Name "host-gateway" -Kind "service"
-    $gatewayConfig = @($gateway.volumes | Where-Object { $_.target -eq "/etc/nginx/nginx.conf" }) | Select-Object -First 1
-    if (-not $gatewayConfig -or $gatewayConfig.source -notmatch "nginx\.proton-search\.conf$") {
-        throw "The Proton search profile must use the VPN-aware localhost gateway configuration."
-    }
-}
-
-function Get-ServiceContainerId {
-    param([string]$ServiceName)
-
-    $containerId = docker compose ps -q $ServiceName 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        return $null
-    }
-
-    return ([string]$containerId).Trim()
-}
-
-function Wait-ForServiceStatus {
-    param(
-        [string]$ServiceName,
-        [string]$ExpectedStatus,
-        [int]$Attempts = 15
-    )
-
-    for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
-        $containerId = Get-ServiceContainerId -ServiceName $ServiceName
-        if ($containerId) {
-            $status = docker inspect $containerId --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" 2>$null
-            if ($LASTEXITCODE -eq 0 -and $status.Trim() -eq $ExpectedStatus) {
-                return $true
-            }
-        }
-
-        Start-Sleep -Seconds 2
-    }
-
-    return $false
-}
-
-function Get-ServicePortBindings {
-    param([string]$ServiceName)
-
-    $containerId = Get-ServiceContainerId -ServiceName $ServiceName
-    if (-not $containerId) {
-        throw "Could not find a running container for service '$ServiceName'."
-    }
-
-    return docker inspect $containerId --format "{{json .HostConfig.PortBindings}}"
-}
-
-function Test-HostHttpEndpoint {
-    param(
-        [string]$Url,
-        [int]$Attempts = 15
-    )
-
-    for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
-        try {
-            $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -TimeoutSec 5
-            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
-                return $true
-            }
-        } catch {
-        }
-
-        Start-Sleep -Seconds 2
-    }
-
-    return $false
-}
-
-function Invoke-BackendPython {
-    param([string]$Script)
-
-    $Script | docker compose exec -T backend python -
-    if ($LASTEXITCODE -ne 0) {
-        throw "Backend-side validation probe failed."
-    }
-}
-
 try {
-    $uiPort = Get-EnvValue -Key "UI_PORT" -DefaultValue "3000"
-    $backendPort = Get-EnvValue -Key "BACKEND_PORT" -DefaultValue "8000"
-    $searxngUiPort = Get-EnvValue -Key "SEARXNG_UI_PORT" -DefaultValue "8085"
-
-    Write-Host "Validating docker compose configuration..."
-    $composeConfig = Get-ComposeConfig
-
-    Write-Host "Validating llama.cpp profile configuration..."
-    $llamaComposeConfig = Get-ComposeConfig -UseLlamaCppProfile
-
-    Write-Host "Validating Proton search overlay configuration..."
-    $protonSearchComposeConfig = Get-ProtonSearchComposeConfig
-
-    Write-Host "Checking compose hardening policy..."
-    Assert-ComposeHardeningPolicy `
-        -BaseComposeConfig $composeConfig `
-        -LlamaComposeConfig $llamaComposeConfig `
-        -UiPort $uiPort `
-        -BackendPort $backendPort `
-        -SearxngUiPort $searxngUiPort
-
-    Write-Host "Checking Proton search overlay policy..."
-    Assert-ProtonSearchComposePolicy -ComposeConfig $protonSearchComposeConfig
-
-    foreach ($scriptName in @('import-proton-wireguard.ps1', 'start-proton-search.ps1', 'check-proton-search.ps1', 'setup-browser-search.ps1', 'test-search-coverage.ps1', 'test-browser-search.ps1')) {
-        $parseErrors = $null; $parseTokens = $null
-        [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $scriptName), [ref]$parseTokens, [ref]$parseErrors) | Out-Null
-        if ($parseErrors.Count) { throw "PowerShell syntax validation failed: $scriptName" }
+    Write-Host 'Validating isolated base and VPN Compose policies...'
+    $raw = docker compose config --format json
+    if ($LASTEXITCODE -ne 0) { throw 'Base Compose config failed.' }
+    $base = $raw | ConvertFrom-Json
+    $raw = docker compose -f docker-compose.yml -f docker-compose.proton-search.yml --profile proton-search config --format json
+    if ($LASTEXITCODE -ne 0) { throw 'VPN Compose config failed.' }
+    $vpn = $raw | ConvertFrom-Json
+    Assert-SearchComposePolicy $base '18085'
+    Assert-SearchComposePolicy $vpn '18085' -Vpn
+    & (Join-Path $PSScriptRoot 'test-compose-policy.ps1') -Base $base -Vpn $vpn
+    $diskCache = @($base.services.'search-provider'.volumes | Where-Object target -eq '/var/cache/searxng')
+    if ($diskCache.Count) { throw 'Validation must not mount the live cache.' }
+    foreach ($script in Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1') {
+        $errors = $null; $tokens = $null
+        [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+        if ($errors.Count) { throw "PowerShell syntax error: $($script.Name)" }
     }
-
-    Write-Host "Testing browser benchmark helpers (offline)..."
-    python -m unittest discover -s scripts/tests -p "test_*.py"
-    if ($LASTEXITCODE -ne 0) { throw "Browser benchmark helper tests failed." }
-
-    Write-Host "Building repo-managed images..."
-    docker compose build ui backend fetcher
-    if ($LASTEXITCODE -ne 0) { throw "docker compose build failed." }
-
-    Write-Host "Running backend tests..."
-    docker compose run --rm --no-deps backend python -m unittest discover -s tests -p "test_*.py"
-    if ($LASTEXITCODE -ne 0) { throw "Backend tests failed." }
-
-    Write-Host "Running fetcher tests..."
-    docker compose run --rm --no-deps fetcher python -m unittest discover -s tests -p "test_*.py"
-    if ($LASTEXITCODE -ne 0) { throw "Fetcher tests failed." }
-
-    Write-Host "Running UI server syntax check..."
-    python -m py_compile apps/ui/server.py
-    if ($LASTEXITCODE -ne 0) { throw "UI server syntax validation failed." }
-
-    Write-Host "Running UI client syntax check..."
-    node --check apps/ui/static/app.js
-    if ($LASTEXITCODE -ne 0) { throw "UI client syntax validation failed." }
-
-    Write-Host "Running base stack smoke test..."
-    docker compose up -d host-gateway ui backend fetcher search-provider
-    if ($LASTEXITCODE -ne 0) { throw "Base stack failed to start." }
-
-    if (-not (Wait-ForServiceStatus -ServiceName "backend" -ExpectedStatus "healthy")) {
-        docker compose logs host-gateway backend fetcher search-provider ui
-        throw "Backend health check failed."
-    }
-
-    if (-not (Wait-ForServiceStatus -ServiceName "fetcher" -ExpectedStatus "healthy")) {
-        docker compose logs fetcher
-        throw "Fetcher health check failed."
-    }
-
-    if (-not (Wait-ForServiceStatus -ServiceName "ui" -ExpectedStatus "healthy")) {
-        docker compose logs ui
-        throw "UI smoke check failed."
-    }
-
-    if (-not (Wait-ForServiceStatus -ServiceName "search-provider" -ExpectedStatus "healthy")) {
-        docker compose logs search-provider
-        throw "Search provider health check failed."
-    }
-
-    if (-not (Wait-ForServiceStatus -ServiceName "host-gateway" -ExpectedStatus "healthy")) {
-        docker compose logs host-gateway ui backend search-provider
-        throw "Host gateway health check failed."
-    }
-
-    $gatewayPorts = Get-ServicePortBindings -ServiceName "host-gateway"
-    foreach ($targetPort in @("3000", "8000", "8085")) {
-        if ($gatewayPorts -notmatch ('"' + $targetPort + '/tcp"')) {
-            throw "The host gateway is missing port binding metadata for $targetPort/tcp."
-        }
-    }
-
-    if ($gatewayPorts -notmatch ('"HostPort":"' + $uiPort + '"') -or $gatewayPorts -notmatch '"HostIp":"127.0.0.1"') {
-        throw "UI localhost port binding is missing or not bound to 127.0.0.1."
-    }
-
-    if ($gatewayPorts -notmatch ('"HostPort":"' + $backendPort + '"') -or $gatewayPorts -notmatch '"HostIp":"127.0.0.1"') {
-        throw "Backend localhost port binding is missing or not bound to 127.0.0.1."
-    }
-
-    if ($gatewayPorts -notmatch ('"HostPort":"' + $searxngUiPort + '"') -or $gatewayPorts -notmatch '"HostIp":"127.0.0.1"') {
-        throw "SearXNG localhost port binding is missing or not bound to 127.0.0.1."
-    }
-
-    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$uiPort/")) {
-        docker compose logs host-gateway ui
-        throw "UI was not reachable on the Windows host at http://127.0.0.1:$uiPort/."
-    }
-
-    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$backendPort/api/v1/health")) {
-        docker compose logs host-gateway backend
-        throw "Backend was not reachable on the Windows host at http://127.0.0.1:$backendPort/api/v1/health."
-    }
-
-    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$searxngUiPort/")) {
-        docker compose logs host-gateway search-provider
-        throw "SearXNG was not reachable on the Windows host at http://127.0.0.1:$searxngUiPort/."
-    }
-
-    Write-Host "Checking browser-route privacy settings (no upstream searches)..."
+    python -m unittest discover -s scripts/tests -p 'test_*.py'
+    if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed.' }
+    & (Join-Path $PSScriptRoot 'test-startup-helpers.ps1')
+    # No source-built app services remain; retain the build entry point to
+    # automatically cover future repo-managed services when they are introduced.
+    docker compose build
+    if ($LASTEXITCODE -ne 0) { throw 'Compose build failed.' }
+    Write-Host 'Image builds: no build contexts remain; all three services use pinned upstream images.'
+    docker compose up -d --wait --wait-timeout 120 host-gateway search-provider
+    if ($LASTEXITCODE -ne 0) { throw 'Isolated search stack failed to start.' }
+    foreach ($path in @('/','/preferences','/config','/stats')) { Assert-HttpPrivacy $path }
+    $id = docker compose ps -q host-gateway
+    $ports = docker inspect $id --format '{{json .HostConfig.PortBindings}}' | ConvertFrom-Json
+    if (@($ports.PSObject.Properties).Count -ne 1 -or $ports.'8085/tcp'[0].HostPort -ne '18085' -or
+        $ports.'8085/tcp'[0].HostIp -ne '127.0.0.1') { throw 'Runtime publication mismatch.' }
     Get-Content -Raw (Join-Path $PSScriptRoot 'check-search-settings.py') | docker compose exec -T search-provider /usr/local/searxng/.venv/bin/python -
-    if ($LASTEXITCODE -ne 0) { throw 'SearXNG privacy setting regression.' }
-    foreach ($path in @('/', '/preferences', '/config')) {
-        $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$searxngUiPort$path" -TimeoutSec 15
-        if ($response.Headers['Cache-Control'] -ne 'no-store' -or $response.Headers['Referrer-Policy'] -ne 'no-referrer') {
-            throw 'Browser search privacy headers missing.'
-        }
+    if ($LASTEXITCODE -ne 0) { throw 'Search privacy settings failed.' }
+    # No upstream query: direct-IP connection must fail in the offline base.
+    @'
+import socket
+try:
+    with socket.create_connection(('1.1.1.1', 443), timeout=3):
+        raise SystemExit('FAIL: base search has direct egress')
+except OSError:
+    print('PASS: base search cannot reach direct public HTTPS')
+'@ | docker compose exec -T search-provider python -
+    if ($LASTEXITCODE -ne 0) { throw 'Offline base leaked direct egress.' }
+    $catalogue = Invoke-RestMethod -Uri 'http://127.0.0.1:18085/config' -TimeoutSec 10
+    foreach ($entry in @(
+        @{ Category='general'; Engines=@('brave','bing','yahoo','wikipedia') },
+        @{ Category='news'; Engines=@('brave.news','duckduckgo news','reuters') },
+        @{ Category='science'; Engines=@('arxiv','pubmed','crossref') }
+    )) {
+        $names = @($catalogue.engines | Where-Object { $_.enabled -and $entry.Category -in $_.categories } | ForEach-Object name)
+        Assert-SetEquality $entry.Category $names $entry.Engines
     }
-
-    Write-Host "Checking loaded SearXNG catalogue and backend selectors (no upstream searches)..."
-    $searchCatalog = Invoke-RestMethod -Uri "http://127.0.0.1:$searxngUiPort/config" -TimeoutSec 10
-    $enabledGeneral = @($searchCatalog.engines | Where-Object { $_.enabled -and 'general' -in $_.categories } | ForEach-Object { $_.name })
-    $enabledNews = @($searchCatalog.engines | Where-Object { $_.enabled -and 'news' -in $_.categories } | ForEach-Object { $_.name })
-    $enabledScience = @($searchCatalog.engines | Where-Object { $_.enabled -and 'science' -in $_.categories } | ForEach-Object { $_.name })
-    Assert-SetEquality -Label 'Enabled general engines' -Actual $enabledGeneral -Expected @('brave', 'bing', 'yahoo', 'wikipedia')
-    Assert-SetEquality -Label 'Enabled news engines' -Actual $enabledNews -Expected @('brave.news', 'duckduckgo news', 'reuters')
-    Assert-SetEquality -Label 'Enabled science engines' -Actual $enabledScience -Expected @('arxiv', 'pubmed', 'crossref')
-    $selector = Get-EnvValue -Key 'SEARCH_ENGINES'
-    foreach ($engine in ($selector -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
-        if ($engine -notin @($searchCatalog.engines | ForEach-Object { $_.name })) {
-            throw "Backend selector references an unloaded search engine: $engine"
-        }
-    }
-
-    Write-Host 'Testing isolated search outage and recovery without external fallback...'
-    $gatewayBefore = docker compose ps -q host-gateway
+    Write-Host 'Testing isolated outage and recovery (no queries)...'
     try {
         docker compose stop search-provider
-        if ($LASTEXITCODE -ne 0) { throw 'Could not stop isolated search for outage test.' }
+        if ($LASTEXITCODE -ne 0) { throw 'Could not stop test search.' }
         $outage = $null
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$searxngUiPort/" -TimeoutSec 15 -MaximumRedirection 0 | Out-Null
-        } catch {
-            $outage = $_.Exception.Response
-        }
-        if (-not $outage -or [int]$outage.StatusCode -ne 503 -or $outage.Headers['Location']) {
-            throw 'Search outage did not fail locally with HTTP 503 and no redirect.'
-        }
-        if ($outage.Headers['Cache-Control'] -ne 'no-store' -or $outage.Headers['Referrer-Policy'] -ne 'no-referrer') {
-            throw 'Search outage response lacked privacy headers.'
+            Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:18085/' -TimeoutSec 15 -MaximumRedirection 0 | Out-Null
+        } catch { $outage = $_.Exception.Response }
+        if (-not $outage -or [int]$outage.StatusCode -ne 503 -or $outage.Headers['Location'] -or
+            $outage.Headers['Cache-Control'] -ne 'no-store' -or $outage.Headers['Referrer-Policy'] -ne 'no-referrer') {
+            throw 'Outage did not fail locally with privacy headers.'
         }
     } finally {
-        docker compose up -d --no-deps --wait --wait-timeout 90 search-provider
-        if ($LASTEXITCODE -ne 0) { throw 'Isolated search recovery failed.' }
+        docker compose up -d --no-deps --wait --wait-timeout 120 search-provider
+        if ($LASTEXITCODE -ne 0) { throw 'Isolated recovery failed.' }
     }
-    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$searxngUiPort/")) { throw 'Search did not recover.' }
-    if ((docker compose ps -q host-gateway) -ne $gatewayBefore) { throw 'Gateway unexpectedly replaced during recovery test.' }
-
-    $modelFileName = Get-EnvValue -Key "MODEL_FILE_NAME" -DefaultValue "Qwen2.5-7B-Instruct.Q4_K_M.gguf"
-    $expectedModelSha = (Get-EnvValue -Key "MODEL_FILE_SHA256").ToLowerInvariant()
-    $modelFilePath = Join-Path $root "data\models\$modelFileName"
-    $configuredModelName = Get-EnvValue -Key "MODEL_NAME" -DefaultValue "qwen2.5-7b-instruct-q4_k_m"
-
-    if (-not (Test-Path -LiteralPath $modelFilePath)) {
-        $skipMessage = "Skipping model runtime smoke test because '$modelFileName' was not found in data\models."
-        if ($RequireModelRuntime) {
-            throw $skipMessage
-        }
-
-        Write-Warning $skipMessage
-        Write-Host "Validation completed successfully without the optional model runtime probe."
-        return
-    }
-
-    if ($expectedModelSha) {
-        Write-Host "Verifying configured model checksum..."
-        $actualModelSha = (Get-FileHash -LiteralPath $modelFilePath -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($actualModelSha -ne $expectedModelSha) {
-            throw "Configured model checksum does not match MODEL_FILE_SHA256."
-        }
-    }
-
-    $env:MODEL_NAME = $configuredModelName
-    $env:MODEL_FILE_NAME = $modelFileName
-
-    Write-Host "Running model runtime smoke test..."
-    docker compose --profile llamacpp up -d model-backend backend
-    if ($LASTEXITCODE -ne 0) { throw "Model runtime services failed to start." }
-
-    if (-not (Wait-ForServiceStatus -ServiceName "model-backend" -ExpectedStatus "healthy" -Attempts 240)) {
-        docker compose logs model-backend backend
-        throw "Model runtime health check failed."
-    }
-
-    Invoke-BackendPython -Script @"
-import json
-import urllib.request
-
-with urllib.request.urlopen("http://127.0.0.1:8000/api/v1/model/runtime", timeout=20) as response:
-    payload = json.load(response)
-
-if not payload.get("ready"):
-    raise SystemExit(f"Model runtime not ready: {payload.get('status')} / {payload.get('error')}")
-
-if payload.get("configured_model") != "$configuredModelName":
-    raise SystemExit("Configured model name reported by the backend did not match the expected model.")
-"@
-
-    Invoke-BackendPython -Script @"
-import json
-import urllib.request
-
-payload = {
-    "model": "$configuredModelName",
-    "messages": [{"role": "user", "content": "Reply with the single word READY."}],
-    "temperature": 0.0,
-    "max_tokens": 8,
-}
-request = urllib.request.Request(
-    "http://model-backend:8080/v1/chat/completions",
-    data=json.dumps(payload).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
-)
-with urllib.request.urlopen(request, timeout=120) as response:
-    data = json.load(response)
-
-answer = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-if not isinstance(answer, str) or not answer.strip():
-    raise SystemExit("Model runtime returned an empty chat response.")
-"@
-
-    Write-Host "Validation completed successfully, including the local model runtime probe."
+    Assert-HttpPrivacy '/'
+    if ((docker compose ps -q host-gateway) -ne $id) { throw 'Gateway replaced during recovery.' }
+    Write-Host 'Validation passed: search-only topology, policies, offline tests, native UI and recovery.'
 } finally {
-    Remove-Item Env:MODEL_NAME -ErrorAction SilentlyContinue
-    Remove-Item Env:MODEL_FILE_NAME -ErrorAction SilentlyContinue
-    docker compose --profile llamacpp down --remove-orphans | Out-Null
-    foreach ($key in $validationSavedEnv.Keys) {
-        [Environment]::SetEnvironmentVariable($key, $validationSavedEnv[$key], 'Process')
-    }
+    docker compose down --remove-orphans | Out-Null
+    foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key], 'Process') }
     Pop-Location
 }

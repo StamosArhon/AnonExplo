@@ -8,13 +8,7 @@ param(
     [switch]$NoStartNow,
     [switch]$NoDockerDesktopStart,
     [switch]$SkipDockerRunEntryRepair,
-    [switch]$NoDuckDuckGoFallback,
-    [int]$RedirectorPort = 8095,
     [int]$SearxngPort = 8085,
-    [int]$PreferredUiPort = 3000,
-    [int]$FallbackUiPort = 3001,
-    [int]$PreferredBackendPort = 8000,
-    [int]$FallbackBackendPort = 8001,
     [int]$CdpPortBase = 9320,
     [string]$BraveExe = "",
     [string]$BraveUserDataDir = "",
@@ -26,10 +20,8 @@ $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $helperDir = Join-Path $env:LOCALAPPDATA "AnonExplo\search-fallback"
-$redirectorScript = Join-Path $helperDir "search-fallback.js"
 $startupScript = Join-Path $helperDir "start-anonexplo-searxng.ps1"
 $startupLauncher = Join-Path $helperDir "start-anonexplo-searxng.vbs"
-$redirectorLauncher = Join-Path $helperDir "start-search-fallback.vbs"
 $dockerDesktopLauncher = Join-Path $helperDir "start-docker-desktop-background.vbs"
 $configureScript = Join-Path $helperDir "configure-chromium-search.js"
 
@@ -39,7 +31,6 @@ $browserSearchUrl = "http://127.0.0.1:$SearxngPort/search?q=%s"
 $searxngBaseUrl = "http://127.0.0.1:$SearxngPort"
 
 $startupTaskName = "AnonExplo SearXNG Startup"
-$redirectorTaskName = "AnonExplo Search Fallback Redirector"
 $startupLaunchMode = "None"
 
 function Resolve-FirstExistingPath {
@@ -89,215 +80,48 @@ function Assert-NodeCapabilities {
 }
 
 function Write-LocalHelperFiles {
-    param([string]$NodePath)
-
     New-Item -ItemType Directory -Force -Path $helperDir | Out-Null
-
-    # Retain the old switch for compatibility; external fallback is never a
-    # default or an automatic recovery path for this privacy-focused product.
-    $allowFallback = "false"
-    $fallbackBase = ""
-
-    $redirectorTemplate = @'
-const http = require("node:http");
-
-const LISTEN_HOST = "127.0.0.1";
-const LISTEN_PORT = __REDIRECTOR_PORT__;
-const SEARXNG_BASE_URL = "__SEARXNG_BASE_URL__";
-const ALLOW_EXTERNAL_FALLBACK = __ALLOW_EXTERNAL_FALLBACK__;
-const FALLBACK_BASE_URL = "__FALLBACK_BASE_URL__";
-
-function buildSearchUrl(baseUrl, query) {
-  const url = new URL("/search", baseUrl);
-  url.searchParams.set("q", query);
-  return url.toString();
-}
-
-function buildDuckDuckGoUrl(query) {
-  const url = new URL(FALLBACK_BASE_URL);
-  url.searchParams.set("q", query);
-  return url.toString();
-}
-
-async function isSearxngHealthy() {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1200);
-  try {
-    const response = await fetch(`${SEARXNG_BASE_URL}/`, {
-      method: "GET",
-      redirect: "manual",
-      signal: controller.signal,
-    });
-    return response.status >= 200 && response.status < 500;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function sendRedirect(response, location) {
-  response.writeHead(302, {
-    Location: location,
-    "Cache-Control": "no-store",
-    "Content-Type": "text/plain; charset=utf-8",
-  });
-  response.end(`Redirecting to ${location}\n`);
-}
-
-const server = http.createServer(async (request, response) => {
-  const requestUrl = new URL(request.url, `http://${LISTEN_HOST}:${LISTEN_PORT}`);
-
-  if (requestUrl.pathname === "/health") {
-    response.writeHead(200, {
-      "Cache-Control": "no-store",
-      "Content-Type": "text/plain; charset=utf-8",
-    });
-    response.end("ok\n");
-    return;
-  }
-
-  if (requestUrl.pathname !== "/search") {
-    response.writeHead(404, {
-      "Cache-Control": "no-store",
-      "Content-Type": "text/plain; charset=utf-8",
-    });
-    response.end("not found\n");
-    return;
-  }
-
-  const query = requestUrl.searchParams.get("q") || "";
-  if (await isSearxngHealthy()) {
-    sendRedirect(response, buildSearchUrl(SEARXNG_BASE_URL, query));
-    return;
-  }
-
-  if (ALLOW_EXTERNAL_FALLBACK) {
-    sendRedirect(response, buildDuckDuckGoUrl(query));
-    return;
-  }
-
-  response.writeHead(503, {
-    "Cache-Control": "no-store",
-    "Content-Type": "text/plain; charset=utf-8",
-  });
-  response.end("Local SearXNG is unavailable and external fallback is disabled.\n");
-});
-
-server.listen(LISTEN_PORT, LISTEN_HOST, () => {
-  console.log(`AnonExplo search fallback redirector listening on http://${LISTEN_HOST}:${LISTEN_PORT}`);
-});
-'@
-
-    $redirector = $redirectorTemplate.
-        Replace("__REDIRECTOR_PORT__", [string]$RedirectorPort).
-        Replace("__SEARXNG_BASE_URL__", $searxngBaseUrl).
-        Replace("__ALLOW_EXTERNAL_FALLBACK__", $allowFallback).
-        Replace("__FALLBACK_BASE_URL__", $fallbackBase)
-    Set-Content -LiteralPath $redirectorScript -Value $redirector -Encoding UTF8
-
     $escapedRoot = $root.Replace("'", "''")
     $startDockerIfNeeded = if ($NoDockerDesktopStart) { '$false' } else { '$true' }
     $startupTemplate = @'
-$ErrorActionPreference = "SilentlyContinue"
-
+$ErrorActionPreference = 'Stop'
 $repo = '__REPO_PATH__'
 $startDockerIfNeeded = __START_DOCKER_IF_NEEDED__
-
-function Test-LocalListenPort {
-    param([int]$Port)
-    return [bool](Get-NetTCPConnection -LocalAddress "127.0.0.1" -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
-}
-
-function Set-PortOrFallback {
-    param(
-        [string]$Name,
-        [int]$Preferred,
-        [int]$Fallback
-    )
-
-    if (Test-LocalListenPort -Port $Preferred) {
-        if (Test-LocalListenPort -Port $Fallback) {
-            exit 20
-        }
-        [Environment]::SetEnvironmentVariable($Name, [string]$Fallback, "Process")
-        return
-    }
-
-    [Environment]::SetEnvironmentVariable($Name, [string]$Preferred, "Process")
-}
-
 & docker info *> $null
 if ($LASTEXITCODE -ne 0 -and $startDockerIfNeeded) {
     & docker desktop start --detach --timeout 120 *> $null
 }
-
 $dockerReady = $false
 for ($i = 0; $i -lt 72; $i++) {
     & docker info *> $null
-    if ($LASTEXITCODE -eq 0) {
-        $dockerReady = $true
-        break
-    }
+    if ($LASTEXITCODE -eq 0) { $dockerReady = $true; break }
     Start-Sleep -Seconds 5
 }
-
-if (-not $dockerReady) {
-    exit 10
-}
-
-# A provisioned VPN must never be silently replaced with the direct profile.
-if (Test-Path -LiteralPath (Join-Path $repo 'data\proton\wireguard\wg0.conf')) {
-    & (Join-Path $repo 'scripts\start-proton-search.ps1')
-    exit $LASTEXITCODE
-}
-
-Set-PortOrFallback -Name "UI_PORT" -Preferred __PREFERRED_UI_PORT__ -Fallback __FALLBACK_UI_PORT__
-Set-PortOrFallback -Name "BACKEND_PORT" -Preferred __PREFERRED_BACKEND_PORT__ -Fallback __FALLBACK_BACKEND_PORT__
-[Environment]::SetEnvironmentVariable("SEARXNG_UI_PORT", "__SEARXNG_PORT__", "Process")
-
-Set-Location -LiteralPath $repo
-& docker compose up -d host-gateway ui backend fetcher search-provider
+if (-not $dockerReady) { exit 10 }
+[Environment]::SetEnvironmentVariable('SEARXNG_UI_PORT', '__SEARXNG_PORT__', 'Process')
+# Missing credentials are an error, never a reason to start direct search.
+& (Join-Path $repo 'scripts\start-proton-search.ps1')
 exit $LASTEXITCODE
 '@
-
-    $startup = $startupTemplate `
-        -replace "__REPO_PATH__", $escapedRoot `
-        -replace "__PREFERRED_UI_PORT__", [string]$PreferredUiPort `
-        -replace "__FALLBACK_UI_PORT__", [string]$FallbackUiPort `
-        -replace "__PREFERRED_BACKEND_PORT__", [string]$PreferredBackendPort `
-        -replace "__FALLBACK_BACKEND_PORT__", [string]$FallbackBackendPort `
-        -replace "__SEARXNG_PORT__", [string]$SearxngPort `
-        -replace "__START_DOCKER_IF_NEEDED__", $startDockerIfNeeded
+    $startup = $startupTemplate.Replace('__REPO_PATH__', $escapedRoot).
+        Replace('__START_DOCKER_IF_NEEDED__', $startDockerIfNeeded).
+        Replace('__SEARXNG_PORT__', [string]$SearxngPort)
     Set-Content -LiteralPath $startupScript -Value $startup -Encoding UTF8
-
-    $escapedStartupScript = $startupScript.Replace("""", """""")
-    $escapedNodePath = $NodePath.Replace("""", """""")
-    $escapedRedirectorScript = $redirectorScript.Replace("""", """""")
-
+    $escapedStartupScript = $startupScript.Replace('"', '""')
     $startupLauncherContent = @"
 Set shell = CreateObject("WScript.Shell")
 shell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$escapedStartupScript""", 0, False
 "@
-
-    $redirectorLauncherContent = @"
-Set shell = CreateObject("WScript.Shell")
-shell.Run """$escapedNodePath"" ""$escapedRedirectorScript""", 0, False
-"@
-
     Set-Content -LiteralPath $startupLauncher -Value $startupLauncherContent -Encoding ASCII
-    Set-Content -LiteralPath $redirectorLauncher -Value $redirectorLauncherContent -Encoding ASCII
-
     $dockerCommand = Get-Command docker.exe -ErrorAction SilentlyContinue
     if ($dockerCommand) {
-        $escapedDockerPath = $dockerCommand.Source.Replace("""", """""")
+        $escapedDockerPath = $dockerCommand.Source.Replace('"', '""')
         $dockerLauncherContent = @"
 Set shell = CreateObject("WScript.Shell")
-shell.Run """$escapedDockerPath"" desktop start --detach", 0, False
+shell.Run """$escapedDockerPath""" desktop start --detach", 0, False
 "@
         Set-Content -LiteralPath $dockerDesktopLauncher -Value $dockerLauncherContent -Encoding ASCII
     }
-
     $configureHelper = @'
 const { spawn } = require("node:child_process");
 
@@ -571,46 +395,29 @@ function configureExpression() {
     Write-Host "Wrote local helper files to $helperDir"
 }
 
-function Register-LocalScheduledTasks {
-    param([string]$NodePath)
 
-    $startupAction = New-ScheduledTaskAction `
-        -Execute "wscript.exe" `
-        -Argument "`"$startupLauncher`""
-    $startupTrigger = New-ScheduledTaskTrigger -AtLogOn
-    $startupSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-    $startupSettings.ExecutionTimeLimit = "PT30M"
-    $startupSettings.Hidden = $true
-
-    Register-ScheduledTask `
-        -TaskName $startupTaskName `
-        -Action $startupAction `
-        -Trigger $startupTrigger `
-        -Settings $startupSettings `
-        -Description "Start the AnonExplo SearXNG browser-search stack at user logon." `
-        -Force | Out-Null
-
-    $redirectorAction = New-ScheduledTaskAction `
-        -Execute "wscript.exe" `
-        -Argument "`"$redirectorLauncher`""
-    $redirectorTrigger = New-ScheduledTaskTrigger -AtLogOn
-    $redirectorSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-    $redirectorSettings.ExecutionTimeLimit = "PT0S"
-    $redirectorSettings.Hidden = $true
-
-    Register-ScheduledTask `
-        -TaskName $redirectorTaskName `
-        -Action $redirectorAction `
-        -Trigger $redirectorTrigger `
-        -Settings $redirectorSettings `
-        -Description "Run the AnonExplo browser search fallback redirector." `
-        -Force | Out-Null
-
-    Write-Host "Registered scheduled tasks:"
-    Write-Host "  - $startupTaskName"
-    Write-Host "  - $redirectorTaskName"
+function Register-SearchStartup {
+    $existing = Get-ScheduledTask -TaskName $startupTaskName -ErrorAction SilentlyContinue
+    $existingAction = if ($existing) { ($existing.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join ' | ' } else { '' }
+    if ($existing -and $existingAction -like "*$startupLauncher*") {
+        Write-Host 'Existing search startup task uses the refreshed hidden helper.'
+        return 'ScheduledTask'
+    }
+    try {
+        $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $startupLauncher + '"')
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        $settings.ExecutionTimeLimit = 'PT30M'
+        $settings.Hidden = $true
+        Register-ScheduledTask -TaskName $startupTaskName -Action $action -Trigger (New-ScheduledTaskTrigger -AtLogOn) -Settings $settings -Description 'Start VPN-isolated AnonExplo search.' -Force | Out-Null
+        return 'ScheduledTask'
+    } catch {
+        if ($existing -or $NoStartupFolderFallback) { throw }
+        $folder = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
+        if (-not $folder) { throw 'No Startup folder.' }
+        Copy-Item -LiteralPath $startupLauncher -Destination (Join-Path $folder 'AnonExplo SearXNG Startup.vbs') -Force
+        return 'StartupFolder'
+    }
 }
-
 function Repair-DockerDesktopRunEntry {
     if ($SkipDockerRunEntryRepair -or $NoDockerDesktopStart) {
         return
@@ -632,69 +439,6 @@ function Repair-DockerDesktopRunEntry {
         $newValue = "wscript.exe `"$dockerDesktopLauncher`""
         Set-ItemProperty -Path $runKey -Name "Docker Desktop" -Value $newValue
         Write-Host "Updated the Docker Desktop logon entry to use a hidden CLI launcher."
-    }
-}
-
-function Repair-ExistingScheduledTasks {
-    $startupTask = Get-ScheduledTask -TaskName $startupTaskName -ErrorAction SilentlyContinue
-    $redirectorTask = Get-ScheduledTask -TaskName $redirectorTaskName -ErrorAction SilentlyContinue
-    $startupActionText = if ($startupTask) { ($startupTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " | " } else { "" }
-    $redirectorActionText = if ($redirectorTask) { ($redirectorTask.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join " | " } else { "" }
-
-    if ($startupActionText -like "*$startupLauncher*" -and $redirectorActionText -like "*$redirectorLauncher*") {
-        Write-Host "Existing scheduled tasks already use hidden launchers."
-        return
-    }
-
-    $startupTaskRun = "wscript.exe `"$startupLauncher`""
-    $redirectorTaskRun = "wscript.exe `"$redirectorLauncher`""
-
-    & schtasks.exe /Change /TN $startupTaskName /TR $startupTaskRun /ENABLE | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not repair existing scheduled task '$startupTaskName'."
-    }
-
-    & schtasks.exe /Change /TN $redirectorTaskName /TR $redirectorTaskRun /ENABLE | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not repair existing scheduled task '$redirectorTaskName'."
-    }
-
-    Write-Host "Updated existing scheduled tasks to use hidden launchers."
-}
-
-function Register-StartupFolderLaunchers {
-    param([string]$NodePath)
-
-    $startupFolder = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
-    if (-not $startupFolder) {
-        throw "Could not resolve the current user's Startup folder."
-    }
-
-    $startupFolderStackLauncher = Join-Path $startupFolder "AnonExplo SearXNG Startup.vbs"
-    $startupFolderRedirectorLauncher = Join-Path $startupFolder "AnonExplo Search Fallback Redirector.vbs"
-
-    Copy-Item -LiteralPath $startupLauncher -Destination $startupFolderStackLauncher -Force
-    Copy-Item -LiteralPath $redirectorLauncher -Destination $startupFolderRedirectorLauncher -Force
-
-    Write-Host "Scheduled-task registration was not available, so Startup folder launchers were written:"
-    Write-Host "  - $startupFolderStackLauncher"
-    Write-Host "  - $startupFolderRedirectorLauncher"
-}
-
-function Stop-ManagedRedirectorIfRunning {
-    $listeners = @(Get-NetTCPConnection -LocalAddress "127.0.0.1" -LocalPort $RedirectorPort -State Listen -ErrorAction SilentlyContinue)
-    foreach ($listener in $listeners) {
-        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction SilentlyContinue
-        if ($process -and $process.CommandLine -like "*search-fallback.js*") {
-            Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Milliseconds 500
-            continue
-        }
-
-        if ($process) {
-            throw "Port $RedirectorPort is already used by PID $($listener.OwningProcess): $($process.CommandLine)"
-        }
-        throw "Port $RedirectorPort is already used by PID $($listener.OwningProcess)."
     }
 }
 
@@ -867,48 +611,22 @@ function Resolve-HeliumTarget {
     return [pscustomobject]@{ Name = "Helium"; Exe = $exe; UserDataDir = $userData }
 }
 
-$nodePath = Get-NodePath
-Assert-NodeCapabilities -NodePath $nodePath -NeedsWebSocket:(-not $SkipBrowserConfiguration)
-Write-LocalHelperFiles -NodePath $nodePath
+
+$nodePath = $null
+if (-not $SkipBrowserConfiguration) {
+    $nodePath = Get-NodePath
+    Assert-NodeCapabilities -NodePath $nodePath -NeedsWebSocket $true
+}
+Write-LocalHelperFiles
 Repair-DockerDesktopRunEntry
-
-if (-not $SkipTaskRegistration) {
-    try {
-        Register-LocalScheduledTasks -NodePath $nodePath
-        $startupLaunchMode = "ScheduledTask"
-    } catch {
-        $existingStartupTask = Get-ScheduledTask -TaskName $startupTaskName -ErrorAction SilentlyContinue
-        $existingRedirectorTask = Get-ScheduledTask -TaskName $redirectorTaskName -ErrorAction SilentlyContinue
-        if ($existingStartupTask -and $existingRedirectorTask) {
-            Write-Warning "Could not overwrite existing scheduled tasks: $($_.Exception.Message)"
-            Repair-ExistingScheduledTasks
-            $startupLaunchMode = "ExistingScheduledTask"
-        } elseif ($NoStartupFolderFallback) {
-            throw
-        } else {
-            Write-Warning "Could not register scheduled tasks: $($_.Exception.Message)"
-            Register-StartupFolderLaunchers -NodePath $nodePath
-            $startupLaunchMode = "StartupFolder"
-        }
-    }
-}
-
+if (-not $SkipTaskRegistration) { $startupLaunchMode = Register-SearchStartup }
 if (-not $NoStartNow) {
-    if ($startupLaunchMode -eq "ScheduledTask" -or $startupLaunchMode -eq "ExistingScheduledTask") {
-        Write-Host "Starting scheduled tasks now..."
+    if ($startupLaunchMode -eq 'ScheduledTask') {
         Start-ScheduledTask -TaskName $startupTaskName
-        Stop-ManagedRedirectorIfRunning
-        Start-ScheduledTask -TaskName $redirectorTaskName
-    } elseif ($startupLaunchMode -eq "StartupFolder") {
-        Write-Host "Starting local helpers now..."
-        Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", $startupScript) -WindowStyle Hidden
-        Stop-ManagedRedirectorIfRunning
-        Start-Process -FilePath $nodePath -ArgumentList @($redirectorScript) -WindowStyle Hidden
-    } else {
-        Write-Warning "Skipping immediate startup because no startup registration mode was selected."
+    } elseif ($startupLaunchMode -eq 'StartupFolder') {
+        Start-Process -FilePath 'wscript.exe' -ArgumentList ('"' + $startupLauncher + '"') -WindowStyle Hidden
     }
 }
-
 if (-not $SkipBrowserConfiguration) {
     $totalProfiles = 0
     $nextPort = $CdpPortBase
@@ -931,6 +649,5 @@ if (-not $SkipBrowserConfiguration) {
     Write-Host "Skipped browser profile configuration."
 }
 
-Write-Host "Browser search setup complete."
-Write-Host "Browser search URL: $browserSearchUrl"
-Write-Host "Verify with: curl.exe -s -I `"http://127.0.0.1:$RedirectorPort/search?q=anonexplo-check`""
+Write-Host "Browser search setup complete: $browserSearchUrl"
+Write-Host 'The obsolete redirector is not generated or started. See operations for one-time retirement.'

@@ -48,7 +48,7 @@ browser history/sync; these safeguards do not erase browser history.
 ## Test
 
 ```powershell
-# Isolated validation, builds, unit tests, local smoke; no live search fixtures.
+# Isolated validation, offline tests and local smoke; no live search fixtures.
 powershell -ExecutionPolicy Bypass -File scripts/validate.ps1
 # Manual public synthetic searches through the VPN, not browser history.
 powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1
@@ -60,12 +60,21 @@ The benchmark reports rank/domain/latency proxies, not full relevance judgements
 It stops on errors or empty results and never bypasses engine cooldowns.
 See [browser integration](docs/BROWSER_SEARCH_INTEGRATION.md).
 
-## Legacy Components And Roadmap
+## Removed Legacy Components
 
-The old `apps/ui`, `apps/backend`, and `services/fetcher` remain in the repository
-and current startup dependencies. They do not process Brave's 8085 searches.
-Moving them behind opt-in deployment profiles is the next scoped milestone;
-no user data is being removed. Model-related settings are legacy-only.
+Only `host-gateway`, `search-provider` and `search-vpn` remain. The old chatbot
+UI, backend, fetcher, model runtime/provisioner and redirector have been removed.
+Ports for the old UI/API are no longer published. Source is recoverable from
+Git; credentials, browser storage, search cache and cached Docker images remain.
+
+For an older installation, refresh startup with
+`setup-browser-search.ps1 -SkipBrowserConfiguration -NoStartNow`, then run
+`remove-legacy-components.ps1` and `ops-check.ps1`. The base Compose file is
+offline/internal-only; startup requires the VPN overlay, never direct fallback.
+
+No repo-managed image build contexts remain; validation checks pinned images,
+policies and runtime behavior. Any future local model can refine results
+headlessly, but none is needed or installed now.
 
 [Roadmap](docs/IMPLEMENTATION_ROADMAP.md) · [Architecture](docs/ARCHITECTURE.md) ·
 [Privacy](docs/SECURITY_PRIVACY.md) · [Historical workbench](docs/LEGACY_LLM_WORKBENCH.md)

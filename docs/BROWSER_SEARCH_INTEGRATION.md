@@ -20,11 +20,12 @@ To refresh hidden startup helpers without touching profiles:
 powershell -ExecutionPolicy Bypass -File scripts/setup-browser-search.ps1 -SkipBrowserConfiguration
 ```
 
-The script still generates/registers the compatibility redirector at 8095 for
-older local clients, but external fallback is disabled unconditionally. The
-old `-NoDuckDuckGoFallback` switch is retained as a no-op compatibility option.
-Removing the redundant helper and legacy app startup dependencies is planned
-as a separate search-only-deployment milestone.
+The script no longer generates, registers or starts a redirector. Retire old
+containers and the 8095 task/process with `remove-legacy-components.ps1` when
+upgrading. The old `-NoDuckDuckGoFallback` and UI/backend port options are removed.
+Startup dispatches only the VPN-protected three-service stack, with no model or
+Node daemon. The historical helper directory name remains so existing startup
+tasks still resolve; it does not mean a fallback listener is running.
 
 ## Search Preferences
 
