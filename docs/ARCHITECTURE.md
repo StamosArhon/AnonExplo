@@ -53,6 +53,15 @@ The overlay does not change the host's default route. It changes only the
 outbound path used by `search-provider`; the UI, backend, fetcher, model
 runtime, browser, and other host applications keep their normal networking.
 
+The activated Windows profile selects both Compose files through the local
+`.env`. The search namespace uses a read-only, Git-ignored WireGuard key file;
+SearXNG's separate `/etc/resolv.conf` is pinned to Gluetun's local encrypted-DNS
+forwarder. Gluetun has a dedicated writable resolver file and tmpfs directories,
+and its control API is namespace-local. Startup helpers select VPN mode when
+the credential is provisioned and disable browser direct-provider fallback.
+Validation uses a separate project and ports; VPN-stop testing explicitly
+recreates namespace clients during recovery.
+
 ## Docker Networks
 
 - `core_internal`

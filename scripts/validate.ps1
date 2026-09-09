@@ -7,6 +7,19 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Push-Location $root
 
+# Never replace or tear down the operator's VPN deployment while testing the
+# base profile. Explicit files and a separate project/ports isolate validation.
+$validationSavedEnv = @{}
+foreach ($key in @('COMPOSE_FILE', 'COMPOSE_PROFILES', 'COMPOSE_PROJECT_NAME', 'UI_PORT', 'BACKEND_PORT', 'SEARXNG_UI_PORT')) {
+    $validationSavedEnv[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
+}
+$env:COMPOSE_FILE = Join-Path $root 'docker-compose.yml'
+$env:COMPOSE_PROFILES = ''
+$env:COMPOSE_PROJECT_NAME = 'anonexplo-validation'
+$env:UI_PORT = '13000'
+$env:BACKEND_PORT = '18000'
+$env:SEARXNG_UI_PORT = '18085'
+
 function Get-EnvValue {
     param(
         [string]$Key,
@@ -288,8 +301,25 @@ function Assert-ProtonSearchComposePolicy {
         -Expected @("core_internal", "egress")
 
     Assert-ServiceHasHealthcheck -ComposeConfig $ComposeConfig -ServiceName "search-vpn"
+    if (($vpn.healthcheck.test -join ' ') -notmatch 'healthcheck && nslookup example.com 127.0.0.1') {
+        throw 'VPN health must check both the tunnel and VPN-local DNS.'
+    }
+    if ($vpn.environment.HTTP_CONTROL_SERVER_ADDRESS -ne '127.0.0.1:8000') {
+        throw 'VPN control API must listen only inside the shared namespace.'
+    }
+    if ($vpn.environment.PSObject.Properties.Name -contains 'WIREGUARD_PRIVATE_KEY') {
+        throw 'VPN credentials must not be present in Compose environment metadata.'
+    }
+    $keyMount = @($vpn.volumes | Where-Object target -eq '/gluetun/wireguard/wg0.conf')
+    if ($keyMount.Count -ne 1 -or -not $keyMount[0].read_only -or $keyMount[0].bind.create_host_path) {
+        throw 'VPN must use a read-only, explicitly provisioned credential file.'
+    }
 
     $searchProvider = Get-NamedValue -Container $ComposeConfig.services -Name "search-provider" -Kind "service"
+    $dnsMount = @($searchProvider.volumes | Where-Object target -eq '/etc/resolv.conf')
+    if ($dnsMount.Count -ne 1 -or -not $dnsMount[0].read_only -or $dnsMount[0].source -notmatch 'resolv\.vpn\.conf$') {
+        throw 'Search DNS must be pinned to the VPN-local resolver, not Docker DNS.'
+    }
     if ($searchProvider.network_mode -ne "service:search-vpn") {
         throw "The Proton search profile must place search-provider in the search-vpn network namespace."
     }
@@ -318,7 +348,7 @@ function Get-ServiceContainerId {
         return $null
     }
 
-    return $containerId.Trim()
+    return ([string]$containerId).Trim()
 }
 
 function Wait-ForServiceStatus {
@@ -408,6 +438,12 @@ try {
 
     Write-Host "Checking Proton search overlay policy..."
     Assert-ProtonSearchComposePolicy -ComposeConfig $protonSearchComposeConfig
+
+    foreach ($scriptName in @('import-proton-wireguard.ps1', 'start-proton-search.ps1', 'check-proton-search.ps1', 'setup-browser-search.ps1')) {
+        $parseErrors = $null; $parseTokens = $null
+        [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $scriptName), [ref]$parseTokens, [ref]$parseErrors) | Out-Null
+        if ($parseErrors.Count) { throw "PowerShell syntax validation failed: $scriptName" }
+    }
 
     Write-Host "Building repo-managed images..."
     docker compose build ui backend fetcher
@@ -570,5 +606,8 @@ if not isinstance(answer, str) or not answer.strip():
     Remove-Item Env:MODEL_NAME -ErrorAction SilentlyContinue
     Remove-Item Env:MODEL_FILE_NAME -ErrorAction SilentlyContinue
     docker compose --profile llamacpp down --remove-orphans | Out-Null
+    foreach ($key in $validationSavedEnv.Keys) {
+        [Environment]::SetEnvironmentVariable($key, $validationSavedEnv[$key], 'Process')
+    }
     Pop-Location
 }

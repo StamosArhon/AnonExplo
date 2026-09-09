@@ -132,12 +132,15 @@ See `docs/ARCHITECTURE.md` for the fuller design.
 11. Optional: route only AnonExplo search traffic through Proton VPN.
 
    Generate a separate Proton WireGuard configuration for this PC from the
-   Proton account dashboard. Copy only its `PrivateKey` value into the
-   untracked `.env` as `PROTON_WIREGUARD_PRIVATE_KEY`, choose a country with
-   `PROTON_SERVER_COUNTRIES`, and start the opt-in profile:
+   Proton account dashboard. Import it with
+   `scripts/import-proton-wireguard.ps1 -ConfigPath <downloaded.conf>`;
+   only its client key/address are retained under Git-ignored `data/proton/`,
+   restricted to the current Windows user, Administrators, and SYSTEM.
+   Choose a country with `PROTON_SERVER_COUNTRIES` in `.env`, then start:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts/start-proton-search.ps1
+   powershell -ExecutionPolicy Bypass -File scripts/check-proton-search.ps1 -TestKillSwitch
    ```
 
    This uses the `docker-compose.proton-search.yml` overlay. Only
@@ -145,6 +148,12 @@ See `docs/ARCHITECTURE.md` for the fuller design.
    UI, backend, fetcher, model runtime, and other PC traffic keep their normal
    routes. The VPN changes the search egress IP but does not stop upstream
    search engines from seeing the plaintext query.
+
+   For persistent Windows Compose selection, set
+   `COMPOSE_FILE=docker-compose.yml;docker-compose.proton-search.yml` and
+   `COMPOSE_PROFILES=proton-search` in `.env`. Regenerate existing browser
+   helpers with `scripts/setup-browser-search.ps1 -SkipBrowserConfiguration -NoDuckDuckGoFallback`.
+   See the operations guide for safe restart and outage testing.
 
 ## Provider Switching
 
@@ -249,6 +258,9 @@ The current default model artifact is:
 ## Validation
 
 Run the repo validation script before shipping changes:
+
+Validation uses its own `anonexplo-validation` project and localhost ports
+13000, 18000, and 18085. Its cleanup never tears down the live VPN project.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/validate.ps1

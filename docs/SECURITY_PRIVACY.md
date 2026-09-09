@@ -38,7 +38,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Never commit tokens, cookies, API keys, or private model access credentials.
 - Model files and fetched content are local assets, not Git assets.
 - The bootstrap flow generates a local `SEARXNG_SECRET` in `.env` for the default search-provider path.
-- The optional Proton search profile reads `PROTON_WIREGUARD_PRIVATE_KEY` from the untracked `.env`; it must never be copied into the repository, logs, Compose output, or documentation.
+- The optional Proton search profile reads a read-only client-key file at `data/proton/wireguard/wg0.conf`, excluded from Git and restricted by Windows ACLs. The importer retains only the private key and client address. Secrets must never appear in Compose environment metadata, chat, logs, or documentation.
 - The default model provisioning flow downloads the GGUF on the host into `data/models/` and verifies it against a tracked SHA256 value; the model container itself does not fetch weights at runtime.
 
 ## Logging Guidance
@@ -78,6 +78,28 @@ These controls reduce privacy leakage and resource abuse, but they are not a sub
 If `SEARCH_PROVIDER=yacy` is used, review YaCy's own peer-to-peer or network settings deliberately. It is supported as a replaceable search adapter, but its privacy posture depends on how the YaCy instance itself is configured.
 
 ## Defense In Depth
+
+### Verified search-only VPN controls (2026-09-09)
+
+- SearXNG shares Gluetun's namespace but has its own read-only resolver pinned
+  to `127.0.0.1`; the local DNS-over-TLS resolver uses Cloudflare through the VPN.
+- Gluetun uses its existing root identity because user creation needs writable
+  `/etc/passwd`; all capabilities except NET_ADMIN remain dropped. Only tmpfs
+  directories and a dedicated non-secret resolver file are writable. The
+  control API listens at namespace-local `127.0.0.1:8000`, not the Docker bridge.
+- Version checking is disabled. Gluetun still contacts its configured health,
+  DNS/blocklist, and public-IP services; these receive infrastructure requests,
+  not search strings. The manual egress check uses api.ipify.org, and the health
+  check resolves example.com. This is not a zero-third-party-contact design.
+- An actual VPN-stop drill blocked direct-IP HTTPS, direct public DNS, and IPv6
+  from SearXNG; recovery recreated the namespace-dependent services and passed
+  DNS/egress checks again. This is evidence for the tested configuration, not
+  a guarantee against every host/container compromise or future regression.
+- Windows Compose defaults and hidden startup helpers preserve VPN mode; the
+  local redirector has external fallback disabled. Validation is isolated in a
+  separate project, so it cannot inadvertently restore live direct egress.
+- Fetcher requests and browser clicks on result links remain outside this
+  search-only tunnel. Websites can therefore still see their normal egress IP.
 
 Docker internal networks reduce accidental reachability, but they are not a complete security boundary if a container is compromised. Recommended follow-up hardening:
 

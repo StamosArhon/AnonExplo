@@ -1,5 +1,6 @@
 .env
 .env.local
+data/proton/
 .venv/
 __pycache__/
 *.py[cod]

@@ -55,11 +55,28 @@ through the VPN.
 
 Use the Proton account dashboard to create a separate WireGuard configuration
 for this PC (`Downloads` -> `WireGuard configuration`). Do not reuse the
-homeserver's private key/configuration. Copy only the generated `PrivateKey`
-value into the untracked `.env`:
+homeserver's private key/configuration. Import the downloaded file (never paste
+its contents into chat or terminal commands):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/import-proton-wireguard.ps1 -ConfigPath <downloaded.conf>
+```
+
+The importer stores only the client key/address in `data/proton/wireguard/wg0.conf`,
+with Windows ACLs restricted to the current user, Administrators, and SYSTEM.
+It refuses to overwrite an existing key. An explicit `-BrowserImport` mode
+provides a one-use localhost form, guarded by a random path and same-origin
+POST checks, with no body logging or external assets. It expires after ten
+minutes and closes after success. Prefer file import when downloads work.
+Gluetun receives a read-only file mount, not a secret environment variable.
+Keep the downloaded original private or remove it after confirming import.
+
+Set these non-secret values in `.env` on Windows to keep plain Compose commands
+VPN-aware (the file separator is platform-specific):
 
 ```text
-PROTON_WIREGUARD_PRIVATE_KEY=<local Proton WireGuard PrivateKey>
+COMPOSE_FILE=docker-compose.yml;docker-compose.proton-search.yml
+COMPOSE_PROFILES=proton-search
 PROTON_SERVER_COUNTRIES=Switzerland
 ```
 
@@ -76,6 +93,28 @@ the direct route. Verify the profile before relying on it:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/check-proton-search.ps1
 ```
+
+Use `-TestKillSwitch` for a disruptive, bounded outage/recovery check. It stops
+only the VPN, checks direct IP HTTPS/DNS and IPv6 reachability, then recreates
+the base services plus VPN to reattach the network namespace. Do not run it
+during an active grounded answer. After a manual stop/restart, use
+`scripts/start-proton-search.ps1 -Recreate` for the same namespace recovery.
+The check contacts api.ipify.org from host/search to compare egress without
+printing the host IP. It does not certify provider retention or anonymity.
+
+SearXNG has a read-only resolver file pointing to `127.0.0.1`, so Docker's host
+DNS is not used for its lookups. Gluetun's DNS-over-TLS resolver uses Cloudflare
+through the tunnel; its own resolver file is the writable, non-secret
+`data/proton/resolv.conf`. Do not enable `DNS_KEEP_NAMESERVER`: in this pinned
+Gluetun version it disables the intended local resolver. VPN health requires
+both the tunnel healthcheck and a local DNS lookup to succeed.
+
+Run `scripts/setup-browser-search.ps1 -SkipBrowserConfiguration -NoDuckDuckGoFallback`
+to refresh existing hidden helpers. With a provisioned credential these helpers
+select VPN startup and disable direct external fallback. An explicit
+`-f docker-compose.yml` still selects the direct profile; do not use it for live
+startup once VPN mode is selected. Validation deliberately uses a separate
+`anonexplo-validation` project/ports, not the live namespace.
 
 If the check fails, inspect the VPN and SearXNG logs:
 

@@ -1,27 +1,18 @@
 param(
-    [switch]$Build
+    [switch]$Build,
+    [switch]$Recreate
 )
 
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$envPath = Join-Path $root ".env"
-
-if (-not (Test-Path -LiteralPath $envPath)) {
-    throw "Missing .env. Copy .env.example to .env and set PROTON_WIREGUARD_PRIVATE_KEY first."
+$credentialPath = Join-Path $root 'data\proton\wireguard\wg0.conf'
+if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) {
+    throw 'Import a separate Proton configuration using scripts/import-proton-wireguard.ps1 first. No direct fallback is started.'
 }
-
-$keyLine = Get-Content -LiteralPath $envPath |
-    Where-Object { $_ -match "^\s*PROTON_WIREGUARD_PRIVATE_KEY=(.+)$" } |
-    Select-Object -First 1
-
-if (-not $keyLine) {
-    throw "PROTON_WIREGUARD_PRIVATE_KEY is missing from .env. Generate a separate Proton WireGuard configuration for this PC."
-}
-
-$privateKey = ($keyLine -replace "^\s*PROTON_WIREGUARD_PRIVATE_KEY=", "").Trim()
-if (-not $privateKey -or $privateKey.StartsWith("replace-with-")) {
-    throw "PROTON_WIREGUARD_PRIVATE_KEY is still a placeholder. Generate a separate Proton WireGuard configuration for this PC."
+$resolverPath = Join-Path $root 'data\proton\resolv.conf'
+if (-not (Test-Path -LiteralPath $resolverPath)) {
+    Copy-Item -LiteralPath (Join-Path $root 'configs\searxng\resolv.vpn.conf') -Destination $resolverPath
 }
 
 Push-Location $root
@@ -30,12 +21,13 @@ try {
         "-f", "docker-compose.yml",
         "-f", "docker-compose.proton-search.yml",
         "--profile", "proton-search",
-        "up", "-d"
+        "up", "-d", "--wait", "--wait-timeout", "180"
     )
 
     if ($Build) {
         $composeArgs += "--build"
     }
+    if ($Recreate) { $composeArgs += '--force-recreate' }
 
     $composeArgs += @(
         "host-gateway",

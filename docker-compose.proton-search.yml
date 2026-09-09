@@ -15,21 +15,39 @@ services:
     environment:
       VPN_SERVICE_PROVIDER: protonvpn
       VPN_TYPE: wireguard
-      WIREGUARD_PRIVATE_KEY: ${PROTON_WIREGUARD_PRIVATE_KEY:-replace-with-local-proton-wireguard-private-key}
       SERVER_COUNTRIES: ${PROTON_SERVER_COUNTRIES:-Switzerland}
       FIREWALL_INPUT_PORTS: "8080"
+      # Gluetun manages the tunnel as root; avoid creating users on read-only /etc.
+      PUID: "0"
+      PGID: "0"
+      HTTP_CONTROL_SERVER_ADDRESS: "127.0.0.1:8000"
+      VERSION_INFORMATION: "off"
+      PUBLICIP_FILE: "/tmp/public-ip"
+    volumes:
+      - type: bind
+        source: ./data/proton/resolv.conf
+        target: /etc/resolv.conf
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./data/proton/wireguard/wg0.conf
+        target: /gluetun/wireguard/wg0.conf
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       core_internal: {}
       egress: {}
     read_only: true
     tmpfs:
       - /tmp
+      - /run
       - /gluetun
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O /dev/null https://api.ipify.org",
+          "/gluetun-entrypoint healthcheck && nslookup example.com 127.0.0.1 >/dev/null 2>&1",
         ]
       interval: 30s
       timeout: 10s
@@ -39,6 +57,8 @@ services:
   search-provider:
     network_mode: "service:search-vpn"
     networks: !reset []
+    volumes:
+      - ./configs/searxng/resolv.vpn.conf:/etc/resolv.conf:ro
     depends_on:
       search-vpn:
         condition: service_healthy

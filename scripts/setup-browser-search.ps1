@@ -94,8 +94,9 @@ function Write-LocalHelperFiles {
 
     New-Item -ItemType Directory -Force -Path $helperDir | Out-Null
 
-    $allowFallback = if ($NoDuckDuckGoFallback) { "false" } else { "true" }
-    $fallbackBase = if ($NoDuckDuckGoFallback) { "" } else { $duckDuckGoBaseUrl }
+    $vpnSelected = Test-Path -LiteralPath (Join-Path $root 'data\proton\wireguard\wg0.conf')
+    $allowFallback = if ($NoDuckDuckGoFallback -or $vpnSelected) { "false" } else { "true" }
+    $fallbackBase = if ($NoDuckDuckGoFallback -or $vpnSelected) { "" } else { $duckDuckGoBaseUrl }
 
     $redirectorTemplate = @'
 const http = require("node:http");
@@ -243,6 +244,12 @@ for ($i = 0; $i -lt 72; $i++) {
 
 if (-not $dockerReady) {
     exit 10
+}
+
+# A provisioned VPN must never be silently replaced with the direct profile.
+if (Test-Path -LiteralPath (Join-Path $repo 'data\proton\wireguard\wg0.conf')) {
+    & (Join-Path $repo 'scripts\start-proton-search.ps1')
+    exit $LASTEXITCODE
 }
 
 Set-PortOrFallback -Name "UI_PORT" -Preferred __PREFERRED_UI_PORT__ -Fallback __FALLBACK_UI_PORT__

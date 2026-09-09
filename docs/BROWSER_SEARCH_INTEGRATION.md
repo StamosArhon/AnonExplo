@@ -1,5 +1,16 @@
 # Browser Search Integration
 
+## Activated VPN profile (2026-09-09)
+
+This workstation now uses search-only Proton egress. Its local `.env` selects
+`docker-compose.yml` plus `docker-compose.proton-search.yml` and the
+`proton-search` profile. Generated hidden helpers use `start-proton-search.ps1`
+when the credential is provisioned and suppress external DuckDuckGo fallback.
+This supersedes the optional direct-fallback behavior described below for this
+workstation. Regenerate helpers with `-SkipBrowserConfiguration -NoDuckDuckGoFallback`
+without modifying browser profiles. After manually
+stopping the VPN, use `start-proton-search.ps1 -Recreate` to refresh clients.
+
 ## Purpose
 
 This runbook documents the Windows host pipeline used to make browser address-bar search use the repo-managed standalone SearXNG route, with an automatic DuckDuckGo fallback when the local SearXNG route is unavailable.

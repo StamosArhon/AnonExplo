@@ -47,7 +47,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Active Branch
 
-- `main`
+- `stamos/proton-search-activation`
 
 ## Completed Work
 
@@ -138,7 +138,69 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## In-Progress Work
 
-- None inside the repo contents. `stamos/search-engine-fallbacks` is merged, and the repo is back on the post-roadmap enhancement baseline on `main`.
+- No implementation work remains in the VPN activation scope. The validated
+  branch is `stamos/proton-search-activation`. Remote push/merge/cleanup are
+  blocked pending explicit destination approval after the tool safety review
+  rejected the combined commit/push command before execution. Local commit is
+  permitted; no remote publication or merge has been claimed.
+
+## Latest Operational Handoff (2026-09-09)
+
+- Created the user-approved `AnonExplo-PC` Proton WireGuard credential, separate
+  from the homeserver identity; expiry September 9, 2027. Imported only its
+  client key/address using a one-use localhost form after browser download was
+  not accessible to local tooling. No key was printed. The restricted file
+  `data/proton/wireguard/wg0.conf` is Git-ignored and mounted read-only; do not
+  store its contents in environment metadata or future handoff messages.
+- Activated search-only Proton egress with Switzerland selection. `.env`
+  selects both Compose files and `proton-search`; current host ports remain UI
+  3001, backend 8001, search 8085, browser redirector 8095. Six containers healthy.
+  Host routing and homeserver configuration are unchanged. Fetcher and clicked
+  browser result pages are still direct, not protected by this search tunnel.
+- Fixed live incompatibilities missed by static checks: Gluetun user creation
+  on read-only `/etc` (use existing root identity), runtime `/run` writes
+  (tmpfs), and its resolver/public-IP file writes (dedicated resolver bind and
+  `/tmp/public-ip`). Kept only NET_ADMIN, dropped other capabilities, retained
+  read-only roots, and bound the control API to namespace localhost.
+- SearXNG has an explicit read-only resolver pointing at `127.0.0.1`. Gluetun
+  DNS-over-TLS runs through the tunnel. Tried `DNS_KEEP_NAMESERVER=on` but
+  reverted it immediately after a live DNS check showed it disabled the
+  intended resolver. Final VPN health checks both tunnel health and local DNS.
+- Added secure importer, namespace/DNS/egress checks, optional outage drill,
+  and `-Recreate` recovery. First outage drill already blocked traffic, but its
+  DNS probe mishandled send-time `Network is unreachable`; corrected it and
+  the full drill/recovery passed. Direct-IP HTTPS, direct DNS, and IPv6 could
+  not bypass the stopped VPN. Restored stack passed the egress/DNS check.
+- Refreshed existing hidden startup helpers without touching browser profiles;
+  they preserve VPN mode and disable direct DuckDuckGo fallback. Scheduled-task
+  overwrite was denied, but existing tasks already pointed to the correct
+  hidden launchers; their helper files were updated and tasks started. The
+  startup task subsequently completed with result 0.
+- Live `behance` reproduction returned 28 Brave/Bing results and no reported
+  engine failures. Redirector returned a no-store 302 to local SearXNG, not an
+  external provider. This verifies one query/exit, not guaranteed future engine
+  availability or provider-side query non-retention. The orchestrator search
+  endpoint also returned eight results. A separate stopped-SearXNG test returned
+  local HTTP 503 with no Location header, confirming no external redirect.
+  Fetcher egress still matched host egress, and SearXNG was restarted afterward.
+- Validator now uses separate `anonexplo-validation` project and ports
+  13000/18000/18085. Builds, 51 backend and 19 fetcher tests, syntax checks,
+  Compose policies, and host smoke passed; optional GGUF probe skipped because
+  no model file is installed. Test containers were cleaned without affecting
+  the live VPN stack. Final rerun passed with stronger credential/DNS/control-API
+  mount policy checks and parsing of the changed PowerShell scripts.
+- No desktop installer/release is applicable to this Docker operational change.
+- Remote workflow blocker: origin resolves to
+  `https://github.com/StamosArhon/AnonExplo.git`, matching the previously
+  documented private project. Auto-review nevertheless required explicit
+  approval for the destination and tracked operational documentation. The
+  `gh` CLI is unavailable, so remote visibility could not be independently
+  rechecked with it. Push, merge into main, and branch cleanup remain pending;
+  the live VPN deployment is unaffected by this Git-only blocker.
+- Next milestone: reassess general engine coverage/quality over the VPN and
+  consider fetcher VPN coverage only with an explicit scope decision. Keep
+  provider privacy limitations visible; do not promise that VPNs prevent query
+  retention or eliminate rate limits.
 
 ## Open Questions / Blockers
 
@@ -229,6 +291,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Validation Status
 
+- `scripts/validate.ps1`: passed twice on 2026-09-09 for `stamos/proton-search-activation`, including the final credential/DNS/control-API policy and script syntax checks, builds, 51 backend tests, 19 fetcher tests, and localhost smoke. Optional model probe skipped (GGUF absent). Isolated validation cleanup preserved the active VPN stack. Live outage/recovery, no-external-redirect, egress separation, startup task, and search checks passed; see latest operational handoff above for transient issues corrected during activation.
 - `scripts/validate.ps1`: passed on 2026-08-30 during `stamos/search-engine-fallbacks`; Compose/config and hardening checks, repo-managed image builds, 51 backend tests, 19 fetcher tests, syntax checks, and base-stack smoke/localhost reachability all passed. The optional model-runtime probe remained skipped because the GGUF was not present. The validator cleaned up the temporary stack after completion.
 - `scripts/validate.ps1`: passed on 2026-08-30 during `stamos/proton-search-egress`; base Compose policy plus the Proton overlay configuration/security checks, repo-managed image builds, 51 backend tests, 19 fetcher tests, syntax checks, and base-stack smoke/localhost reachability all passed. The first sandboxed validator attempt could not access Docker's named pipe, so it was rerun with approved Docker access. The optional model-runtime probe remained skipped because the GGUF was not present. The Proton tunnel itself was not activated because no local WireGuard private key is configured yet.
 - Live container checks on 2026-08-30 during `stamos/search-engine-fallbacks`: the final browser-facing SearXNG route returned Bing results, and the backend search route returned a mixed Bing/Brave result set for `behance`; all five base-stack containers were healthy after the final reload. The candidate audit found Qwant access-denied, Mojeek and Google empty, and Yahoo protocol-failure responses, so those providers were excluded from the default profile.
@@ -307,7 +370,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Exact Next Steps
 
-1. If search-only VPN egress is desired, generate a separate Proton WireGuard configuration for this PC, put only its private key in `.env`, start `scripts/start-proton-search.ps1`, and verify with `scripts/check-proton-search.ps1`.
+1. Search-only Proton egress is now provisioned and active on this PC. Preserve the local Compose VPN selection and restricted key file. Use `scripts/check-proton-search.ps1` for verification and `-TestKillSwitch` only for a deliberate outage/recovery drill. Renew the dedicated credential before September 9, 2027.
 2. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
 3. Keep validating the current baseline against real live-news queries on the target hardware, especially large pages, slow publishers, and mixed multi-source questions.
 4. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
