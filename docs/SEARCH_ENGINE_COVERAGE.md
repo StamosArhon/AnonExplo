@@ -1,5 +1,18 @@
 # Search engine coverage: VPN audit, 2026-09-09
 
+## Native Browser Baseline (2026-09-10)
+
+The product is native SearXNG at localhost:8085, not the legacy backend.
+`test-browser-search.ps1` measures instance-default GET search without cookies
+or engine/category overrides, using six fixed public English/Greek fixtures.
+Browser-locale mode: 6/6 expected sites rank 1, no errors, mean 1.18s.
+Explicit-language mode: 6/6 rank 1, no errors, mean 1.19s. All queries had three
+contributing web engines. No engine weights or language defaults were changed.
+These are navigation proxies and sequential observations, not a broad relevance
+score, independent-index proof or controlled performance comparison. The suite
+does not inspect Brave's saved preferences/history. Stop on degradation and
+keep native suspensions; do not schedule tests or rotate exits automatically.
+
 ## Selected profile
 
 - General web: Brave, Bing, Yahoo; Wikipedia supplies info boxes.

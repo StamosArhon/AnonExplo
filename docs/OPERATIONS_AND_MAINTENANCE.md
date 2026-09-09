@@ -1,5 +1,23 @@
 # Operations And Maintenance
 
+## Browser Search Is The Current Product
+
+Use `start-proton-search.ps1` and `check-proton-search.ps1`, then open
+`http://127.0.0.1:8085`. The model and old workbench instructions below are
+legacy-only, not prerequisites for browser search. No external outage fallback.
+
+For manual relevance/availability samples use `test-browser-search.ps1`; this
+sends a small paced suite of public synthetic queries through the VPN. Do not
+schedule it or use private history. Container/root health alone does not prove
+that an upstream engine returns results. Native `/stats` provides local engine
+statistics; do not enable debug query logging for routine diagnosis.
+
+Search responses have no-store/no-referrer headers and search-vhost nginx errors
+are suppressed to avoid retaining URLs. A local 503 means check gateway/search/
+VPN health, not switch browsers to an external engine. Fixed-name Docker DNS
+refresh helps after address changes, but VPN namespace replacement still needs
+`start-proton-search.ps1 -Recreate`. Do not restart services to clear upstream bans.
+
 ## Purpose
 
 This guide covers the practical operator path for keeping the local AnonExplo stack healthy on a single workstation. It is intentionally focused on local-only usage, repeatable updates, and privacy-preserving troubleshooting.

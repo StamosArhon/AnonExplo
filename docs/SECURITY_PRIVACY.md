@@ -1,5 +1,31 @@
 # Security And Privacy
 
+## Current Browser-Search Product (2026-09-10)
+
+The native SearXNG UI at localhost:8085 is the product. Browser queries bypass
+the legacy chatbot/backend/fetcher. The deployed search service uses Proton
+WireGuard and VPN-local DNS; no automatic external-provider fallback is allowed.
+The old LLM/fetcher controls below remain relevant only to retained legacy code.
+
+- Autocomplete and remote favicon resolution are locked off; SearXNG image proxy
+  is locked on; query-in-title is locked off. Saved preferences cannot silently
+  override those four safeguards. Language/engines remain configurable.
+- Gateway search responses, including errors, carry `Cache-Control: no-store`
+  and `Referrer-Policy: no-referrer`. Access logs remain off; the search vhost
+  also suppresses nginx error logs because these can include full query URLs.
+  This sacrifices per-request proxy errors: use local status/HTTP checks instead.
+  Proxy result buffering/temp files are disabled and form bodies are bounded.
+- The gateway dynamically resolves only a fixed Docker service name, never a
+  user-supplied destination. Failure yields a local 503 with no provider redirect.
+- Images rendered through SearXNG's image proxy use its VPN egress. Image hosts
+  receive those requests. Result links and intentionally opened remote media
+  still use the browser's normal connection; no whole-browser VPN is implied.
+- Brave's GET query URLs may be stored in its history/sync. No-store does not
+  erase history. Upstreams see queries and may retain them. These controls do
+  not promise anonymity against identifying query content or host compromise.
+- Benchmarks use fixed public examples, not browser history. Only ids/counts/
+  rank proxies/latency are printed; no query-result database or remote NLP added.
+
 ## Threat Model
 
 This project assumes a local single-user workstation deployment. The main risks are:
@@ -18,7 +44,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - The bundled SearXNG web UI is reachable only through the localhost gateway; the search container itself is still not published directly to the host.
 - The default SearXNG profile uses a bounded curated multi-engine set (`brave`, `bing`, `yahoo`, plus specialized sources) and bounded upstream timeouts. Each upstream receives queries; Yahoo adds another recipient, not a guarantee of independent results or non-retention. DuckDuckGo web, Google web/news, Startpage, Mojeek, and Qwant are opt-in only. No search accounts or API keys were added.
 - Explicit backend engine selection omits SearXNG category parameters, which otherwise add category-default recipients. Clearing or widening `SEARCH_ENGINES` deliberately changes query exposure and availability variability. Existing browser preference cookies can override the instance defaults independently of the backend.
-- Optional browser address-bar integration should point browser profiles at a localhost-only redirector, not directly at SearXNG, when DuckDuckGo fallback is desired for local SearXNG outages.
+- Browser address-bar integration points directly at localhost SearXNG on 8085. External outage fallback is not allowed in the current product.
 - Repo-managed services run as non-root where practical.
 - Capabilities are dropped and `no-new-privileges` is enabled where practical.
 - Compose validation now checks expected network membership, localhost-only publication, digest-pinned third-party images, and local-only CORS origins before a branch is declared ready.
@@ -61,7 +87,7 @@ This project assumes a local single-user workstation deployment. The main risks 
 - Grounded-answer transcripts, fetched source details, and fetch-inspector output must remain non-persistent by default.
 - Because direct-chat history is now browser-local persistent state, the UI must keep explicit delete and purge controls, label that storage clearly as browser-local and device-local, and must not silently expand that storage to grounded searches or fetched page bodies.
 - If `MODEL_PROVIDER=ollama` is used, keep `MODEL_BASE_URL` on a local or otherwise trusted private endpoint; do not silently treat a hosted Ollama API as equivalent to a local runtime from a privacy perspective.
-- If the optional browser search redirector is configured with DuckDuckGo fallback, address-bar queries are sent to DuckDuckGo only when the local SearXNG route is unavailable. Disable or replace that fallback on devices that must never send browser search queries to an external provider.
+- The retained compatibility redirector must return a local 503 on outage; setup no longer offers automatic external fallback. This PC's previously generated helper already has fallback disabled.
 
 ## Fetcher Controls
 

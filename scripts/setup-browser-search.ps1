@@ -35,9 +35,8 @@ $configureScript = Join-Path $helperDir "configure-chromium-search.js"
 
 $searchName = "AnonExplo SearXNG"
 $searchKeyword = "searxng.local"
-$browserSearchUrl = "http://127.0.0.1:$RedirectorPort/search?q=%s"
+$browserSearchUrl = "http://127.0.0.1:$SearxngPort/search?q=%s"
 $searxngBaseUrl = "http://127.0.0.1:$SearxngPort"
-$duckDuckGoBaseUrl = "https://duckduckgo.com/"
 
 $startupTaskName = "AnonExplo SearXNG Startup"
 $redirectorTaskName = "AnonExplo Search Fallback Redirector"
@@ -94,9 +93,10 @@ function Write-LocalHelperFiles {
 
     New-Item -ItemType Directory -Force -Path $helperDir | Out-Null
 
-    $vpnSelected = Test-Path -LiteralPath (Join-Path $root 'data\proton\wireguard\wg0.conf')
-    $allowFallback = if ($NoDuckDuckGoFallback -or $vpnSelected) { "false" } else { "true" }
-    $fallbackBase = if ($NoDuckDuckGoFallback -or $vpnSelected) { "" } else { $duckDuckGoBaseUrl }
+    # Retain the old switch for compatibility; external fallback is never a
+    # default or an automatic recovery path for this privacy-focused product.
+    $allowFallback = "false"
+    $fallbackBase = ""
 
     $redirectorTemplate = @'
 const http = require("node:http");

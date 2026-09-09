@@ -1,0 +1,201 @@
+# Legacy Architecture (historical, superseded 2026-09-10)
+
+## Overview
+
+AnonExplo uses a local-first, privacy-first service layout:
+
+- `host-gateway`
+  - localhost-only reverse proxy that exposes the UI, backend, and optional standalone SearXNG UI to the host without putting those app services directly on a non-internal Docker network
+- `ui`
+  - local browser interface for prompts, browser-local direct chat history, modal settings, provider status, inline citation pills with hover tooltips, an on-demand source drawer for grounded answers, and separate direct/grounded/fetch workspaces
+- `backend`
+  - orchestrator that owns provider routing and exposes a stable local API
+- `model-backend`
+  - isolated local inference runtime
+- `search-provider`
+  - anonymized search service, default example SearXNG
+- `fetcher`
+  - page fetch and read pipeline that turns URLs into readable text
+
+## Service Boundaries
+
+The UI must only talk to the backend. The backend may talk to the model backend, search provider, and fetcher. The model backend should never need direct internet access.
+
+## Network Topology
+
+```mermaid
+flowchart LR
+    User["Local Browser"] --> Gateway["Host Gateway (127.0.0.1)"]
+    Gateway --> UIService["UI Service (internal)"]
+    Gateway --> Backend["Backend (localhost via gateway)"]
+    Gateway --> SearchUI["SearXNG Web UI (localhost via gateway)"]
+    Backend --> Model["Model Backend (internal only)"]
+    Backend --> Search["Search Provider"]
+    Backend --> Fetcher["Fetcher / Reader"]
+    Search --> Internet["Internet"]
+    Fetcher --> Internet
+```
+
+The optional `docker-compose.proton-search.yml` overlay inserts a local
+Proton WireGuard gateway only for the search path:
+
+```mermaid
+flowchart LR
+    Backend["Backend"] --> Search["SearXNG / search-provider"]
+    Search -. "shared network namespace" .-> VPN["search-vpn"]
+    VPN --> Proton["Proton VPN"]
+    Proton --> Internet["Search engines"]
+    UI["UI and browser"] --> Gateway["Host Gateway"]
+    Gateway --> Backend
+```
+
+The overlay does not change the host's default route. It changes only the
+outbound path used by `search-provider`; the UI, backend, fetcher, model
+runtime, browser, and other host applications keep their normal networking.
+
+The activated Windows profile selects both Compose files through the local
+`.env`. The search namespace uses a read-only, Git-ignored WireGuard key file;
+SearXNG's separate `/etc/resolv.conf` is pinned to Gluetun's local encrypted-DNS
+forwarder. Gluetun has a dedicated writable resolver file and tmpfs directories,
+and its control API is namespace-local. Startup helpers select VPN mode when
+the credential is provisioned and disable browser direct-provider fallback.
+Validation uses a separate project and ports; VPN-stop testing explicitly
+recreates namespace clients during recovery.
+
+## Docker Networks
+
+- `core_internal`
+  - internal bridge network for host-gateway, UI, backend, fetcher, and search-provider coordination
+- `host_access`
+  - non-internal bridge used only by the localhost reverse proxy so Docker Desktop can publish `127.0.0.1` ports reliably on the host
+- `model_internal`
+  - internal bridge network reserved for backend to model-runtime traffic
+- `egress`
+  - bridge network only for services that must reach the public internet
+
+### Default network membership
+
+- host-gateway:
+  - `host_access`
+  - `core_internal`
+- UI:
+  - `core_internal`
+- backend:
+  - `core_internal`
+  - `model_internal`
+- fetcher:
+  - `core_internal`
+  - `egress`
+- search-provider:
+  - `core_internal`
+  - `egress`
+- search-vpn (optional `proton-search` overlay):
+  - `core_internal`
+  - `egress`
+  - `search-provider` shares this service's network namespace when the overlay is active
+- model-backend:
+  - `model_internal`
+
+## Provider Abstraction Strategy
+
+The backend uses environment-driven provider selection:
+
+- model:
+  - `MODEL_PROVIDER`
+  - `MODEL_BASE_URL`
+  - `MODEL_NAME`
+- search:
+  - `SEARCH_PROVIDER`
+  - `SEARCH_BASE_URL`
+  - `SEARCH_CATEGORIES`
+  - `SEARCH_LANGUAGE`
+  - `SEARCH_TIME_RANGE`
+  - `SEARCH_ENGINES`
+  - `SEARCH_PREFERRED_DOMAINS`
+  - `SEARCH_PREFERRED_DOMAIN_BOOST`
+  - `GROUNDING_QUERY_EXPANSION_ENABLED`
+  - `GROUNDING_MAX_QUERY_VARIANTS`
+- fetch:
+- `FETCH_BASE_URL`
+  - `FETCH_WIKIMEDIA_API_ENABLED`
+  - `FETCH_WIKIMEDIA_API_USER_AGENT`
+
+The current code includes:
+
+- a localhost-only reverse proxy in front of the UI, backend, and optional standalone SearXNG host ports
+- an OpenAI-compatible model adapter
+- a native Ollama model adapter
+- a SearXNG search adapter
+- a YaCy search adapter
+- a fetcher client that calls the internal fetch service
+- an opt-in Wikimedia Parse API path for supported Wikimedia-hosted article URLs
+- a grounded-answer path that composes bounded source context before calling the model
+- a runtime-readiness probe that distinguishes configuration from live model availability
+- structured fetcher error propagation so the backend and UI can distinguish blocked, rate-limited, thin-content, and generic fetch failures
+
+This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
+The SearXNG adapter sends either an explicit engine list or category selection,
+never both: SearXNG unions these parameters, which would otherwise widen the
+recipient set. Adaptive routing still filters news engines from ordinary
+queries. General defaults are Brave, Bing, Yahoo, and Wikipedia; news defaults
+are Brave News, DuckDuckGo News, and Reuters. Science engines remain selected
+through their category or explicit names. The tested image and opt-in candidates
+are recorded in `docs/SEARCH_ENGINE_COVERAGE.md`.
+
+Local `query_text.py` heuristics detect Greek for backend requests only when no
+explicit language is pinned. Matching retains Unicode letters and folds accents,
+case, and sigma forms without changing outbound query text. English/Greek
+question clauses separated by conjunctions or question punctuation share the
+existing maximum-three-query budget. Quoted/operator queries and detected
+pronoun-dependent clauses are not expanded. Source selection seeds relevant
+coverage for independent parts while preferring distinct domains; excerpts and
+source/snippet text budgets reserve room for later parts. These are deterministic
+heuristics, not translation, full morphology, or guaranteed semantic coverage.
+
+The backend also no longer hard-depends on a Compose service literally named `search-provider`, so `SEARCH_BASE_URL` can point at any reachable internal or local search service that matches one of the supported adapters.
+The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` service rather than from direct publishing on internal-only app containers, because Docker Desktop did not reliably expose those ports when the services were attached only to `internal: true` networks. That same gateway also provides an optional browser path to the bundled SearXNG service, so standalone search and LLM-grounded search can coexist without changing the internal network shape.
+Optional browser address-bar integration is a host-level operator setup implemented by `scripts/setup-browser-search.ps1` and documented in `docs/BROWSER_SEARCH_INTEGRATION.md`. It keeps the repo-managed SearXNG route on `127.0.0.1:8085` and points browser profiles at a separate localhost redirector on `127.0.0.1:8095` when DuckDuckGo fallback is desired. The Windows startup pieces use hidden launchers so the redirector is not tied to a visible terminal and Docker Desktop is started through `docker desktop start --detach` rather than by foreground-launching the dashboard.
+The validation path now treats that network and exposure model as enforceable policy: only the gateway may publish host ports, third-party runtime images stay digest-pinned by default, and the expected service-to-network memberships are checked before a branch is declared ready. The backend route on the localhost gateway also now allows longer-lived grounded requests so search-plus-fetch-plus-model calls do not get cut off at the proxy first.
+
+## Data Flow
+
+### Plain prompt flow
+
+1. UI sends a prompt to the backend.
+2. UI may include direct-chat-specific saved instructions from the browser-local settings modal.
+3. UI may include a request-level model selection sourced from the runtime-advertised model list.
+4. Backend validates that selection against the runtime when possible and forwards the request to the model adapter.
+5. Backend returns the model response plus selection metadata to the UI.
+6. The browser may present that exchange inside a local conversation-style shell and persist direct-chat history locally in browser storage on the same device only, with explicit delete and purge controls.
+7. Direct Chat intentionally does not call the search provider or fetcher.
+
+### Grounded search flow
+
+1. UI submits a grounding query to the backend.
+2. UI may include grounded-answer-specific saved instructions plus default search and fetch limits from the browser-local settings modal.
+3. Backend calls the configured search provider with env-driven search tuning such as adaptive categories, language, and optional time-range or engine filters. Clearly multi-part questions may be sent as a bounded set of parallel query variants, with the original query retained for broad coverage.
+4. Backend deduplicates results, ranks unique candidates by query relevance while preserving domain diversity, and can apply a modest config-driven preferred-domain bias before selecting the initial fetch batch.
+5. Backend calls the fetcher service for readable page text, classifies thin or blocked fetch outcomes explicitly, and keeps trying later-ranked sources when earlier fetches fail.
+6. When explicitly enabled, the fetcher may use the official Wikimedia Parse API for supported Wikimedia article URLs instead of the default direct HTML request path.
+7. Backend packages bounded fetched source text when available, or bounded search-result snippets when fetches fail but search material still exists.
+8. Backend marks the grounding bundle with an explicit `context_mode` so the UI and future services can distinguish fetched article text from snippet fallback.
+9. Backend can return the grounding bundle directly or use it to call the selected model through the configured model adapter for a grounded answer.
+10. UI shows the grounded answer with inline citation pills, a retractable source drawer, the selected or attempted sources, the current grounding mode, and any per-source fetch failures.
+11. Grounded-answer transcripts and source bundles remain transient in the current tab rather than persistent browser storage.
+
+When the optional Proton search overlay is active, steps 3 and the standalone
+SearXNG browser path still terminate at the same local `search-provider`
+service, but its public egress is supplied by the `search-vpn` WireGuard
+gateway. This changes the source IP visible to upstream search engines; it
+does not prevent those engines from receiving or potentially retaining the
+plaintext query.
+
+## Why The Fetcher Is Separate
+
+Search snippets alone are not enough. The fetcher exists so the system can retrieve, parse, and normalize article text without giving the model backend internet access.
+The current fetcher pass also classifies thin extractions so the backend can reject paywall-shell or otherwise low-value pages instead of pretending they are usable grounding context. The deliberate steady-state design remains direct HTML fetches plus explicit snippet fallback, with one explicit exception: operators may opt into the official Wikimedia Parse API for supported Wikimedia article URLs by configuring the fetcher accordingly. No third-party reader proxy or hidden publisher-specific bypass is bundled.
+The preferred-domain ranking bias lives in the backend's source-selection stage, not in the fetcher. It is meant to improve selection of already-returned trusted domains such as Wikipedia or Wikimedia without forcing a provider-specific search mode.
+
+## First Runtime Profile
+
+The first concrete local runtime profile is `llama.cpp` in CUDA server mode, exposed as an OpenAI-compatible endpoint. The Compose profile now sets an explicit alias for the configured model name so the runtime, backend, and UI share the same stable identifier. See `docs/LLAMA_CPP_RUNTIME_PROFILE.md` for the pinned image, the default GGUF source and checksum, and the provisioning and validation flow.

@@ -23,6 +23,7 @@ general:
 
 search:
   autocomplete: ""
+  favicon_resolver: ""
   default_lang: "auto"
   safe_search: 0
   formats:
@@ -32,6 +33,19 @@ search:
 server:
   limiter: false
   public_instance: false
+  image_proxy: true
+
+ui:
+  query_in_title: false
+
+# Do not let old browser cookies re-enable auxiliary third-party requests.
+# Language, engines, categories and appearance remain user-selectable.
+preferences:
+  lock:
+    - autocomplete
+    - favicon_resolver
+    - image_proxy
+    - query_in_title
 
 # Keep the local instance responsive with a focused general/news/research
 # catalogue. Individual engine overrides below can be adjusted without

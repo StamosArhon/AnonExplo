@@ -1,5 +1,28 @@
 # Instructions And Notes
 
+## Current Product Rules (2026-09-10; supersede legacy notes below)
+
+- SearXNG itself at localhost:8085 is the UI and Brave's direct search endpoint.
+  Do not change Brave to 8095 or build a replacement dashboard by default.
+- Native settings.yml and SearXNG preferences control browser search. Backend
+  SEARCH_/GROUNDING_ tuning has no effect on that native result list.
+- Keep account-free search through Proton, VPN-local DNS and no external fallback.
+  Engine cooldowns remain enabled; do not rotate exits or clear bans to retry.
+- Native privacy locks prevent saved cookies enabling autocomplete/favicons,
+  disabling the image proxy, or exposing the query in page titles. Engine,
+  language, SafeSearch and appearance controls remain user-selectable.
+- GET URLs can remain in Brave history/sync even with no-store. Never claim
+  no-retention guarantees for browser history or upstream search providers.
+- Use test-browser-search.ps1 for manual, paced public-fixture metrics on the
+  actual endpoint. Browser mode uses a fixed English Accept-Language header
+  and no cookies, not the user's private browser state. Explicit mode hints
+  each fixture's language; compare evidence before changing global defaults.
+- Never schedule provider searches without authorization. Keep deterministic
+  validation offline with respect to search queries. Preserve user data.
+- Legacy services currently remain running; making them opt-in is the next
+  deployment milestone. Model provisioning is not a current next step.
+- Historical LLM implementation advice below applies only to legacy components.
+
 ## Coding Standards
 
 - Keep services small and explicit.
@@ -97,7 +120,7 @@
 - Do not reintroduce a backend orchestration dependency on one hard-coded search service name; provider switching should remain env-driven at the backend boundary.
 - Keep the host-facing UI and backend access path behind the dedicated localhost gateway unless there is a documented reason to publish app containers directly.
 - If the bundled SearXNG web UI is exposed for standalone use, route it through the same localhost gateway rather than publishing the search container directly.
-- If a machine configures Brave, Helium, or another Chromium-family browser to use bundled SearXNG from the address bar, prefer `scripts/setup-browser-search.ps1` and follow `docs/BROWSER_SEARCH_INTEGRATION.md`: browsers should point at the local fallback redirector on `127.0.0.1:8095`, not directly at `127.0.0.1:8085`, and Brave should be verified to show `AnonExplo SearXNG (Default)` because adding the engine alone may not make it the active default.
+- Browser setup now selects direct `127.0.0.1:8085/search?q=%s` and disables external fallback. Verify the intended profile shows `AnonExplo SearXNG (Default)`; do not edit profiles merely to refresh startup helpers.
 - Browser-search startup must stay non-disruptive: use hidden VBS launchers for the redirector and stack starter, and use `docker desktop start --detach` rather than foreground-launching `Docker Desktop.exe`.
 - Future branches should prefer expanding functionality through adapters and configuration rather than adding direct service-to-service coupling.
 - `scripts/validate.ps1` now enforces the intended Compose hardening model, including localhost-only publication, expected network membership, digest-pinned third-party images, and local-only CORS origins.

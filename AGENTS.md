@@ -64,14 +64,24 @@ If a remote is missing or remote operations fail, record that explicitly in the 
 
 ## Repo Conventions
 
+- AnonExplo is a SearXNG browser-search product, not an LLM product. The native
+  SearXNG UI at `127.0.0.1:8085` is the user interface; Brave uses
+  `/search?q=%s` directly. Preserve that endpoint and VPN-only search egress.
+- Do not add a replacement UI, local model, query history, or hidden query
+  expansion without a demonstrated need and a separately scoped decision.
+- Tune browser results in SearXNG, not the legacy backend. Preserve engine
+  cooldowns and use synthetic manual tests rather than user history.
 - Favor config-driven provider selection instead of hard-coding one model backend or one search provider.
-- The UI talks only to the orchestrator.
+- Only the legacy chatbot UI talks to the orchestrator; native SearXNG does not.
 - Search and page-fetching remain separate concerns even when the backend offers a combined grounding endpoint.
 - Prefer exact dependency versions where practical.
 - Use repo-managed scripts for repeatable setup and validation.
 
 ## Useful Commands
 
+- Start the configured private browser search: `powershell -ExecutionPolicy Bypass -File scripts/start-proton-search.ps1`
+- Check VPN search isolation: `powershell -ExecutionPolicy Bypass -File scripts/check-proton-search.ps1`
+- Manual synthetic browser benchmark: `powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1`
 - Bootstrap local files: `powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1`
 - Check the running local stack: `powershell -ExecutionPolicy Bypass -File scripts/ops-check.ps1`
 - Provision the default GGUF locally: `powershell -ExecutionPolicy Bypass -File scripts/provision-default-model.ps1`

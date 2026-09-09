@@ -439,11 +439,15 @@ try {
     Write-Host "Checking Proton search overlay policy..."
     Assert-ProtonSearchComposePolicy -ComposeConfig $protonSearchComposeConfig
 
-    foreach ($scriptName in @('import-proton-wireguard.ps1', 'start-proton-search.ps1', 'check-proton-search.ps1', 'setup-browser-search.ps1', 'test-search-coverage.ps1')) {
+    foreach ($scriptName in @('import-proton-wireguard.ps1', 'start-proton-search.ps1', 'check-proton-search.ps1', 'setup-browser-search.ps1', 'test-search-coverage.ps1', 'test-browser-search.ps1')) {
         $parseErrors = $null; $parseTokens = $null
         [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $scriptName), [ref]$parseTokens, [ref]$parseErrors) | Out-Null
         if ($parseErrors.Count) { throw "PowerShell syntax validation failed: $scriptName" }
     }
+
+    Write-Host "Testing browser benchmark helpers (offline)..."
+    python -m unittest discover -s scripts/tests -p "test_*.py"
+    if ($LASTEXITCODE -ne 0) { throw "Browser benchmark helper tests failed." }
 
     Write-Host "Building repo-managed images..."
     docker compose build ui backend fetcher
@@ -528,6 +532,16 @@ try {
         throw "SearXNG was not reachable on the Windows host at http://127.0.0.1:$searxngUiPort/."
     }
 
+    Write-Host "Checking browser-route privacy settings (no upstream searches)..."
+    Get-Content -Raw (Join-Path $PSScriptRoot 'check-search-settings.py') | docker compose exec -T search-provider /usr/local/searxng/.venv/bin/python -
+    if ($LASTEXITCODE -ne 0) { throw 'SearXNG privacy setting regression.' }
+    foreach ($path in @('/', '/preferences', '/config')) {
+        $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$searxngUiPort$path" -TimeoutSec 15
+        if ($response.Headers['Cache-Control'] -ne 'no-store' -or $response.Headers['Referrer-Policy'] -ne 'no-referrer') {
+            throw 'Browser search privacy headers missing.'
+        }
+    }
+
     Write-Host "Checking loaded SearXNG catalogue and backend selectors (no upstream searches)..."
     $searchCatalog = Invoke-RestMethod -Uri "http://127.0.0.1:$searxngUiPort/config" -TimeoutSec 10
     $enabledGeneral = @($searchCatalog.engines | Where-Object { $_.enabled -and 'general' -in $_.categories } | ForEach-Object { $_.name })
@@ -542,6 +556,30 @@ try {
             throw "Backend selector references an unloaded search engine: $engine"
         }
     }
+
+    Write-Host 'Testing isolated search outage and recovery without external fallback...'
+    $gatewayBefore = docker compose ps -q host-gateway
+    try {
+        docker compose stop search-provider
+        if ($LASTEXITCODE -ne 0) { throw 'Could not stop isolated search for outage test.' }
+        $outage = $null
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$searxngUiPort/" -TimeoutSec 15 -MaximumRedirection 0 | Out-Null
+        } catch {
+            $outage = $_.Exception.Response
+        }
+        if (-not $outage -or [int]$outage.StatusCode -ne 503 -or $outage.Headers['Location']) {
+            throw 'Search outage did not fail locally with HTTP 503 and no redirect.'
+        }
+        if ($outage.Headers['Cache-Control'] -ne 'no-store' -or $outage.Headers['Referrer-Policy'] -ne 'no-referrer') {
+            throw 'Search outage response lacked privacy headers.'
+        }
+    } finally {
+        docker compose up -d --no-deps --wait --wait-timeout 90 search-provider
+        if ($LASTEXITCODE -ne 0) { throw 'Isolated search recovery failed.' }
+    }
+    if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$searxngUiPort/")) { throw 'Search did not recover.' }
+    if ((docker compose ps -q host-gateway) -ne $gatewayBefore) { throw 'Gateway unexpectedly replaced during recovery test.' }
 
     $modelFileName = Get-EnvValue -Key "MODEL_FILE_NAME" -DefaultValue "Qwen2.5-7B-Instruct.Q4_K_M.gguf"
     $expectedModelSha = (Get-EnvValue -Key "MODEL_FILE_SHA256").ToLowerInvariant()
