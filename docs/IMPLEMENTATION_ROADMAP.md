@@ -24,6 +24,9 @@ claim that backend language/ranking improvements affect SearXNG's native UI.
 ## Branch Handoff And Scope
 
 - Implementation branch: `stamos/browser-search-baseline`; verified handoff target: `main`.
+- Implementation commit `f48458b` was pushed successfully to origin; the final
+  documentation closeout accompanies the reviewed fast-forward merge/cleanup.
+  No remote blocker remains. Resume future implementation from updated main.
 - Scope: direct browser route privacy/recovery, native preference safeguards,
   synthetic browser-path benchmark, and documentation rebaseline.
 - No new providers/accounts, no model downloads, no browser profile/cookie edits,
@@ -108,11 +111,9 @@ claim that backend language/ranking improvements affect SearXNG's native UI.
 ## Exact Next Steps
 
 1. Preserve port 8085, privacy safeguards, engine choices and the VPN profile.
-2. Complete reviewed branch publication/merge/cleanup; Git history records remote
-   publication. No installer/release-hub artifact applies to this Docker change.
-3. Recommend `search-only-deployment`; ask before starting another scope. Keep
+2. Recommend `search-only-deployment`; ask before starting another scope. Keep
    legacy data/code while removing unnecessary default service dependencies.
-4. Later quality work needs richer informational/news fixtures and manual
+3. Later quality work needs richer informational/news fixtures and manual
    judgements, not global language/weight changes based on six navigation cases.
 
 ## Continuity
