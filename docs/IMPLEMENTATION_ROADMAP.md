@@ -25,8 +25,11 @@ or cached Docker images are deleted by this migration.
 
 ## Current Relevance And Coverage Scope (2026-09-10)
 
-- Branch: stamos/relevance-and-coverage, from clean main 3e2fc4e. User authorized
-  broader informational/news evaluation and evidence-backed tuning.
+- Completed scope: stamos/relevance-and-coverage, from clean main 3e2fc4e.
+  User authorized broader informational/news evaluation and evidence-backed tuning.
+- Implementation commit ec13674 was pushed to origin. This documentation closeout
+  accompanies the reviewed fast-forward main merge and branch cleanup. Resume
+  future implementation from updated main; no remote blocker remains.
 - Extended manual browser benchmark: six navigation, six informational and four
   news fixtures; separate Anytime/month cases, language comparison, explicit
   single-engine diagnostics, recipient/filter eligibility and freshness metadata.
@@ -71,9 +74,9 @@ or cached Docker images are deleted by this migration.
   expected sites rank 1, three contributors each, zero engine errors, mean 1.71s
   (one request 3.98s). No claim of a latency improvement. Live ops passed: three
   healthy services, unchanged localhost 8085, VPN namespace/DNS/distinct egress.
-- Implementation and validation complete; prepared for reviewed publication and
-  main merge/branch cleanup. No release artifact applies to local settings-only
-  deployment. Follow-up must start from updated main, not reuse this branch.
+- Implementation, validation and live settings deployment complete. No release
+  artifact applies to local settings-only deployment. Follow-up must start from
+  updated main, not reuse this completed branch.
 
 ## Previous Removal Scope (2026-09-10, historical)
 
