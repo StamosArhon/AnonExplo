@@ -439,7 +439,7 @@ try {
     Write-Host "Checking Proton search overlay policy..."
     Assert-ProtonSearchComposePolicy -ComposeConfig $protonSearchComposeConfig
 
-    foreach ($scriptName in @('import-proton-wireguard.ps1', 'start-proton-search.ps1', 'check-proton-search.ps1', 'setup-browser-search.ps1')) {
+    foreach ($scriptName in @('import-proton-wireguard.ps1', 'start-proton-search.ps1', 'check-proton-search.ps1', 'setup-browser-search.ps1', 'test-search-coverage.ps1')) {
         $parseErrors = $null; $parseTokens = $null
         [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $scriptName), [ref]$parseTokens, [ref]$parseErrors) | Out-Null
         if ($parseErrors.Count) { throw "PowerShell syntax validation failed: $scriptName" }
@@ -526,6 +526,21 @@ try {
     if (-not (Test-HostHttpEndpoint -Url "http://127.0.0.1:$searxngUiPort/")) {
         docker compose logs host-gateway search-provider
         throw "SearXNG was not reachable on the Windows host at http://127.0.0.1:$searxngUiPort/."
+    }
+
+    Write-Host "Checking loaded SearXNG catalogue and backend selectors (no upstream searches)..."
+    $searchCatalog = Invoke-RestMethod -Uri "http://127.0.0.1:$searxngUiPort/config" -TimeoutSec 10
+    $enabledGeneral = @($searchCatalog.engines | Where-Object { $_.enabled -and 'general' -in $_.categories } | ForEach-Object { $_.name })
+    $enabledNews = @($searchCatalog.engines | Where-Object { $_.enabled -and 'news' -in $_.categories } | ForEach-Object { $_.name })
+    $enabledScience = @($searchCatalog.engines | Where-Object { $_.enabled -and 'science' -in $_.categories } | ForEach-Object { $_.name })
+    Assert-SetEquality -Label 'Enabled general engines' -Actual $enabledGeneral -Expected @('brave', 'bing', 'yahoo', 'wikipedia')
+    Assert-SetEquality -Label 'Enabled news engines' -Actual $enabledNews -Expected @('brave.news', 'duckduckgo news', 'reuters')
+    Assert-SetEquality -Label 'Enabled science engines' -Actual $enabledScience -Expected @('arxiv', 'pubmed', 'crossref')
+    $selector = Get-EnvValue -Key 'SEARCH_ENGINES'
+    foreach ($engine in ($selector -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+        if ($engine -notin @($searchCatalog.engines | ForEach-Object { $_.name })) {
+            throw "Backend selector references an unloaded search engine: $engine"
+        }
     }
 
     $modelFileName = Get-EnvValue -Key "MODEL_FILE_NAME" -DefaultValue "Qwen2.5-7B-Instruct.Q4_K_M.gguf"

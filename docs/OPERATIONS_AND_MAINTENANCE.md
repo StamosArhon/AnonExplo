@@ -144,9 +144,11 @@ Reference material: [Proton WireGuard configuration instructions](https://proton
 ## Search Quality Tuning
 
 The default profile uses `SEARCH_CATEGORIES=auto`: ordinary questions use
-`general` plus the configured general engines (`brave` and `bing`),
-while current or news-like questions use `general,news` and add the
-configured news engines. It also uses a bounded curated engine list and can
+the configured general engines (`brave`, `bing`, `yahoo`, and Wikipedia),
+while current or news-like questions add Brave News, DuckDuckGo News, and
+Reuters. Explicit engine lists take precedence over categories; when no engines
+are specified, ordinary/current queries use `general`/`general,news` respectively.
+It also uses a bounded curated engine list and can
 issue up to three SearXNG queries
 for a clearly multi-part grounded question. The original full question is
 always retained, and failed variants are reported as partial search issues.
@@ -163,6 +165,15 @@ The main operator knobs are in `.env`:
   `month`, or `year` for recency-sensitive searches.
 - `GROUNDING_MAX_QUERY_VARIANTS`: lower to `1` to disable fan-out, or keep the
   default `3` for compound questions.
+
+See [the VPN engine audit](SEARCH_ENGINE_COVERAGE.md) for tested image versions,
+engine outcomes, manual coverage checks, and rollback. Google and DuckDuckGo
+web remain visible in SearXNG Preferences but are disabled by default; enabling
+them opts into their observed availability problems. Preference cookies from
+older sessions can override the new defaults. For science in the backend, use
+explicit science engine names or clear `SEARCH_ENGINES` and select the science
+category. Time-range/language support varies by engine; do not impose a global
+recency limit on ordinary navigational searches.
 
 After changing `.env` or `configs/searxng/settings.yml`, recreate the affected
 services so the settings are loaded:

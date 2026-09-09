@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     search_language: str = Field(default="", validation_alias="SEARCH_LANGUAGE")
     search_time_range: str = Field(default="", validation_alias="SEARCH_TIME_RANGE")
     search_engines: str = Field(
-        default="brave,wikipedia,duckduckgo news,google news,reuters",
+        default="brave,bing,yahoo,wikipedia,brave.news,duckduckgo news,reuters",
         validation_alias="SEARCH_ENGINES",
     )
     search_preferred_domains: str = Field(

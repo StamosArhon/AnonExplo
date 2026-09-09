@@ -133,7 +133,7 @@ class BackendApiTests(unittest.TestCase):
         self.assertEqual(payload["search"]["time_range"], "none")
         self.assertEqual(
             payload["search"]["engines"],
-            "brave,bing,wikipedia,duckduckgo news,google news,reuters",
+            "brave,bing,yahoo,wikipedia,brave.news,duckduckgo news,reuters",
         )
         self.assertEqual(payload["search"]["preferred_domains"], "wikipedia.org,wikimedia.org")
         self.assertEqual(payload["search"]["preferred_domain_boost"], 14.0)
@@ -1805,6 +1805,14 @@ class GroundingPipelineTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
+    def test_default_search_engines_include_curated_general_and_news_sources(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            settings = Settings(_env_file=None)
+        self.assertEqual(
+            settings.search_engines,
+            "brave,bing,yahoo,wikipedia,brave.news,duckduckgo news,reuters",
+        )
+
     async def test_searxng_auto_categories_separate_ordinary_and_current_queries(self) -> None:
         provider = SearxngSearchProvider(
             base_url="http://search-provider:8080",
@@ -1857,19 +1865,21 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
             categories="auto",
             language="",
             time_range="",
-            engines="brave,wikipedia,duckduckgo news,google news,reuters",
+            engines="brave,bing,yahoo,wikipedia,brave.news,duckduckgo news,reuters",
             timeout_seconds=20,
         )
 
         with patch("app.providers.httpx.AsyncClient", return_value=client):
             await provider.search("What is local inference?", 8)
-            self.assertEqual(client.last_get_params["engines"], "brave,wikipedia")
+            self.assertEqual(client.last_get_params["engines"], "brave,bing,yahoo,wikipedia")
+            self.assertNotIn("categories", client.last_get_params)
 
             await provider.search("What is the current state of the ceasefire?", 8)
             self.assertEqual(
                 client.last_get_params["engines"],
-                "brave,wikipedia,duckduckgo news,google news,reuters",
+                "brave,bing,yahoo,wikipedia,brave.news,duckduckgo news,reuters",
             )
+            self.assertNotIn("categories", client.last_get_params)
 
     async def test_searxng_reports_unresponsive_engines_when_no_results_are_usable(self) -> None:
         provider = SearxngSearchProvider(
@@ -1925,7 +1935,7 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
             results = await provider.search("privacy", 5)
 
         self.assertEqual(len(results), 1)
-        self.assertEqual(client.last_get_params["categories"], "general,news")
+        self.assertNotIn("categories", client.last_get_params)
         self.assertEqual(client.last_get_params["language"], "all")
         self.assertEqual(client.last_get_params["time_range"], "month")
         self.assertEqual(client.last_get_params["engines"], "duckduckgo,wikipedia")

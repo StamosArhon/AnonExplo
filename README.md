@@ -185,10 +185,19 @@ The repo treats provider choice as configuration:
   - `FETCH_WIKIMEDIA_API_USER_AGENT`
 
 The default general-search engine set is deliberately multi-engine:
-`brave` and `bing`. News and research engines are added for matching
-categories. Each enabled upstream receives the search query, so adding more
-engines improves resilience at the cost of more outbound exposure and request
-latency.
+`brave`, `bing`, and `yahoo`, with Wikipedia info boxes. News uses
+`brave.news`, `duckduckgo news`, and `reuters`; Science offers arXiv, PubMed,
+and Crossref. DuckDuckGo web, Google web/news, Startpage, Mojeek, and Qwant
+remain available but disabled by default after empty, intermittent, or denied
+responses in the VPN audit. Existing SearXNG preference cookies can override
+instance defaults; review the local `/preferences` engine selections if needed.
+Each upstream receives the query; more engines increase exposure and latency,
+not guaranteed relevance. See [engine coverage and tests](docs/SEARCH_ENGINE_COVERAGE.md).
+
+Explicit `SEARCH_ENGINES` takes precedence over categories so SearXNG cannot
+silently add category-default recipients. With `SEARCH_CATEGORIES=auto`, news
+names are removed for ordinary queries. An empty `SEARCH_ENGINES` lets category
+defaults apply. The SearXNG image is pinned to the tested September 8, 2026 build.
 
 The current implementation supports these provider adapters:
 

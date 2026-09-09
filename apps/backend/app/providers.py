@@ -501,13 +501,15 @@ class SearxngSearchProvider:
             "pageno": 1,
         }
         categories = self._categories_for_query(query)
-        if categories:
+        engines = self._engines_for_query(query)
+        # SearXNG unions categories with explicit engines; sending both would
+        # silently widen the upstream recipient set beyond SEARCH_ENGINES.
+        if categories and not engines:
             params["categories"] = categories
         if self.language:
             params["language"] = self.language
         if self.time_range:
             params["time_range"] = self.time_range
-        engines = self._engines_for_query(query)
         if engines:
             params["engines"] = engines
         try:

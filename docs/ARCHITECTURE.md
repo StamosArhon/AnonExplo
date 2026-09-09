@@ -134,6 +134,13 @@ The current code includes:
 - structured fetcher error propagation so the backend and UI can distinguish blocked, rate-limited, thin-content, and generic fetch failures
 
 This keeps future runtime changes small. A new model runtime should usually mean a new adapter or a new base URL, not a full backend rewrite.
+The SearXNG adapter sends either an explicit engine list or category selection,
+never both: SearXNG unions these parameters, which would otherwise widen the
+recipient set. Adaptive routing still filters news engines from ordinary
+queries. General defaults are Brave, Bing, Yahoo, and Wikipedia; news defaults
+are Brave News, DuckDuckGo News, and Reuters. Science engines remain selected
+through their category or explicit names. The tested image and opt-in candidates
+are recorded in `docs/SEARCH_ENGINE_COVERAGE.md`.
 The backend also no longer hard-depends on a Compose service literally named `search-provider`, so `SEARCH_BASE_URL` can point at any reachable internal or local search service that matches one of the supported adapters.
 The host-facing `127.0.0.1` ports now come from the dedicated `host-gateway` service rather than from direct publishing on internal-only app containers, because Docker Desktop did not reliably expose those ports when the services were attached only to `internal: true` networks. That same gateway also provides an optional browser path to the bundled SearXNG service, so standalone search and LLM-grounded search can coexist without changing the internal network shape.
 Optional browser address-bar integration is a host-level operator setup implemented by `scripts/setup-browser-search.ps1` and documented in `docs/BROWSER_SEARCH_INTEGRATION.md`. It keeps the repo-managed SearXNG route on `127.0.0.1:8085` and points browser profiles at a separate localhost redirector on `127.0.0.1:8095` when DuckDuckGo fallback is desired. The Windows startup pieces use hidden launchers so the redirector is not tied to a visible terminal and Docker Desktop is started through `docker desktop start --detach` rather than by foreground-launching the dashboard.

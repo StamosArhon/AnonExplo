@@ -138,11 +138,57 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## In-Progress Work
 
-- No implementation work remains in the VPN activation scope. The validated
-  `stamos/proton-search-activation` changes are the completed handoff to `main`.
-  The next engine-coverage milestone has not started.
+- No implementation work remains in the VPN engine-coverage scope. The
+  deployed, validated `stamos/vpn-engine-coverage` changes are the handoff to
+  `main`. The next quality milestone needs a new user-approved scoped branch.
 
-## Latest Operational Handoff (2026-09-09)
+## Latest Engine-Coverage Handoff (2026-09-09)
+
+- User approved testing more engines and tuning defaults. Compared the installed
+  April SearXNG build with the official September 8 build in an unpublished,
+  ephemeral candidate sharing the existing VPN namespace; no key mount, exit
+  rotation, search registration, CAPTCHA bypass, or external fallback added.
+- Selected digest-pinned `2026.9.8+3fdc6d753`: general Brave/Bing/Yahoo plus
+  Wikipedia, news Brave News/DuckDuckGo News/Reuters, science arXiv/PubMed/Crossref.
+  Google web/news, DuckDuckGo web, Startpage, Mojeek, and Qwant remain opt-in due
+  to empty, denied, CAPTCHA, or intermittent responses. Yahoo failed in the old
+  parser but passed all three synthetic fixtures in the new one. Brave had one
+  cold timeout and then passed all three; no promise of error-free service.
+- Corrected backend selection: SearXNG unions explicit engines with category
+  defaults. The first audit helper caught unintended Bing participation in a
+  Brave-only probe. Explicit engine lists now omit category parameters; empty
+  selectors use categories. Aligned Python/Compose/template defaults and fixed
+  Compose empty-selector handling. Regression tests cover explicit/adaptive
+  selection and the built-in defaults.
+- Added `scripts/test-search-coverage.ps1` (manual, synthetic, VPN-checked,
+  paced, count-only output, no persistence or suspension resets) and
+  `docs/SEARCH_ENGINE_COVERAGE.md` with measured outcomes and rollback.
+- Full validator passed twice: builds, 52 backend/19 fetcher tests, script
+  syntax, Compose/VPN policies, localhost smoke, and loaded catalogue checks.
+  The final run includes the Compose empty-selector correction. Optional model
+  probe skipped because the GGUF is absent. No desktop release applies to this
+  Docker change.
+- Deployed the pinned image and rebuilt backend. Live three-engine x
+  three-fixture suite passed nine samples without reported errors, with expected
+  domains in the top five for all nine. Browser defaults returned 27 combined
+  Brave/Bing/Yahoo results and no engine errors; backend returned eight results.
+  An actual VPN-stop test blocked direct HTTPS, direct DNS, and IPv6. Recovery
+  passed VPN/DNS/distinct-egress checks; all six services healthy. Post-recovery
+  default search again returned 27 rows without errors, and the redirector
+  returned only a local SearXNG 302. These are bounded test observations, not
+  future availability guarantees. No browser profiles or preference cookies changed.
+- Updated only the two local search keys in ignored `.env`; preserved VPN
+  selection, ports, secret, and credentials. Temporary candidate container and
+  its ephemeral data removed after testing; no user data deleted.
+- Compared code/config/docs against `main`, checked for whitespace errors and
+  untracked credentials, and confirmed remote main had not diverged before
+  publication. This closeout records the tested scope for the standard
+  push/fast-forward merge/working-branch cleanup workflow.
+- Next recommended milestone: Greek-language and multi-part query relevance,
+  using synthetic tests before changing routing or ranking; not automatic
+  provider polling, query-history collection, or further egress expansion.
+
+## VPN Activation Handoff (2026-09-09)
 
 - Created the user-approved `AnonExplo-PC` Proton WireGuard credential, separate
   from the homeserver identity; expiry September 9, 2027. Imported only its
@@ -223,7 +269,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 - SearXNG upstream availability is environment-dependent. A live check on 2026-08-30 showed Brave and DuckDuckGo rate-limit/access-denial responses and Startpage CAPTCHA responses from this workstation; configuration can reduce noise and preserve partial results, but it cannot create Google- or Brave-equivalent coverage without a healthy upstream/API or an explicitly trusted egress route.
 - The standalone SearXNG browser route now uses the same focused keep-only catalogue as the backend profile. Operators can widen it deliberately by editing `configs/searxng/settings.yml`, while `SEARCH_ENGINES` remains the backend request-level selector.
 - The browser search integration now has a repo-managed setup script, but it still performs per-machine host changes. Browser automation needs Brave or Helium closed, or the operator must use `-ForceCloseBrowsers`.
-- The validated default general-search set is `brave` plus `bing`; adding more names to `SEARCH_ENGINES` does not guarantee usable coverage because upstream engines may be disabled, rate-limited, access-denied, or incompatible with the current SearXNG parser. A future third general source should use a tested official API/provider route rather than blindly widening the scraper catalogue.
+- The September-image VPN audit expanded the default general set to `brave`, `bing`, and `yahoo`; the older August conclusions about Yahoo are superseded. Google web remains empty and DuckDuckGo web intermittent. Adding engine names alone does not guarantee usable coverage or independent results. New APIs/accounts still require an explicit privacy review; tested account-free upstreams can be selected through the existing SearXNG adapter.
 
 ## Decisions Made And Why
 
@@ -289,6 +335,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Validation Status
 
+- `scripts/validate.ps1`: passed twice on 2026-09-09 for `stamos/vpn-engine-coverage`, including the final Compose selector fix; builds, 52 backend tests, 19 fetcher tests, syntax, network/security policies, localhost smoke, and loaded engine catalogue checks passed. Optional GGUF test skipped (file absent). Live nine-sample engine suite, browser/backend search, local redirector, and actual VPN-stop/recovery checks passed. See the latest engine-coverage handoff and `docs/SEARCH_ENGINE_COVERAGE.md` for candidate failures and limits.
 - `scripts/validate.ps1`: passed twice on 2026-09-09 for `stamos/proton-search-activation`, including the final credential/DNS/control-API policy and script syntax checks, builds, 51 backend tests, 19 fetcher tests, and localhost smoke. Optional model probe skipped (GGUF absent). Isolated validation cleanup preserved the active VPN stack. Live outage/recovery, no-external-redirect, egress separation, startup task, and search checks passed; see latest operational handoff above for transient issues corrected during activation.
 - `scripts/validate.ps1`: passed on 2026-08-30 during `stamos/search-engine-fallbacks`; Compose/config and hardening checks, repo-managed image builds, 51 backend tests, 19 fetcher tests, syntax checks, and base-stack smoke/localhost reachability all passed. The optional model-runtime probe remained skipped because the GGUF was not present. The validator cleaned up the temporary stack after completion.
 - `scripts/validate.ps1`: passed on 2026-08-30 during `stamos/proton-search-egress`; base Compose policy plus the Proton overlay configuration/security checks, repo-managed image builds, 51 backend tests, 19 fetcher tests, syntax checks, and base-stack smoke/localhost reachability all passed. The first sandboxed validator attempt could not access Docker's named pipe, so it was rerun with approved Docker access. The optional model-runtime probe remained skipped because the GGUF was not present. The Proton tunnel itself was not activated because no local WireGuard private key is configured yet.
