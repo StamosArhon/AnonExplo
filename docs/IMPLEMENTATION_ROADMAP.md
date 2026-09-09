@@ -25,7 +25,10 @@ or cached Docker images are deleted by this migration.
 
 ## Current Removal Scope (2026-09-10)
 
-- Branch: stamos/remove-legacy-stack; handoff target main.
+- Completed scope: stamos/remove-legacy-stack; handoff target main.
+- Implementation commit a3e2fd4 was pushed to origin. This documentation
+  closeout accompanies the reviewed fast-forward merge and branch cleanup;
+  resume future work from updated main. No remote blocker remains.
 - Removed 20 tracked legacy app/runtime/provisioner files, legacy Compose
   services/network, UI/API gateway listeners, obsolete model/backend .env.example
   keys and startup dependencies. Existing .env and credentials are untouched.
@@ -152,9 +155,8 @@ or cached Docker images are deleted by this migration.
 ## Exact Next Steps
 
 1. Preserve port 8085, privacy safeguards, engine choices and the VPN profile.
-2. Finish removal closeout/review/push/merge/branch cleanup. Next scope should be
-   relevance-and-coverage with richer informational/news fixtures and manual
-   judgements, not restoration of a chatbot. Ask before starting that milestone.
+2. Next scope: relevance-and-coverage with richer informational/news fixtures and
+   manual judgements, not restoration of a chatbot. Ask before starting it.
 3. Later quality work needs richer informational/news fixtures and manual
    judgements, not global language/weight changes based on six navigation cases.
 
