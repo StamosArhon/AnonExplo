@@ -28,6 +28,16 @@
 - Keep upstream cooldowns. Never clear bans, rotate VPN exits or poll providers
   automatically to conceal errors. No telemetry, query database or remote NLP.
 - Use synthetic manual benchmarks, never private browser history/cookies.
+- Expanded benchmark suites: informational, news (Anytime), news-month. Only
+  explicit -ReviewTop5 displays bounded public-fixture snippets; no transcripts
+  or result payloads in Git. Record manual snippet-level grades, not correctness.
+- Engine and category selectors are unioned by SearXNG: diagnostics MUST send
+  one or the other, never both. Verify local catalogue eligibility first.
+- Unsupported time filters exclude engines. In this build filtered News leaves
+  only Reuters; do not fake support or silently discard a user's filter.
+- Preserve Bing weight 0.35 pending new evidence; engine remains available.
+  Manual benchmark pace is 15 seconds, stop on degradation. Wait out cooldowns
+  before any necessary settings restart; never restart to clear a ban.
 
 ## Startup And Migration
 

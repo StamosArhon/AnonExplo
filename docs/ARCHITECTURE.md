@@ -28,6 +28,8 @@ still requires start-proton-search.ps1 -Recreate.
 ## Configuration
 
 - configs/searxng/settings.yml: engines, timeouts and native privacy defaults.
+- General ranking retains Brave/Yahoo/Bing, with Bing weight 0.35 after the
+  informational audit. No query rewriting or model is on this path.
 - Native preferences/query syntax: language, engines, categories and appearance.
 - configs/localhost-gateway/nginx.proton-search.conf: production reverse proxy.
 - .env: project/port/image/VPN configuration and SearXNG secret only. Old unused

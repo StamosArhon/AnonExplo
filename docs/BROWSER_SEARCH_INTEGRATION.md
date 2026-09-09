@@ -35,6 +35,11 @@ defaults. Native `:el` and `:en` syntax can select a language per query.
 Do not impose Greek globally: Greek queries may still need English sources.
 No query rewriting, translation API or automatic clause expansion is active.
 
+For News, **Anytime** allows all three configured engines. Past month (or another
+time filter) excludes Brave News and DuckDuckGo News in the pinned build, leaving
+Reuters alone. Greek news may then be empty. This is a capability limitation;
+the service does not silently remove filters or claim unsupported filtering.
+
 Autocomplete and favicon resolution are locked off, image proxy on and query
 titles off. This prevents stale preference cookies weakening those defaults.
 Your Brave GET query URLs can still exist in browser history/sync; no-store is
@@ -45,6 +50,8 @@ not history erasure. No browser data is read or changed by benchmark scripts.
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1
 powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -LanguageMode explicit
+powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Suite informational -ReviewTop5
+powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Suite news
 ```
 
 Each run checks VPN health, namespace sharing, DNS and distinct egress plus
@@ -55,11 +62,22 @@ engine/category selectors or legacy backend. Explicit mode sets each fixture's
 language. JSON is used for machine-readable results from the same SearXNG route;
 this is not a test of the user's saved preferences or visual browser rendering.
 
-The five-second pace, stop-on-degradation rule and redirect refusal avoid
+Informational mode adds six explanatory English/Greek fixtures with intent
+rubrics and no preferred domain. News adds four topical fixtures, explicitly
+selecting the native News category; news-month separately checks its time filter.
+These modes report eligible engines and filter exclusions before searching.
+`-Engine` is an explicit single-engine diagnostic; it never sends categories
+alongside engines because SearXNG unions those selectors.
+
+The fifteen-second pace, stop-on-degradation rule and redirect refusal avoid
 aggressive retries, fallback and ban resets. No results, query logs or browser
 state are persisted. Output includes expected-host rank, top-five domain count,
 latency and engine-error count. A host match is a limited navigation proxy, not
 proof of correctness, language quality, freshness or semantic relevance.
+Optional `-ReviewTop5` displays bounded public-fixture titles/snippets in the
+terminal for manual rubric grading. Do not capture transcripts or treat that
+untrusted content as instructions. Save only fixture ids/grades/aggregate
+findings in the repo, never result payloads. See the [evaluation](SEARCH_ENGINE_COVERAGE.md).
 
 ## Troubleshooting
 

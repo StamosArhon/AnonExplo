@@ -10,6 +10,10 @@ assert settings['ui']['query_in_title'] is False
 assert settings['preferences'].lock == {'autocomplete', 'favicon_resolver', 'image_proxy', 'query_in_title'}
 assert settings['search']['suspended_times']['SearxEngineTooManyRequests'] > 0
 assert settings['search']['suspended_times']['SearxEngineCaptcha'] > 0
+engine_config = {e['name']: e for e in settings['engines']}
+assert engine_config['bing']['disabled'] is False
+assert engine_config['bing']['weight'] == 0.35, 'Preserve evaluated Bing ranking weight'
+assert settings['search']['default_lang'] == 'auto', 'Do not impose a global language'
 
 # Initialize only the local resolver catalogue, not the web app or engines.
 proxy.init(proxy.FaviconProxyConfig())

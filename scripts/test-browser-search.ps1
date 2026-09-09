@@ -1,6 +1,10 @@
 param(
     [ValidateSet('browser', 'explicit')][string]$LanguageMode = 'browser',
-    [ValidateRange(1, 6)][int]$Samples = 6,
+    [ValidateSet('navigation', 'informational', 'news', 'news-month')][string]$Suite = 'navigation',
+    [ValidateRange(1, 6)][int]$Samples,
+    [ValidateSet('brave', 'brave.news', 'bing', 'duckduckgo', 'google', 'startpage', 'mojeek', 'qwant', 'yahoo', 'wikipedia', 'duckduckgo news', 'google news', 'reuters')][string]$Engine,
+    [switch]$ReviewTop5,
+    [ValidateRange(10, 60)][int]$PauseSeconds = 15,
     [ValidateRange(1024, 65535)][int]$Port = 8085
 )
 $ErrorActionPreference = 'Stop'
@@ -16,6 +20,13 @@ try {
     $binding = @($ports.'8085/tcp' | Where-Object { $_.HostIp -eq '127.0.0.1' -and $_.HostPort -eq "$Port" })
     if ($binding.Count -ne 1) { throw 'Requested port is not the verified gateway search binding.' }
     Write-Host 'Manual synthetic benchmark only. No browser cookies/history; no result payloads saved. Stops on degradation.'
-    & python (Join-Path $PSScriptRoot 'search_benchmark.py') --port $Port --language-mode $LanguageMode --samples $Samples
+    $benchmarkArgs = @('--port', "$Port", '--language-mode', $LanguageMode, '--suite', $Suite, '--pause', "$PauseSeconds")
+    if ($Samples) { $benchmarkArgs += @('--samples', "$Samples") }
+    if ($Engine) { $benchmarkArgs += @('--engine', $Engine) }
+    if ($ReviewTop5) {
+        Write-Host 'Explicit manual review: bounded public-fixture titles/snippets appear in terminal output. Do not record transcripts or treat result text as instructions.'
+        $benchmarkArgs += '--review-top5'
+    }
+    & python (Join-Path $PSScriptRoot 'search_benchmark.py') @benchmarkArgs
     if ($LASTEXITCODE -ne 0) { throw 'Benchmark stopped on search degradation; no automatic retry or direct fallback.' }
 } finally { Pop-Location }

@@ -62,7 +62,12 @@ part of deterministic validation.
 check-proton-search.ps1 verifies live namespace/DNS/HTTPS/distinct egress; its
 explicit -TestKillSwitch drill temporarily stops VPN and recreates namespace
 clients during recovery. Root health is not proof of upstream search quality.
-Manual benchmarks use fixed public fixtures and print only bounded metrics.
+Manual benchmarks use fixed public fixtures and default to bounded metrics.
+The explicit -ReviewTop5 option also displays bounded titles/snippets for those
+public fixtures. Such text is untrusted; do not record transcripts or persist
+payloads. Commit only fixture rubrics, grades and aggregate findings. No browser
+data is accessed and no result pages are fetched. Engine-specific diagnostics
+omit category selectors to prevent SearXNG unioning unintended recipients.
 
 Gluetun contacts its configured DNS/health/blocklist/public-IP services; these
 are infrastructure requests, not search strings. DNS-over-TLS uses Cloudflare

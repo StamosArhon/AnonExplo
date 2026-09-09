@@ -23,7 +23,59 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Removal Scope (2026-09-10)
+## Current Relevance And Coverage Scope (2026-09-10)
+
+- Branch: stamos/relevance-and-coverage, from clean main 3e2fc4e. User authorized
+  broader informational/news evaluation and evidence-backed tuning.
+- Extended manual browser benchmark: six navigation, six informational and four
+  news fixtures; separate Anytime/month cases, language comparison, explicit
+  single-engine diagnostics, recipient/filter eligibility and freshness metadata.
+  Optional bounded public-fixture review supports manual rubric grades; default
+  output remains sanitized metrics. No browser history, payload files or AI.
+- Consolidated old engine coverage helper onto the hardened benchmark to remove
+  raw upstream error printing and inherited redirects/proxies. Engine/category
+  selectors are never combined (SearXNG unions them). Tests stop on degradation.
+- Baseline informational run: 6/6 nonempty, 24-36 rows, three web contributors,
+  no engine errors, mean 1.25s. Manual top-five inspection found five clearly
+  irrelevant positions across 30. Explicit language failed to cure Bing's
+  unrelated matches; sixth sample hit Brave rate limiting and the run stopped.
+- Preserved the configured 180-second rate-limit cooldown; no exit/key/ban reset.
+  Worked on offline validation before restarting SearXNG after the cooldown had
+  elapsed. Increased manual benchmark pace to 15 seconds; not a no-limit promise.
+- Changed only Bing weight 1.0 -> 0.35 initially, retained all providers. Live
+  six-question comparison: 6/6 nonempty, three contributors, no engine errors,
+  mean 1.09s; clearly irrelevant top-five positions fell from five to two.
+  Sequential small-sample observations, not a controlled causal or speed claim.
+- News-month exposed eligibility loss: only Reuters supports the time filter;
+  English fixture 20 rows, Greek zero, test stopped. Anytime news: 4/4 nonempty,
+  70-92 rows, 2-3 contributors, no errors, mean 1.23s. Some highly ranked Reuters
+  items were years old. Trialled supported display_date:desc ordering: four
+  nonempty/error-free runs, mean 1.09s. Space top-five recent metadata rose from
+  zero to two but an unrelated item entered; rejected that change and restored
+  original Reuters ordering. No news ranking change is shipped.
+- Full isolated validator passed for Bing trial: 24 benchmark unit tests,
+  14 negative Compose tests, generated startup syntax, pinned topology, native
+  privacy/engine settings, direct-egress block and stopped-search recovery.
+  No custom image build contexts remain; Compose build succeeds with no builds.
+- Reuters candidate also passed the full validator, but was rejected for manual
+  relevance reasons, not runtime failure. Final validator passed after rollback:
+  same 24 unit/14 negative policy cases plus complete offline UI/recovery checks.
+- Retired outdated coverage instructions into LEGACY_SEARCH_ENGINE_COVERAGE.md;
+  current docs no longer recommend restoring backend or editing old .env keys.
+- Reviewed retained code/config/docs against main; whitespace checks passed and
+  remote main was synchronized. No .env or VPN key files are tracked/modified.
+  No new recipient/account, image update, browser profile edit, model, telemetry,
+  query storage or saved result payload. No live VPN-stop/reboot/sleep drill in
+  this scope: network topology and existing kill switch are unchanged.
+- After restoring Reuters ordering, final navigation regression passed: six
+  expected sites rank 1, three contributors each, zero engine errors, mean 1.71s
+  (one request 3.98s). No claim of a latency improvement. Live ops passed: three
+  healthy services, unchanged localhost 8085, VPN namespace/DNS/distinct egress.
+- Implementation and validation complete; prepared for reviewed publication and
+  main merge/branch cleanup. No release artifact applies to local settings-only
+  deployment. Follow-up must start from updated main, not reuse this branch.
+
+## Previous Removal Scope (2026-09-10, historical)
 
 - Completed scope: stamos/remove-legacy-stack; handoff target main.
 - Implementation commit a3e2fd4 was pushed to origin. This documentation
@@ -87,7 +139,8 @@ or cached Docker images are deleted by this migration.
 3. `relevance-and-coverage`: expand the synthetic suite with manual relevance
    judgements for informational/news queries; compare language and engine choices;
    tune only when evidence supports it. Evaluate image/video coverage separately
-   with proxied thumbnails and an explicit recipient review.
+   with proxied thumbnails and an explicit recipient review. Informational/news
+   work is the current scope; media/new recipients remain deferred.
 4. `reliability-maintenance`: validate reboot/sleep/resume and VPN interruption;
    keep digest-pinned update/rollback procedures and local aggregate diagnostics.
 
@@ -155,10 +208,12 @@ or cached Docker images are deleted by this migration.
 ## Exact Next Steps
 
 1. Preserve port 8085, privacy safeguards, engine choices and the VPN profile.
-2. Next scope: relevance-and-coverage with richer informational/news fixtures and
-   manual judgements, not restoration of a chatbot. Ask before starting it.
-3. Later quality work needs richer informational/news fixtures and manual
-   judgements, not global language/weight changes based on six navigation cases.
+2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
+   unchanged after rejecting the newest-first trial. Retain honest limits of
+   snippet-level judgements, news freshness and intermittent upstream errors.
+3. Next recommended scope: independent informational holdout fixtures and native
+   news ranking evaluation; avoid overfitting the six tuning questions. Ask before
+   a new scope. Media recipients, headless models and reboot drills are separate.
 
 ## Continuity
 

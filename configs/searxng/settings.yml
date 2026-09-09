@@ -89,6 +89,9 @@ engines:
   - name: bing
     timeout: 5.0
     disabled: false
+    # Informational EN/EL audit: unrelated matches polluted the first five.
+    # Retain coverage but reduce its influence; see SEARCH_ENGINE_COVERAGE.md.
+    weight: 0.35
   - name: wikipedia
     timeout: 5.0
   - name: duckduckgo news

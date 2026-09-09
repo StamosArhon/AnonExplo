@@ -72,6 +72,9 @@ If a remote is missing or remote operations fail, record that explicitly in the 
   expansion without a demonstrated need and a separately scoped decision.
 - Tune browser results in SearXNG, not the legacy backend. Preserve engine
   cooldowns and use synthetic manual tests rather than user history.
+- Benchmark output is metrics-only unless bounded public-fixture review is
+  explicitly requested. Persist grades/rubrics, never result payloads. Do not
+  combine engine and category selectors: SearXNG unions their recipients.
 - Configure engines in SearXNG; the legacy chatbot UI, backend, fetcher and model
   runtime have been removed. Do not resurrect them for browser search.
 - Future local result refinement may be headless; no separate AnonExplo UI needed.

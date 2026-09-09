@@ -39,6 +39,10 @@ Science have separate curated sources. Other providers remain optional after
 observed empty, intermittent, denied or CAPTCHA responses; see
 [engine coverage](docs/SEARCH_ENGINE_COVERAGE.md).
 
+Bing remains available with reduced ranking influence after off-topic matches
+in informational tests. For broad News coverage, use **Anytime**: in this build,
+Past month excludes Brave News and DuckDuckGo News, leaving only Reuters.
+
 Autocomplete and remote favicon resolution are locked off; query titles are
 hidden and SearXNG images are proxied. The gateway sends no-store/no-referrer,
 does not write search request errors or buffer result bodies to temporary files,
@@ -54,10 +58,15 @@ powershell -ExecutionPolicy Bypass -File scripts/validate.ps1
 powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1
 # Compare explicit query languages against the browser-locale baseline.
 powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -LanguageMode explicit
+# Broader questions; explicit review displays bounded public-fixture snippets.
+powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Suite informational -ReviewTop5
+powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Suite news
 ```
 
-The benchmark reports rank/domain/latency proxies, not full relevance judgements.
-It stops on errors or empty results and never bypasses engine cooldowns.
+The benchmark reports rank/domain/latency proxies; informational/news relevance
+requires manual rubric grading. Default output has no result text. Expanded
+suites report eligible engines and unsupported time filters. Runs are paced at
+15 seconds and stop on errors or empty results, never bypassing cooldowns.
 See [browser integration](docs/BROWSER_SEARCH_INTEGRATION.md).
 
 ## Removed Legacy Components
