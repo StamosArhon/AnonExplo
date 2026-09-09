@@ -47,7 +47,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Active Branch
 
-- `stamos/proton-search-activation`
+- `main`
 
 ## Completed Work
 
@@ -139,10 +139,8 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 ## In-Progress Work
 
 - No implementation work remains in the VPN activation scope. The validated
-  branch is `stamos/proton-search-activation`. Remote push/merge/cleanup are
-  blocked pending explicit destination approval after the tool safety review
-  rejected the combined commit/push command before execution. Local commit is
-  permitted; no remote publication or merge has been claimed.
+  `stamos/proton-search-activation` changes are the completed handoff to `main`.
+  The next engine-coverage milestone has not started.
 
 ## Latest Operational Handoff (2026-09-09)
 
@@ -190,13 +188,13 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
   the live VPN stack. Final rerun passed with stronger credential/DNS/control-API
   mount policy checks and parsing of the changed PowerShell scripts.
 - No desktop installer/release is applicable to this Docker operational change.
-- Remote workflow blocker: origin resolves to
-  `https://github.com/StamosArhon/AnonExplo.git`, matching the previously
-  documented private project. Auto-review nevertheless required explicit
-  approval for the destination and tracked operational documentation. The
-  `gh` CLI is unavailable, so remote visibility could not be independently
-  rechecked with it. Push, merge into main, and branch cleanup remain pending;
-  the live VPN deployment is unaffected by this Git-only blocker.
+- Remote workflow approval resolved: the user explicitly approved publication
+  of code and operational documentation to `StamosArhon/AnonExplo` and completion
+  of the merge. The branch was pushed successfully and compared against `main`;
+  no `.env` or `data/proton/` files are tracked. This final documentation commit
+  closes the handoff for the reviewed fast-forward merge and branch cleanup.
+  Full validation and outage tests from this session remain applicable: this
+  closeout changes documentation only and does not restart the live stack.
 - Next milestone: reassess general engine coverage/quality over the VPN and
   consider fetcher VPN coverage only with an explicit scope decision. Keep
   provider privacy limitations visible; do not promise that VPNs prevent query
