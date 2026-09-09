@@ -159,8 +159,10 @@ The main operator knobs are in `.env`:
   redundancy; clear it to let the backend query every engine enabled in the
   bundled SearXNG profile, accepting more upstream errors and outbound
   requests.
-- `SEARCH_LANGUAGE`: leave blank for SearXNG's automatic/default handling, or
-  set a language such as `en` or `el` when results should be pinned.
+- `SEARCH_LANGUAGE`: blank/`auto` uses a local Greek-question hint (`el`) and
+  otherwise SearXNG defaults. Set `en`/`el` to pin a language or `all` to disable
+  that hint. This affects backend searches only; browser search uses its own
+  SearXNG language preference. Detection does not translate or infer location.
 - `SEARCH_TIME_RANGE`: set a SearXNG-supported range such as `day`, `week`,
   `month`, or `year` for recency-sensitive searches.
 - `GROUNDING_MAX_QUERY_VARIANTS`: lower to `1` to disable fan-out, or keep the

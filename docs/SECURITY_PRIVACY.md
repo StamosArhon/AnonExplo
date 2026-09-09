@@ -44,6 +44,14 @@ This project assumes a local single-user workstation deployment. The main risks 
 
 ## Logging Guidance
 
+- Greek-language detection, text normalization, and clause splitting run locally
+  without external NLP/translation services, telemetry, or persistent query state.
+  Newly recognized Greek/punctuation-separated questions may now use the existing
+  multi-query allowance; the original and derived clauses reach the configured
+  upstreams through SearXNG. Set `GROUNDING_QUERY_EXPANSION_ENABLED=false` or
+  `GROUNDING_MAX_QUERY_VARIANTS=1` to keep one query. No new recipients or egress
+  routes are introduced; fetcher traffic remains separate and direct.
+
 - Keep logs operational, not archival.
 - Do not add debug logging that dumps prompts, full fetched article bodies, headers, or provider payloads by default.
 - If deeper logging is ever added for troubleshooting, it must be temporary and documented.

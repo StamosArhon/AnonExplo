@@ -199,6 +199,15 @@ silently add category-default recipients. With `SEARCH_CATEGORIES=auto`, news
 names are removed for ordinary queries. An empty `SEARCH_ENGINES` lets category
 defaults apply. The SearXNG image is pinned to the tested September 8, 2026 build.
 
+The backend now retains Greek letters in relevance matching, ignoring accents,
+case, and final-sigma differences. Blank/`auto` `SEARCH_LANGUAGE` hints `el` for
+Greek questions; explicit language settings win. Grounded multi-part questions
+can use the original plus clause queries (at most three total), balanced source
+selection, and per-part excerpts within the existing budgets. Answers are
+instructed to address every part in the requested language and flag unsupported
+parts separately. This is backend grounding behavior, not a replacement for
+standalone browser SearXNG ranking. No translation API or query history is added.
+
 The current implementation supports these provider adapters:
 
 - model runtime:

@@ -5,6 +5,8 @@ from typing import Any, Protocol
 import httpx
 from pydantic import BaseModel, Field
 
+from app.query_text import infer_greek_language, is_greek_current_query
+
 
 CURRENT_QUERY_PATTERN = re.compile(
     r"\b(?:as of|breaking|ceasefire|current|developments?|happening|latest|live|news|now|ongoing|recent|situation|status|today|update|updates|war)\b",
@@ -474,7 +476,7 @@ class SearxngSearchProvider:
             STATUS_QUERY_PATTERN.search(query or "")
             and STATUS_CONTEXT_PATTERN.search(query or "")
         )
-        return is_current_query or is_status_query
+        return is_current_query or is_status_query or is_greek_current_query(query or "")
 
     def _engines_for_query(self, query: str) -> str:
         configured_engines = [
@@ -506,8 +508,11 @@ class SearxngSearchProvider:
         # silently widen the upstream recipient set beyond SEARCH_ENGINES.
         if categories and not engines:
             params["categories"] = categories
-        if self.language:
-            params["language"] = self.language
+        language = self.language
+        if language in {"", "auto"}:
+            language = infer_greek_language(query) or language
+        if language:
+            params["language"] = language
         if self.time_range:
             params["time_range"] = self.time_range
         if engines:

@@ -138,9 +138,59 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## In-Progress Work
 
-- No implementation work remains in the VPN engine-coverage scope. The
-  deployed, validated `stamos/vpn-engine-coverage` changes are the handoff to
-  `main`. The next quality milestone needs a new user-approved scoped branch.
+- No implementation work remains in the Greek/multi-part backend relevance
+  scope. The deployed, validated `stamos/greek-multipart-relevance` changes are
+  the handoff to `main`. Model provisioning/evaluation requires a new scope.
+
+## Latest Greek / Multi-Part Handoff (2026-09-09)
+
+- Fixed the ASCII-only relevance tokenizer, which discarded Greek letters.
+  Matching now retains Unicode letters/numbers and consistently folds accents,
+  case, and sigma forms on queries and sources. Greek stopwords prevent common
+  function words from dominating. This is not full morphology or translation.
+- Blank/auto backend language setting now hints `el` for predominantly Greek
+  text or Greek question prefixes with Latin technical names. Explicit language
+  settings win (`all` disables the hint). Greek current-news signals select
+  only the news engines already configured; general place names are not treated
+  as news merely because they contain "new". No global Greek/recency filter set.
+- English/Greek independent questions split on question punctuation or
+  conjunctions, preserving the original query and the existing three-query cap.
+  Quoted/operator queries and detected pronoun-dependent clauses are not expanded.
+  No coreference guesses, new providers, translation service, or history storage.
+- Source ranking seeds relevant coverage across parts and prefers distinct
+  domains; shared generic terms cannot substitute for distinguishing terms of
+  another clause. Excerpt selection and context allocation reserve space across
+  parts/sources, including relevant snippets for blocked sources. Existing query,
+  fetch, and text budgets remain unchanged. Prompt instructions request the
+  user's language, per-part citations, and explicit per-part insufficiency.
+- These changes affect backend search/grounding, not standalone browser SearXNG
+  ranking. Browser preferences, VPN settings, secrets, and fetcher routing are
+  unchanged. Selected publishers can still reject page fetches.
+- Added deterministic fixtures for normalization, language overrides, Greek
+  recency, independent/dependent clauses, expansion off/bounds, Greek excerpts,
+  per-part sources/budgets, shared-term disambiguation, and blocked second-part
+  snippet fallback. Intermediate full validators passed with 64 and 65 backend
+  tests; final full run passed with 66 backend tests and 19 fetcher tests,
+  builds, Compose/VPN policy, syntax, catalogue, and localhost smoke checks.
+- First live synthetic Greek two-museum probe: inferred `el`, three variants,
+  24 search hits, 17 unique, no search-stage failures, two fetched pages, four
+  failed/blocked/thin pages, and explicit `fetched_plus_snippets`. This is a
+  pipeline availability observation, not proof of answer correctness. The
+  subsequent shared-term refinement has deterministic regression coverage.
+- Local model file is absent, so live generated Greek/multi-part answer quality
+  and the optional model-runtime probe remain untested. Do not imply that the
+  prompt improvements have been evaluated with a running model.
+- Final backend and gateway rebuilt/recreated without restarting or changing
+  SearXNG/VPN. Final synthetic Greek Python/Docker probe returned 24 search hits,
+  18 unique, two successful fetches, one blocked fetch, no search-stage failures,
+  and `fetched_plus_snippets`; both topic names appeared in the available
+  source material. This checks pipeline behavior, not semantic answer quality.
+  VPN/DNS/distinct-egress checks passed; all six services healthy.
+- Reviewed code, regression fixtures, and docs against `main`; whitespace checks
+  passed and remote main was synchronized before publication. Secrets and local
+  `.env` were not changed or staged. Standard push/merge/branch-cleanup handoff
+  applies. No operational rules changed in `AGENTS.md`.
+- No desktop release is applicable; backend Docker deployment is the delivery.
 
 ## Latest Engine-Coverage Handoff (2026-09-09)
 
@@ -335,6 +385,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 
 ## Validation Status
 
+- `scripts/validate.ps1`: passed on 2026-09-09 for `stamos/greek-multipart-relevance`; final run includes 66 backend and 19 fetcher tests, image builds, Compose/VPN policies, syntax, catalogue checks, and localhost smoke. Two intermediate runs also passed (64 and 65 backend tests). Optional model probe skipped: GGUF absent. Final deployed Greek two-topic search/fetch probe returned both topic mentions with explicit blocked-source snippet fallback. Generated-answer quality was not tested. VPN health/egress and all six service health checks passed.
 - `scripts/validate.ps1`: passed twice on 2026-09-09 for `stamos/vpn-engine-coverage`, including the final Compose selector fix; builds, 52 backend tests, 19 fetcher tests, syntax, network/security policies, localhost smoke, and loaded engine catalogue checks passed. Optional GGUF test skipped (file absent). Live nine-sample engine suite, browser/backend search, local redirector, and actual VPN-stop/recovery checks passed. See the latest engine-coverage handoff and `docs/SEARCH_ENGINE_COVERAGE.md` for candidate failures and limits.
 - `scripts/validate.ps1`: passed twice on 2026-09-09 for `stamos/proton-search-activation`, including the final credential/DNS/control-API policy and script syntax checks, builds, 51 backend tests, 19 fetcher tests, and localhost smoke. Optional model probe skipped (GGUF absent). Isolated validation cleanup preserved the active VPN stack. Live outage/recovery, no-external-redirect, egress separation, startup task, and search checks passed; see latest operational handoff above for transient issues corrected during activation.
 - `scripts/validate.ps1`: passed on 2026-08-30 during `stamos/search-engine-fallbacks`; Compose/config and hardening checks, repo-managed image builds, 51 backend tests, 19 fetcher tests, syntax checks, and base-stack smoke/localhost reachability all passed. The optional model-runtime probe remained skipped because the GGUF was not present. The validator cleaned up the temporary stack after completion.
@@ -416,7 +467,7 @@ Docker Compose is the initial orchestration layer. Only the localhost gateway is
 ## Exact Next Steps
 
 1. Search-only Proton egress is now provisioned and active on this PC. Preserve the local Compose VPN selection and restricted key file. Use `scripts/check-proton-search.ps1` for verification and `-TestKillSwitch` only for a deliberate outage/recovery drill. Renew the dedicated credential before September 9, 2027.
-2. Start a focused follow-on milestone for multi-part grounded-answer coverage so live current-events answers handle both clauses of compound questions more consistently.
+2. With separate user approval, provision/verify the local model and evaluate generated Greek/multi-part answers end to end. The query/source/context heuristics are now tuned, but model-answer completeness remains unverified without the runtime.
 3. Keep validating the current baseline against real live-news queries on the target hardware, especially large pages, slow publishers, and mixed multi-source questions.
 4. If Wikimedia support is enabled on a local machine, set a real contactable `FETCH_WIKIMEDIA_API_USER_AGENT` in `.env` before relying on it for live grounding.
 5. Use `SEARCH_PREFERRED_DOMAINS` and `SEARCH_PREFERRED_DOMAIN_BOOST` for operator-level tuning before adding a heavier Wikipedia-specific search strategy.

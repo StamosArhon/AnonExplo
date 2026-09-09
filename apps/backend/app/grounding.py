@@ -5,6 +5,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, Field
 
+from app.query_text import GREEK_STOPWORDS, fold_text, question_clauses
+
 from app.providers import (
     FetchDocument,
     FetcherClient,
@@ -91,7 +93,7 @@ class GroundingBundle(BaseModel):
     errors: list[GroundingError]
 
 
-QUERY_TOKEN_PATTERN = re.compile(r"[a-z0-9]{2,}", re.IGNORECASE)
+QUERY_TOKEN_PATTERN = re.compile(r"[^\W_]{2,}", re.UNICODE)
 SOURCE_ID_PATTERN = re.compile(r"S\d+", re.IGNORECASE)
 GROUPED_SOURCE_IDS_PATTERN = re.compile(
     r"\[((?:\s*S\d+\s*(?:,|;|/|\band\b)\s*)+\s*S\d+\s*)\]",
@@ -136,16 +138,7 @@ DIRECT_ANSWER_HINT_PATTERN = re.compile(
     r"\b(?:timeline|date|dated|first reported|first strike|began|started|happened|occurred|phase|ceasefire|blockade|negotiations?|talks?|open|closed|resume|resumed|resuming|confirmed|denied)\b",
     re.IGNORECASE,
 )
-SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+(?=(?:[\"'(\[]*[A-Z0-9]))")
-MULTI_PART_QUERY_PATTERN = re.compile(
-    r"\band\s+(?:what|who|where|when|why|how|is|are|was|were|do|does|did|has|have|had|can|could|will|would|should)\b",
-    re.IGNORECASE,
-)
-MULTI_PART_QUERY_SPLIT_PATTERN = re.compile(
-    r"(?:\s+and\s+|\s*[?!.]\s*(?:and\s+)?)"
-    r"(?=(?:what|who|where|when|why|how|is|are|was|were|do|does|did|has|have|had|can|could|will|would|should)\b)",
-    re.IGNORECASE,
-)
+SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?;;])\s+(?=(?:[\"'(\[]*[^\W_]))")
 TEXT_MATCH_CANONICALIZATION_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bUnited States(?: of America)?\b", re.IGNORECASE), " unitedstates "),
     (re.compile(r"\bAmerican(?:s)?\b", re.IGNORECASE), " unitedstates "),
@@ -233,14 +226,14 @@ def _canonicalize_text_for_match(text: str) -> str:
 
 def _normalize_text_for_match(text: str) -> str:
     canonicalized = _canonicalize_text_for_match(text)
-    return " ".join(QUERY_TOKEN_PATTERN.findall(canonicalized.lower()))
+    return " ".join(QUERY_TOKEN_PATTERN.findall(fold_text(canonicalized)))
 
 
 def _extract_query_terms(query: str) -> list[str]:
     seen_terms: set[str] = set()
     query_terms: list[str] = []
     for token in _normalize_text_for_match(query).split():
-        if token in COMMON_QUERY_STOPWORDS:
+        if token in COMMON_QUERY_STOPWORDS or token in GREEK_STOPWORDS:
             continue
         if token not in seen_terms:
             query_terms.append(token)
@@ -280,7 +273,7 @@ def _is_status_query(query: str) -> bool:
 
 
 def _is_multi_part_query(query: str) -> bool:
-    return bool(MULTI_PART_QUERY_PATTERN.search(query or ""))
+    return len(question_clauses(query)) > 1
 
 
 def _build_search_query_variants(query: str, max_variants: int = 3) -> list[str]:
@@ -288,11 +281,7 @@ def _build_search_query_variants(query: str, max_variants: int = 3) -> list[str]
     if not normalized_query or max_variants <= 1 or not _is_multi_part_query(normalized_query):
         return [normalized_query]
 
-    clauses = [
-        part.strip(" .?!")
-        for part in MULTI_PART_QUERY_SPLIT_PATTERN.split(normalized_query)
-        if part.strip()
-    ]
+    clauses = question_clauses(normalized_query)
     if len(clauses) <= 1:
         return [normalized_query]
 
@@ -585,7 +574,34 @@ def _rank_sources(
                 continue
             fallback_pass.append(candidate)
 
-    return primary_pass + fallback_pass
+    ranked = primary_pass + fallback_pass
+    clauses = question_clauses(query)
+    if len(clauses) <= 1:
+        return ranked
+
+    # Seed one relevant source per part before filling remaining slots.
+    balanced: list[GroundingSelectedSource] = []
+    clause_terms = [set(_extract_query_terms(clause)) for clause in clauses[:3]]
+    for clause_index, terms in enumerate(clause_terms):
+        if not terms:
+            continue
+        other_terms = set().union(*(other for index, other in enumerate(clause_terms) if index != clause_index))
+        distinguishing_terms = terms - other_terms
+
+        def coverage(candidate: GroundingSelectedSource) -> float:
+            words = set(_normalize_text_for_match(candidate.title + " " + candidate.snippet).split())
+            if distinguishing_terms and not (distinguishing_terms & words):
+                return 0.0
+            matches = len(terms & words)
+            return matches / len(terms) if matches >= min(2, len(terms)) else 0.0
+
+        if any(coverage(candidate) >= 0.5 for candidate in balanced):
+            continue
+        relevant = [candidate for candidate in ranked if coverage(candidate) >= 0.5 and candidate not in balanced]
+        if relevant:
+            fresh = [candidate for candidate in relevant if candidate.domain not in {item.domain for item in balanced}]
+            balanced.append(max(fresh or relevant, key=coverage))
+    return balanced + [candidate for candidate in ranked if candidate not in balanced]
 
 
 def _trim_context_chunk(text: str, char_limit: int) -> str:
@@ -594,6 +610,7 @@ def _trim_context_chunk(text: str, char_limit: int) -> str:
     normalized = " ".join(text.split()).strip()
     if len(normalized) <= char_limit:
         return normalized
+
     trimmed = normalized[:char_limit].rstrip()
     last_space = trimmed.rfind(" ")
     if last_space >= max(0, char_limit // 2):
@@ -699,6 +716,9 @@ def _score_context_candidate(query: str, query_terms: list[str], passage: str, p
 
 
 def _source_matches_query_strongly(query: str, source: GroundingSelectedSource) -> bool:
+    clauses = question_clauses(query)
+    if len(clauses) > 1:
+        return any(_source_matches_query_strongly(clause, source) for clause in clauses[:3])
     query_terms = _extract_query_terms(query)
     if not query_terms:
         return False
@@ -748,6 +768,26 @@ def _select_context_excerpt(query: str, content_text: str, char_limit: int) -> s
         return ""
     if len(normalized) <= char_limit:
         return normalized
+
+    clauses = question_clauses(query)
+    if 1 < len(clauses) <= 3 and char_limit >= 160:
+        joiner = "\n...\n"
+        budget = (char_limit - len(joiner) * (len(clauses) - 1)) // len(clauses)
+        passages = _build_context_candidates(normalized, budget)
+        selected_parts: list[tuple[int, str]] = []
+        clause_terms = [set(_extract_query_terms(clause)) for clause in clauses]
+        for clause_index, clause in enumerate(clauses):
+            terms = _extract_query_terms(clause)
+            other_terms = set().union(*(other for index, other in enumerate(clause_terms) if index != clause_index))
+            distinguishing_terms = set(terms) - other_terms
+            required = distinguishing_terms or set(terms)
+            relevant = [(pos, text) for pos, text in passages if required & set(_normalize_text_for_match(text).split())]
+            if relevant:
+                best = max(relevant, key=lambda item: _score_context_candidate(clause, terms, item[1], item[0]))
+                if best not in selected_parts:
+                    selected_parts.append(best)
+        if selected_parts:
+            return _trim_context_chunk(joiner.join(text for _, text in sorted(selected_parts)), char_limit)
 
     candidate_chars = min(char_limit, max(260, min(680, char_limit // 2 or char_limit)))
     query_terms = _extract_query_terms(query)
@@ -912,6 +952,15 @@ def _compose_context(
     errors = [error for _, _, error in fetch_results if error is not None]
     context_parts: list[str] = []
     used_context_chars = 0
+
+    successful_count = sum(document is not None for _, document, _ in fetch_results)
+    if _is_multi_part_query(query):
+        snippet_count = min(3, sum(
+            document is None and _source_matches_query_strongly(query, source)
+            for source, document, _ in fetch_results
+        ))
+        if successful_count + snippet_count > 1:
+            source_char_limit = min(source_char_limit, total_context_chars // (successful_count + snippet_count))
 
     for source, document, _ in fetch_results:
         if document is None:
@@ -1130,7 +1179,7 @@ def build_grounded_model_request(
         [
             context_guidance,
             "Answer the question directly in the first sentence whenever the supplied material supports a direct answer.",
-            "For yes-or-no questions, start with Yes, No, or Insufficient based only on the provided material.",
+            "For yes-or-no questions, start with Yes, No, or Insufficient (translated into the answer's language) based only on the provided material.",
             "If the sources provide a concrete date, name, number, or event label, state it plainly before adding context.",
             "Use the smallest sufficient set of sources. If one source directly answers the question, lead with that answer and use other sources only to confirm it or to describe a conflict.",
             "Every substantive factual claim must cite one or more supporting source IDs like [S1].",
@@ -1138,6 +1187,8 @@ def build_grounded_model_request(
             "Do not answer from prior knowledge, training data, or unstated assumptions.",
             "If the provided material does not establish an answer, say that the sourced material is insufficient.",
             "If the sources conflict, describe the conflict and cite the competing source IDs.",
+            "Answer in the language of the user's question unless the user explicitly requests another language.",
+            "For a multi-part question, address each part separately and in order. Cite evidence for each part; if one part lacks evidence, say that part is insufficient without discarding supported answers to the other parts.",
             "Keep the answer concise and specific. Do not hedge with phrases like 'the sourced material suggests' when the supplied text directly answers the question.",
             f"Question: {query}",
             context_heading,

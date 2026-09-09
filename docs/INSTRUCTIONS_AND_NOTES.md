@@ -46,6 +46,20 @@
 
 ## Practical Notes
 
+- Greek/multi-part relevance tuning lives in the backend, not the standalone
+  browser SearXNG UI. Match Unicode letters, accents/case/sigma consistently on
+  queries and sources; never strip Greek text or translate remotely. `SEARCH_LANGUAGE`
+  blank/auto permits the local Greek hint; explicit `en`, `el`, or `all` wins.
+- Keep clause recognition conservative: quoted/operator queries and detected
+  pronoun-dependent clauses retain the full query rather than guessing a subject.
+  Punctuation-separated English/Greek questions can expand within the existing
+  three-query cap. Prefer relevant coverage across clauses without inflating
+  query, fetch, or context limits. Reserve snippet space for a failed clause's
+  source instead of consuming the whole budget on successful first-clause text.
+- Unit fixtures cover Greek normalization, language overrides, recency signals,
+  bounded splitting, source/excerpt balance, and partial failures. They do not
+  prove generated-answer quality; without a provisioned GGUF, explicitly report
+  that live model-answer evaluation is skipped.
 - The first branch intentionally keeps the UI static and lightweight to avoid introducing a frontend toolchain before the architecture is stable.
 - The current model slot is a concrete `llama.cpp` CUDA profile, but the backend remains adapter-driven and should not be coupled to that runtime.
 - The default validated model path is `QuantFactory/Qwen2.5-7B-Instruct-GGUF` with the file `Qwen2.5-7B-Instruct.Q4_K_M.gguf` stored in `data/models/`.
