@@ -23,7 +23,41 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Publication-Date Repair (2026-09-10)
+## Current DDG Request Diagnosis (2026-09-10)
+
+- User approved investigating the remaining DDG News timeouts. New scope branch
+  stamos/ddg-request-diagnosis from clean main 25a8425. No production fix/change.
+- Read native adapter/processor/network: cold token HTTP and downstream news
+  request share the six-second engine budget; token HTTP retains its own 2s
+  limit. Synchronous waiter has 0.2s overhead and no explicit future cancellation.
+- Added bounded, metadata-only native-call observation and two new frozen public
+  fixtures; do not retry the old failed suite. Native arguments/results/errors
+  and limits remain intact. Offline preparation passed 37 host tests and native
+  network-none initialization. See DDG_REQUEST_DIAGNOSIS.md for evidence/limits.
+- One live run passed the full cooldown/VPN/image preflight. ddg-wind: cold cache,
+  token HTTP timeout in 2.002s (transport budget 2s, waiter 2.199s); native web
+  response 2.038s, zero rows, one error. No token response/parsing completion,
+  downstream request or news parsing occurred. Stopped; Greek fixture unqueried.
+- This confirms a token-fetch failure in this sample, distinct from the earlier
+  failure after a fast token-page HTTP return. DNS/TCP/TLS/server-read cause is
+  not established. No global timeout/provider/routing change or fix justified.
+  No rerun; diagnostic -Live now refuses immediately. Full validator passed:
+  62 Python tests, 18 negative Compose cases, managed build, native initialization,
+  ranking/privacy/offline-egress/recovery. Temporary resources removed.
+- Cached validation rebuild changed the OCI index/attestation but not the runtime
+  platform manifest. Final ops-check fails its top-level ID comparison; read-only
+  platform descriptor comparison proves identical sha256:1f98d2d96d53e188a371cd13e3e439c94aafca027dbfc1ef8179977ad5d6396a.
+  The old index cannot be inspected locally anymore. No retag, code fix or
+  production restart attempted. Independent VPN/DNS/distinct-egress and native
+  localhost/privacy checks passed; deployed search remains healthy.
+- This exposes a separate pre-existing health-check/validation-image identity
+  bug, not a DDG cause. Recommend a scoped checker/validation-tag correction
+  before the next content-free transport-phase diagnostic on a fresh fixture.
+  Do not weaken image identity to tag-only or restart to hide the false alarm.
+  Diagnosis/tooling complete; Git review/push/merge/cleanup pending. No deploy,
+  release, browser history, provider config or credential change in this scope.
+
+## Previous Publication-Date Repair (2026-09-10)
 
 - User approved fixing the confirmed duplicate-date loss. Fresh branch
   stamos/preserve-publication-dates from clean main 15159dd. No ranking/timeout,
@@ -481,8 +515,10 @@ or cached Docker images are deleted by this migration.
 3. Guarded trial completed to its stop condition: one healthy result, then DDG
    timeout after a fast token-page response. Do not rerun the failed suite or
    ship the timeout/ranking candidate. The date repair is implemented/deployed;
-   investigate DDG's downstream request separately
-   with bounded metadata-only diagnostics.
+   DDG-only diagnosis now also confirms a token HTTP timeout in a new sample.
+   Correct the separately discovered manifest-identity health-check false alarm
+   in a new approved scope, then consider bounded transport-phase diagnostics
+   with a fresh fixture. No replay of either failed suite.
    Require healthy holdout/topicality evidence before any ranking deployment.
    Media/models/reboot drills remain separate.
 

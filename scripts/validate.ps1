@@ -42,6 +42,7 @@ try {
     docker compose build
     if ($LASTEXITCODE -ne 0) { throw 'Compose build failed.' }
     Write-Host 'Built local SearXNG date-merge repair; gateway/VPN remain pinned upstream images.'
+    & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1')
     docker compose up -d --wait --wait-timeout 120 host-gateway search-provider
     if ($LASTEXITCODE -ne 0) { throw 'Isolated search stack failed to start.' }
     foreach ($path in @('/','/preferences','/config','/stats')) { Assert-HttpPrivacy $path }

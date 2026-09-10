@@ -70,6 +70,12 @@
 - The historical News candidate's -Live mode now refuses immediately. Its failed
   suite must not be retried; original-image offline tests remain characterization.
   A new DDG diagnostic needs its own scope, fixtures and compatibility review.
+- The subsequent DDG-only trace stopped on its first fresh fixture: token HTTP
+  timed out in 2.002s, before parsing or the downstream News request. This does
+  not explain the earlier post-token-page failure or prove a DNS/TLS/root cause.
+  Read DDG_REQUEST_DIAGNOSIS.md. Its -Live mode is now refused; do not rerun failed
+  fixtures. Any new transport observation needs a fresh scoped decision, no
+  payload logging, native timeout/retry semantics intact, and normal cooldowns.
 
 ## Startup And Migration
 
@@ -97,3 +103,8 @@
   RUN steps and a data-excluding context. No legacy application build is restored.
   Runtime validation repeats date tests plus existing ranking/privacy checks.
 - ops-check.ps1 verifies the three-service live topology and VPN isolation.
+- Known pending checker bug: a cached rebuild can change the OCI index due to
+  provenance while leaving the platform manifest identical. ops-check currently
+  compares the index IDs and can falsely fail. Read DDG_REQUEST_DIAGNOSIS.md;
+  inspect the running ImageManifestDescriptor and built --platform descriptor.
+  Do not redeploy, retag arbitrarily or bypass checks just to hide this warning.
