@@ -74,6 +74,8 @@ See [browser integration](docs/BROWSER_SEARCH_INTEGRATION.md).
 The [holdout/News investigation](docs/HOLDOUT_AND_NEWS_RANKING.md) explains
 layout grouping, missing news dates and the adapter's separate token timeout.
 No live ranking behavior is changed by the diagnostic replay.
+The [isolated candidate trial](docs/ISOLATED_NEWS_CANDIDATE.md) tests a bounded
+token timeout and News score ordering without modifying the browser service.
 
 ## Removed Legacy Components
 

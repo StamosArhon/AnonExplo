@@ -23,7 +23,47 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Holdout And News Diagnosis Scope (2026-09-10)
+## Current Isolated News Candidate Scope (2026-09-10)
+
+- User approved the isolated adapter/ranking experiment. Fresh branch
+  stamos/isolated-news-adapter from clean main cb3e9ed.
+- Candidate is an unprivileged, read-only, disposable pinned-image process:
+  no HTTP listener, ports, production cache, secrets or config writes. Offline
+  tests use network=none; explicit live trial shares only the existing VPN
+  namespace and resolver. Native in-process Flask search uses three existing
+  News adapters, no added recipients or fetched article pages.
+- Freeze four new EN/EL public fixtures before live evaluation. Change only
+  the inner token budget 2 -> 4 seconds; retain native six-second engine
+  deadline, parsing, cache semantics, filters and suspension behavior. Candidate
+  News order uses native scores before layout grouping, leaving metadata intact.
+- Guard exact upstream source hashes. Log only bounded stage timings/status,
+  cold-cache boolean and aggregates; optional top-five snippet review. No raw
+  adapter exceptions, tokens, pages or trace files. Stop on first degradation;
+  never recreate the candidate as a retry/cooldown bypass.
+- Offline implementation passed 12 new pinned-source tests plus native app
+  initialization, 32 existing benchmark tests, 14 negative Compose cases and
+  the full privacy/offline-egress/recovery validator. Early offline-only harness
+  failures (PYTHONPATH and disabled Brave network dependency) were fixed before
+  any live query. Image builds N/A: still no managed build contexts.
+- Live preflight waited 180 seconds then refused to launch because production
+  error history changed. Read-only follow-up found three DDG News error contexts,
+  previously two; same-snapshot serialization compared equal. No candidate
+  query was sent, and all four fixtures remain unseen. Asked the user for a
+  roughly five-minute quiet window; no automatic reattempt or new provider.
+- Native aggregate errors now show timeouts in both fetch_vqd and the actual
+  request stage. Token failure is observed, but the proposed fix is not proven;
+  don't imply every DDG error has the same cause. Full details and limitations
+  are in ISOLATED_NEWS_CANDIDATE.md.
+- Production unchanged. Candidate tools are safe for offline use; deployment
+  awaits healthy cold-query results and topicality evidence. No release applies
+  to this intentionally isolated experiment. Final full validator passed again;
+  live ops passed with three healthy services, unchanged 8085 and VPN routing.
+  Production config/Compose diff is empty. No browser automation, live VPN-stop
+  or reboot/sleep drill was run. Offline candidate containers and validation
+  project cleaned up; user data/cache/images remain untouched. Remote closeout
+  follows the reviewed tools/documentation commit; live evaluation is deferred.
+
+## Previous Holdout And News Diagnosis Scope (2026-09-10)
 
 - Completed scope stamos/holdout-news-ranking from clean main db95831; user
   authorized unseen-question evaluation and deeper News ranking investigation.
@@ -261,10 +301,11 @@ or cached Docker images are deleted by this migration.
 2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
    unchanged after rejecting the newest-first trial. Retain honest limits of
    snippet-level judgements, news freshness and intermittent upstream errors.
-3. Next recommended scope: isolated candidate adapter/ranking repair, grounded in
-   HOLDOUT_AND_NEWS_RANKING.md (token budget, score-vs-layout grouping, missing
-   dates). Require healthy cold-query tests and topicality review before deploy.
-   Ask before the new scope. Media, headless models and reboot drills are separate.
+3. Candidate adapter/ranking tools are now built and offline-tested. Live
+   preflight detected changing production error history and sent no queries.
+   Next: an operator-confirmed quiet window for the bounded trial described in
+   ISOLATED_NEWS_CANDIDATE.md. Require healthy cold-query tests and topicality
+   review before deploy. Media, headless models and reboot drills are separate.
 
 ## Continuity
 

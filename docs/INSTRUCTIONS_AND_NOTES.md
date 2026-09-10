@@ -47,6 +47,12 @@
   dates and a separate hard-coded DuckDuckGo token timeout. Read
   HOLDOUT_AND_NEWS_RANKING.md before any adapter/ranking patch; global timeout
   increases and new providers do not directly address these mechanisms.
+- Isolated candidate tools are experiment-only, never production imports. Read
+  ISOLATED_NEWS_CANDIDATE.md before using test-news-candidate.ps1 -Live. Its
+  process does not share native suspension state: respect preceding cooldowns,
+  avoid concurrent searches, stop on degradation and never recreate as a retry.
+  Default invocation is network-disabled and sends no queries. Exact source
+  fingerprints must be reviewed, not blindly updated on an image change.
 
 ## Startup And Migration
 

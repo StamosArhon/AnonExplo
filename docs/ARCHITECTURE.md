@@ -25,6 +25,11 @@ base plus docker-compose.validation.yml, a tmpfs cache and separate port/project
 Normal startup explicitly selects the Proton overlay. A replaced VPN namespace
 still requires start-proton-search.ps1 -Recreate.
 
+The manual News candidate is a disposable experiment process, not a service or
+production import. Offline checks use network=none; an explicitly invoked trial
+shares the existing VPN namespace with a separate tmpfs cache and no listener.
+See ISOLATED_NEWS_CANDIDATE.md for cooldown limitations and deployment gates.
+
 ## Configuration
 
 - configs/searxng/settings.yml: engines, timeouts and native privacy defaults.

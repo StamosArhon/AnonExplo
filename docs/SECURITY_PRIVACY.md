@@ -73,6 +73,13 @@ The existing DuckDuckGo token cache has secret-hashed query/UA keys and expiring
 token values; it is not plaintext history, nor does expiry guarantee secure
 erasure. This scope did not inspect/cache-dump, delete or add to its design.
 
+The disposable News candidate uses a separate tmpfs cache, never the production
+cache or key. Logs are disabled and stage diagnostics omit tokens, queries and
+URLs. Its default offline test has network=none; an explicit live trial shares
+only VPN networking and opens no listener. Suspension state is process-local:
+review cooldowns before a trial and never recreate it to retry a failed provider.
+Tmpfs disposal is not a guarantee of secure erasure from host memory or swap.
+
 Gluetun contacts its configured DNS/health/blocklist/public-IP services; these
 are infrastructure requests, not search strings. DNS-over-TLS uses Cloudflare
 through the VPN; checks use example.com and api.ipify.org. No zero-third-party-

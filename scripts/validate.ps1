@@ -36,6 +36,7 @@ try {
     }
     python -m unittest discover -s scripts/tests -p 'test_*.py'
     if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed.' }
+    & (Join-Path $PSScriptRoot 'test-news-candidate.ps1')
     & (Join-Path $PSScriptRoot 'test-startup-helpers.ps1')
     # No source-built app services remain; retain the build entry point to
     # automatically cover future repo-managed services when they are introduced.
