@@ -44,6 +44,11 @@
     arrange(result.order, result.nodes);
     status.textContent = result.message;
   }
+  function note(text) {
+    if (!cached) return;
+    cached.message = `${cached.summary} ${text} OFF restores the original page.`;
+    display(cached);
+  }
   async function request(path, body, signal, search = false) {
     const timeout = new AbortController();
     const abort = () => timeout.abort();
@@ -102,18 +107,19 @@
   function coverageParameters() {
     // Rendered RSS metadata contains the effective native POST/cookie filters.
     const link = document.querySelector('link[rel="alternate"][type="application/rss+xml"]');
-    if (!link) return null;
+    if (!link) return {reason: 'Extra searches skipped: native filters unavailable.'};
     const p = new URL(link.href, location.href).searchParams;
     const current = new URL(location.href).searchParams;
-    if (p.get('q') !== query || p.get('categories') !== 'general' || p.get('pageno') !== '1' ||
-        current.has('engines') || /(^|\s)[!:]|\b(?:site|inurl|intitle|filetype):/i.test(query) ||
-        document.querySelector('#engines_msg .response-error')) return null;
+    if (document.querySelector('#engines_msg .response-error')) return {reason: 'Extra searches skipped because an engine reported an error.'};
+    if (p.get('categories') !== 'general' || p.get('pageno') !== '1') return {reason: 'Extra searches apply only to the first General results page.'};
+    if (p.get('q') !== query || current.has('engines') || /(^|\s)[!:]|\b(?:site|inurl|intitle|filetype):/i.test(query))
+      return {reason: 'Extra searches skipped to preserve your explicit query or engine restrictions.'};
     const result = new URLSearchParams({format: 'json', categories: 'general', pageno: '1'});
     for (const name of ['language', 'time_range', 'safesearch']) {
-      if (!p.has(name)) return null;
+      if (!p.has(name)) return {reason: 'Extra searches skipped: native filters unavailable.'};
       result.set(name, p.get(name));
     }
-    return result;
+    return {params: result};
   }
   function nodeFor(row) {
     const article = document.createElement('article');
@@ -132,15 +138,15 @@
     article.append(heading, content, attribution);
     return article;
   }
-  async function rank(candidates, nodes, signal, note) {
+  async function rank(candidates, nodes, signal, message) {
     const r = await request('/anonexplo-preview/rank-v2', JSON.stringify({query, results: candidates, native_count: native.length}), signal);
     if (signal.aborted) throw Error('cancelled');
     if (r.version !== 2 || !Array.isArray(r.order) || new Set(r.order).size !== r.order.length ||
         !r.order.every(i => Number.isInteger(i) && i >= 0 && i < nodes.length) ||
         !native.every((_, i) => r.order.includes(i)) || !Number.isInteger(r.added) ||
         r.added !== r.order.filter(i => i >= native.length).length || !Number.isInteger(r.moved)) throw Error('invalid');
-    cached = {order: r.order, nodes, message: `${r.moved} original result(s) moved · ${r.added} relevant addition(s). ${note} OFF restores the original page.`};
-    display(cached);
+    cached = {order: r.order, nodes, summary: `${r.moved} original result(s) moved · ${r.added} relevant addition(s).`};
+    note(message);
   }
   async function run() {
     pending = true;
@@ -149,14 +155,15 @@
     status.textContent = 'Ranking locally… Original results remain available.';
     try {
       await rank(rows, [...native], signal, 'Checking extra-source availability.');
-      const params = coverageParameters();
-      if (!params) { cached.message = 'Local relevance ranking applied. Extra searches skipped: restricted query, later page, category or engine errors. OFF restores the original page.'; display(cached); return; }
+      const eligibility = coverageParameters();
+      if (!eligibility.params) { note(eligibility.reason); return; }
+      const params = eligibility.params;
       const plan = await request('/anonexplo-preview/plan', '{}', signal);
       if (signal.aborted) return;
       if (plan.version !== 2 || !Array.isArray(plan.groups) || plan.groups.length > 2 ||
           !plan.groups.every(g => Array.isArray(g) && g.length > 0 && g.length <= 9 && g.every(d =>
             typeof d === 'string' && d.length <= 253 && /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?)+$/.test(d)))) throw Error('invalid plan');
-      if (!plan.groups.length) { cached.message = 'Local ranking applied. Extra searches skipped by the shared request limit; no automatic retry. OFF restores the original page.'; display(cached); return; }
+      if (!plan.groups.length) { note(plan.status === 'source_limit' ? 'Extra searches skipped: this mode supports at most 18 preferred sites.' : 'Extra searches skipped by the shared request limit; no automatic retry.'); return; }
       const seen = new Set(all.map(n => canonical(n.querySelector('h3 a')?.href)));
       const additions = [];
       let searches = 0;
@@ -184,13 +191,13 @@
         }
       }
       if (additions.length) await rank([...rows, ...additions], [...native, ...additions.map(nodeFor)], signal, `${searches} extra search(es) completed.`);
-      else { cached.message = `Local ranking applied. ${searches} extra search(es), no new matching links found. OFF restores the original page.`; display(cached); }
+      else note(`${searches} extra search(es), no new matching links found.`);
     } catch (_) {
       if (signal.aborted) return;
       if (!cached) restore();
       const message = cached ? 'Local ranking retained. Extra search or final ranking unavailable; stopped without retries.' : 'Local ranking unavailable; original page retained. No extra searches sent.';
-      if (cached) cached.message = message;
-      status.textContent = message;
+      if (cached) note(message);
+      else status.textContent = message;
     } finally {
       pending = false;
     }
@@ -200,7 +207,7 @@
     if (persist) { try { localStorage.setItem(key, enabled ? 'on' : 'off'); } catch (_) { /* Storage may be disabled. */ } }
     label();
     if (!enabled) {
-      if (pending && cached) cached.message = 'Completed local ranking retained; remaining extra work cancelled. No retry on this page.';
+      if (pending && cached) note('Remaining extra work cancelled. No retry on this page.');
       controller?.abort();
       restore();
       status.textContent = 'Original page restored. No further extra searches will be sent.';

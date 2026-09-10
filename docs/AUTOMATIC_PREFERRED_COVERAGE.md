@@ -96,9 +96,13 @@ ordinary native search also works with the separate model stopped.
 - Full isolated validator passed: Compose policies, managed image build (live
   image tag unchanged), historical regression suites, native settings/date guards,
   privacy, blocked egress, outage/recovery and isolated cleanup.
-- Deployment, updated gateway smoke and bounded browser/live coverage verification
-  pending at implementation checkpoint. Do not claim live coverage or quality
-  improvement based on deterministic fixtures alone.
+- Deployed by replacing only the separate model and reloading nginx; all three
+  core identities/health unchanged. Actual gateway v2, asset SHA equality, privacy,
+  method/content/cross-site rejection, model relevance-first and shared budget
+  pass. Latest two-pair gateway inference 0.115s; no provider queries in this smoke.
+- Full isolated validation passed again after adding deployment/routes. Final
+  status-wording change separately passed the v2 DOM suite and deployed asset/
+  gateway check. No managed SearXNG source or production image change.
 
 One fresh functional browser fixture, fixed before dispatch: `cross border
 investigative journalism`, General/Anytime/auto, one native search and at most the
@@ -106,3 +110,15 @@ two automatic follow-ups. Check UI state, provider-error stop, bounded dispatch,
 addition counts and exact OFF restoration. No article text, query response or
 browser history stored. This is an integration check, not a quality holdout;
 stop on degradation, no retry or replacement fixture in this scope.
+
+Outcome: one native response, 21 results, Yahoo parsing error. Local ranking
+worked (20 positions changed); exact native restoration and cached ON/OFF verified
+in an actual in-app browser tab. Panel stayed in the native results column (648px).
+The native error correctly prevented all supplemental dispatch. No retry, extra
+fixture, provider change or ban reset. Temporary test tab closed with mode OFF;
+the user's original tab and Brave profile remained untouched. Brave had no CDP
+endpoint, so the browser skill's no-relaunch boundary led to the in-app fallback.
+Remembered-mode and successful supplemental merging are covered by deterministic
+DOM/transport tests, but **successful live additional retrieval remains unverified**.
+This fixture is now observed/retired, not an unseen quality benchmark. Do not
+claim that site omissions, provider failures or general relevance are solved.

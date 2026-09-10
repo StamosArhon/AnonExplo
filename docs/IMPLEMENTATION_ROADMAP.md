@@ -37,9 +37,19 @@ or cached Docker images are deleted by this migration.
   model pass. Full 32 longer-pair authored fixture: 3.809s, four relevant additions
   admitted/four irrelevant rejected. Full isolated validator passes including
   managed image build, unchanged live tag, privacy/egress/outage tests and cleanup.
-- Implementation staged behind the gateway alias/reload; existing live pages
-  remain v1. Deployment/gateway/live verification and Git closeout pending.
-  No broad relevance improvement or guaranteed preferred-site coverage claimed.
+- Implementation frozen/pushed at 85042ee. Deployed model-only replacement and
+  nginx reload; gateway/search/VPN identities and health unchanged. V2 gateway
+  asset equality, request/privacy controls, model ranking and shared budget pass.
+- Single fixed browser fixture: 21 native results, Yahoo parsing error. Local
+  ranking moved 20 positions; exact OFF restore/cached toggles verified. Native
+  error correctly prevented all extra queries, no retries or replacement fixture.
+  Successful live supplemental retrieval remains unverified; deterministic
+  merging/admission tests pass. No broad quality or guaranteed coverage claim.
+- Full isolated validation passed again; final status wording passed v2 DOM and
+  deployed gateway checks. User's original tab/Brave unchanged; temporary in-app
+  test tab closed OFF. No CDP endpoint, no browser relaunch. This closeout records
+  the reviewed commit/push, main merge and scoped cleanup; older unrelated shadow
+  branch preserved. No installer/registry release applies to this local update.
 
 ## Previous Opt-In Browser Preview (2026-09-11)
 
