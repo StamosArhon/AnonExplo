@@ -94,6 +94,16 @@ Exact profile/source and artifact hashes are checked before use. No host package
 installation, runtime download, credential/cache sharing or payload capture.
 See UPSTREAM_TRANSPORT_REVIEW.md; this candidate is not a deployed upgrade.
 
+The guarded DDG web experiment imports explicitly provisioned, hash-pinned source
+only in a non-root network-disabled container. It substitutes a no-op query
+cache and mock transport, restricts requested HTTPS hosts/paths, disables redirect
+options, filters headers and bounds challenge parsing/request counts/deadlines.
+No response JavaScript execution, credentials, production cache or listeners.
+Post-buffer text limits are not streaming limits; mock transport assertions do
+not establish real session-cookie isolation or cancellation. Native cooldown
+integration is not yet implemented. Live mode refuses; do not deploy this helper.
+See GUARDED_DDG_WEB_CANDIDATE.md for limits and next integration gates.
+
 Gluetun contacts its configured DNS/health/blocklist/public-IP services; these
 are infrastructure requests, not search strings. DNS-over-TLS uses Cloudflare
 through the VPN; checks use example.com and api.ipify.org. No zero-third-party-

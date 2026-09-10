@@ -23,7 +23,32 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current New-Adapter Applicability Review (2026-09-10)
+## Current Guarded Web Candidate Batch (2026-09-10)
+
+- Approved implementation/offline-test/readiness batch on
+  stamos/guarded-ddg-web-candidate from clean main 637ade0.
+- Added explicit hash-pinned upstream source provisioning, a guarded first-page
+  adapter executor, pure policy tests and exact-upstream mocked pipeline tests.
+  HTTPS host/path restrictions, no redirects, header filtering, bounded challenge
+  arithmetic, shared deadline and no query cache/retries. No JS execution.
+- Runner is offline-only, non-root/read-only with network=none and capped tmpfs;
+  no VPN/key/live cache/ports. -Live refuses. Optional validate.ps1 -WebCandidate
+  requires explicit provisioning and never downloads during validation.
+- Full validate.ps1 -WebCandidate passed: 110 Python test executions (including
+  12 new host guards and 18 new exact-adapter mock tests), 20 negative Compose
+  cases, seven negative identity cases plus equality, source/binding checks,
+  isolated managed build with production tag unchanged, native privacy/settings/
+  ranking, blocked egress, outage/recovery and cleanup. -Live refusal passed.
+  Optional old transport-version comparison not repeated. Read-only source
+  inspection recovered from an import-time missing-/tmp error; no product impact.
+- Readiness decision: no live trial yet. This direct adapter executor is not a
+  native processor/cooldown integration; real transport/cookies/cancellation need
+  offline checks first. See GUARDED_DDG_WEB_CANDIDATE.md. No production repair,
+  relevance gain, image deployment, new engine enablement or News fix claimed.
+- Reviewed code/docs accompany commit/push, fast-forward main merge and scoped
+  local/remote branch cleanup. No installer/release or deployment applies.
+
+## Previous New-Adapter Applicability Review (2026-09-10)
 
 - User requested proceeding after the completed batch. Read-only upstream check
   found unchanged client releases but new SearXNG revisions 765a999 (DDG web) and
@@ -642,9 +667,12 @@ or cached Docker images are deleted by this migration.
    reproducible tests for a future relevant upstream fix; do not repeatedly
    probe providers or upgrade simply because a newer version exists.
    Later DDG web commit 765a999 is a distinct candidate, not a News timeout fix:
-   review/test allowed origins, redirects, bounded challenge parsing and shared
-   request budgets offline before any live web trial. Keep Startpage inactive/
-   disabled; do not adopt its new challenge handling by incidental image upgrade.
+   its guarded offline executor and synthetic adapter tests are now implemented.
+   Next integrate/test the exact native processor and real transport offline,
+   including option forwarding, session cookies, redirects, cancellation and
+   native cooldown/error mapping, before deciding on any live web trial. Keep
+   Startpage inactive/disabled; do not adopt its new challenge handling by
+   incidental image upgrade.
    Require healthy holdout/topicality evidence before any ranking deployment.
    Media/models/reboot drills remain separate.
 

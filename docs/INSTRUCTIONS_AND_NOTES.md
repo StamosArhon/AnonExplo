@@ -100,6 +100,13 @@
   candidate needs explicit allowed-origin/redirect and bounded parsing/budget
   review for response-derived follow-up URLs before a live trial.
 
+- GUARDED_DDG_WEB_CANDIDATE.md documents the implemented offline web executor.
+  Provision its exact source explicitly; test-ddg-web-candidate.ps1 and optional
+  validate.ps1 -WebCandidate are network-disabled and -Live refuses. It wraps
+  upstream request/response with mocks, not the native online processor. Never
+  import it into production or infer tested cookie/cooldown/cancellation behaviour
+  from mocked options; complete native integration offline before a live trial.
+
 ## Startup And Migration
 
 - setup-browser-search.ps1 -SkipBrowserConfiguration refreshes hidden startup
