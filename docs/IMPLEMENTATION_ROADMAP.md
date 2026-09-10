@@ -23,7 +23,26 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Native Web Integration Batch (2026-09-10)
+## Current Guarded Web Trial Batch (2026-09-10)
+
+- User approved the suggested small VPN-only web trial. Fresh branch
+  stamos/ddg-web-guarded-trial from clean main a72c0d4.
+- Added a separate one-shot trial wrapper, offline initialization, frozen fresh
+  public navigation fixtures and metrics-only acceptance tests. Keep existing
+  retired live guards untouched. No production settings/image/VPN changes.
+- Preflight requires a 10s settling + 180s quiet/cooldown window, known DDG error
+  classes, unchanged local stats/error history and full production/VPN checks.
+  One process/network/suspension state, 20s pacing, at most three queries, stop
+  on first degradation. No provider retries, exit rotation or cache reset.
+- Full validate.ps1 -WebCandidate passed: 139 Python test executions, 20 negative
+  Compose cases, seven negative identity cases plus equality, managed isolated
+  build with production tag unchanged, source/binding checks, native privacy/
+  settings/ranking, blocked egress, outage/recovery and cleanup. Offline startup
+  was repeated after numeric-only call observation was added. Fixtures/policy
+  are hash-locked for a pre-evaluation freeze commit; live evaluation pending.
+  See DDG_WEB_GUARDED_TRIAL.md. No installer/release applies.
+
+## Previous Native Web Integration Batch (2026-09-10)
 
 - Approved offline integration batch on stamos/ddg-web-native-integration from
   clean main 088bfa6. Added candidate-only native processor/client integration;

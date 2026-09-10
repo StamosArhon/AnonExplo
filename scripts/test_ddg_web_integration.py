@@ -61,7 +61,8 @@ class IntegrationTests(unittest.TestCase):
         self.closed_stall = None
         self.server = run(self.start_server())
         self.port = self.server.sockets[0].getsockname()[1]
-        self.network = Network(enable_http=False, verify=True, max_connections=1, max_redirects=0, retries=0)
+        self.network = Network(enable_http=False, verify=True, enable_http2=True,
+                               max_connections=1, max_redirects=0, retries=0)
         self.addCleanup(lambda: run(self.cleanup_async()))
         original = Network.get_client
         self.trust_fixture = True
