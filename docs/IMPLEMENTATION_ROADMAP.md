@@ -54,8 +54,11 @@ or cached Docker images are deleted by this migration.
   bug, not a DDG cause. Recommend a scoped checker/validation-tag correction
   before the next content-free transport-phase diagnostic on a fresh fixture.
   Do not weaken image identity to tag-only or restart to hide the false alarm.
-  Diagnosis/tooling complete; Git review/push/merge/cleanup pending. No deploy,
-  release, browser history, provider config or credential change in this scope.
+  Diagnosis/tooling complete; fa0e3a0 committed and pushed, diff reviewed against
+  unchanged remote main, whitespace checks passed. This documentation closeout
+  accompanies the fast-forward main merge and local/remote branch cleanup.
+  No remote blocker; the checker defect remains explicitly open, not fixed.
+  No deploy, release, browser history, provider config or credential change.
 
 ## Previous Publication-Date Repair (2026-09-10)
 
