@@ -58,13 +58,17 @@ or cached Docker images are deleted by this migration.
 - Final production ops passed with the same three healthy services, 8085 and
   VPN-only DNS/egress. Only these audit documents changed; no deployment,
   installer/release, reboot or live VPN-stop drill applies.
-- Git closeout is partially blocked by the automatic safety reviewer: the
+- Git closeout was initially blocked by the automatic safety reviewer: the
   combined commit/push command was rejected before execution because the remote
   had not been verified for transmitting project/security notes. Read-only Git
   config confirms https://github.com/StamosArhon/AnonExplo.git, without embedded
   credentials. GitHub CLI is unavailable, so private visibility was not verified
-  here. Local commit/review can proceed; ask user approval for the push. Do not
-  claim remote push, main merge or branch cleanup occurred in this audit scope.
+  here. Audit commit 5b4b34c was retained locally. The user subsequently explicitly
+  approved pushing these notes to the existing repository and finishing the
+  merge. This closeout records that approval and accompanies the reviewed
+  push/main merge/local and remote branch cleanup. The full validator already
+  passed for this audit; this follow-up changes documentation only and uses
+  whitespace/diff review, without rerunning Docker tests or production probes.
 
 ## Previous Quiet-Window Trial (2026-09-10)
 
