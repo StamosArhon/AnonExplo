@@ -25,8 +25,11 @@ or cached Docker images are deleted by this migration.
 
 ## Current Holdout And News Diagnosis Scope (2026-09-10)
 
-- Branch stamos/holdout-news-ranking from clean main db95831; user authorized
-  unseen-question evaluation and deeper News ranking investigation.
+- Completed scope stamos/holdout-news-ranking from clean main db95831; user
+  authorized unseen-question evaluation and deeper News ranking investigation.
+- Implementation 7c22ed9 was pushed to origin. This documentation closeout
+  accompanies the reviewed fast-forward main merge and branch cleanup. Resume
+  future work from updated main; no remote blocker remains.
 - Added six fixed EN/EL informational holdouts and four News holdouts, declared
   before querying. Existing production settings/weights remain unchanged. No
   live plugin, model, new provider, restart, key/exit change or browser edit.
@@ -62,7 +65,8 @@ or cached Docker images are deleted by this migration.
   DNS and distinct egress. Production settings/Compose diff is empty. No new
   kill-switch/reboot drill or browser UI automation was needed/performed.
 - Reviewed changes against main, whitespace checks passed, remote main matches
-  local. No secret files tracked. Ready for publication/merge/branch cleanup.
+  local. No secret files tracked. Evaluation tools and diagnosis are complete;
+  the next adapter experiment must use a fresh branch and separate scope.
   No installer/release applies to benchmark/documentation-only changes.
 
 ## Previous Relevance And Coverage Scope (2026-09-10, historical)
