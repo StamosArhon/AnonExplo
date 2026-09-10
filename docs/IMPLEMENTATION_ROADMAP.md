@@ -60,8 +60,13 @@ or cached Docker images are deleted by this migration.
   live ops passed with three healthy services, unchanged 8085 and VPN routing.
   Production config/Compose diff is empty. No browser automation, live VPN-stop
   or reboot/sleep drill was run. Offline candidate containers and validation
-  project cleaned up; user data/cache/images remain untouched. Remote closeout
-  follows the reviewed tools/documentation commit; live evaluation is deferred.
+  project cleaned up; user data/cache/images remain untouched.
+- Implementation 2f0cc98 was committed and pushed. Reviewed branch against main:
+  only experiment tools, validator integration and docs; whitespace checks pass,
+  no secrets tracked. This closeout accompanies the fast-forward main merge and
+  local/remote branch cleanup. Resume from updated main on a fresh scope branch.
+  Offline preparation is complete; live evaluation is explicitly deferred, not
+  claimed passed. No remote blocker remains.
 
 ## Previous Holdout And News Diagnosis Scope (2026-09-10)
 
