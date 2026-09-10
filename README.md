@@ -83,6 +83,11 @@ guarded web adapter with the native client/processor over container-loopback TLS
 It is offline-only, not a deployed News fix. After explicit source provisioning,
 `validate.ps1 -WebCandidate` includes both mock and real-client integration suites;
 `test-ddg-web-candidate.ps1 -Integration` runs the latter alone. `-Live` refuses.
+The separately approved [local reranker trial](docs/LOCAL_RERANKER_TRIAL.md)
+passed its initial Greek/English synthetic tests in a network-disabled container.
+It is provisioned locally but not connected to browser searches or source boosts.
+This is a headless relevance-gating experiment, not a restored chatbot product.
+
 The [bounded quality decision](docs/SEARCH_QUALITY_DECISION.md) found no deployable
 ranking improvement: a mixed, small score-order gain on 11 graded questions,
 then a provider error stopped query 12. The holdout and recent-information

@@ -58,6 +58,13 @@ for routine diagnosis. Use local status checks and native aggregate engine stats
 
 ## Verification
 
+The separately approved local reranker experiment downloads pinned, verified
+official model files only during explicit provisioning. Runtime inference is
+network=none with read-only mounts, no ports, no remote code and no production
+cache/VPN credential. Synthetic score metrics only; the private preferred-site
+list is not committed or passed to external services. The model is not connected
+to browser search. See LOCAL_RERANKER_TRIAL.md for measured limits and provenance.
+
 validate.ps1 checks offline Compose policies (including negative regressions),
 the exact service/port topology, native settings/headers, direct-egress blocking
 in the offline base, and local outage/recovery. Its separate project/port/tmpfs

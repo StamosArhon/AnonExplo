@@ -67,5 +67,8 @@ offline integration test boundary or treat the experiment as a deployment.
 
 A future reranker may run as a headless internal-only service, consuming already
 returned results. It does not require the removed UI/backend/fetcher. Define its
-contract, privacy boundaries and benchmark before implementation; none is added
-or provisioned now. Historical architecture/code remains in Git and LEGACY docs.
+contract, privacy boundaries and benchmark before integration. A separately
+approved CPU-only experiment is now provisioned: LOCAL_RERANKER_TRIAL.md.
+Its disposable network-none runner has no listener or production connection;
+the browser path above is unchanged. Historical architecture/code remains in Git
+and LEGACY docs; no legacy runtime is restored.

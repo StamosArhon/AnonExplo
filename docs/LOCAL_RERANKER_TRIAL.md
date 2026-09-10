@@ -57,5 +57,51 @@ or sent to providers. No private list is installed or active in this trial.
 
 ## Outcome
 
-Provisioning/build complete; frozen offline evaluation and full validation pending.
-No production integration, restart or search engine changes.
+Frozen fixtures/policy committed and pushed at 41a413f before evaluation.
+Fixture SHA256: 9c83e4d83b354561381d38559228ebb82b46f3565297756f9994d099009f0e6d.
+
+| Case | Relevant score | Largest negative score | Eligible positive |
+| --- | ---: | ---: | --- |
+| dev-en-dns | 0.978063 | 0.000821 | yes |
+| dev-el-water | 0.989685 | 0.000029 | yes |
+| dev-en-port | 0.955227 | 0.029528 | yes |
+| dev-el-licence | 0.985977 | 0.008520 | yes |
+| test-en-battery | 0.006515 | 0.000411 | no |
+| test-el-relative | 0.855054 | 0.001394 | yes |
+| test-en-news | 0.923590 | 0.003511 | yes |
+| test-el-certificate | 0.996475 | 0.076241 | yes |
+
+Relevant snippet top-ranked 8/8; zero of 24 negatives crossed 0.8. Seven of eight
+positives eligible, including all four Greek positives. The cold-battery positive
+was strongly under-scored despite being correctly ordered relative to negatives:
+this shows why an absolute score is not a probability and conservative gating can
+miss genuinely useful preferred pages. No threshold was changed after inspection.
+The four holdouts are now observed regression fixtures, not fresh validation.
+This tiny authored suite does not establish real-result false-positive rates or
+resistance to arbitrary adversarial content.
+
+Warm four-pair times 0.242–0.346s; warm batch of 24 short pairs 1.559s on CPU.
+CPU functional/latency gate passed. Longer snippets, 512-token batches, cold start,
+concurrent searches and real-result performance remain unmeasured. No GPU trial.
+Loopback-only interface and failed public-IP connection checks passed in the actual
+inference container. Runtime dependency capture: RERANKER_RUNTIME_VERSIONS.txt.
+Local evaluated image index: sha256:a1ecd793732ada795e0f2fb5162b126b748a982ca902a5a7513df946f2b5cb99;
+platform manifest: sha256:cb292e14b807bebf61dfd564272937f329ef87d25a547ee6d122334cfbef6955.
+These are provenance records, not an immutable registry publication.
+
+Decision: promising enough for separately bounded real-result shadow evaluation;
+NOT approved as a production relevance filter from synthetic evidence alone.
+Future integration needs full artifact/runtime verification, disabled-by-default
+local configuration, a fixed request/time budget and unchanged-order fallback on
+failure. Keep preferred domains local; no model on an egress-capable network.
+No production integration, restart or search-engine changes. Model artifacts and
+the trial image remain locally available; no permanent model process is running.
+Full validate.ps1 passed: 127 Python test executions (91 host, 12 historical
+News, 11 timeout semantics, 13 date), 20 negative Compose cases, seven negative
+image-identity cases plus equality, managed isolated search-image build, native
+privacy/settings/ranking, blocked direct egress and outage/recovery cleanup.
+The separately managed reranker image was built successfully during explicit
+provisioning and exercised in the actual model trial. Optional unrelated retired
+DDG candidate suites not repeated. Reviewed tooling/docs accompany commit/push,
+main merge and scoped local/remote branch cleanup. No production deployment or
+installer/release applies to this isolated experiment.

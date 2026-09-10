@@ -31,7 +31,20 @@ or cached Docker images are deleted by this migration.
 - Official hash-verified multilingual model provisioned locally; CPU image built.
   No private domain list committed, model API, production endpoint, query history
   or changed browser search. Fixed EN/EL synthetic fixtures and conservative
-  bounded boost policy; offline tests, evaluation and validation pending.
+  bounded boost policy. Frozen/pushed at 41a413f before evaluation.
+- Actual network-none CPU inference: correct top result 8/8, zero negative boosts
+  in 24 negatives, 7/8 eligible positives, all four Greek positives eligible.
+  Cold-battery case was a conservative false negative; threshold unchanged.
+  Warm 24-short-pair batch 1.559s. Synthetic gate passed, not real-world validation.
+  Candidate is ready for bounded shadow evaluation, not production deployment.
+  No private source list installed, no persistent model process, no provider
+  requests or production changes. Full validate.ps1 passed: 127 Python test
+  executions, 20 negative Compose cases, seven negative image-identity cases plus
+  equality, isolated managed search build (production tag unchanged), native
+  privacy/settings/ranking, blocked egress and outage/recovery cleanup. Separate
+  reranker build/inference passed; optional unrelated DDG candidate suites skipped.
+  Reviewed results/tooling accompany commit/push, main merge and scoped cleanup.
+  No production deployment or installer/release applies to the experiment.
 
 ## Previous End-to-End Quality Decision (2026-09-10)
 
