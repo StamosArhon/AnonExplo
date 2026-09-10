@@ -115,8 +115,11 @@ VPN credential or production cache; no listener, host port, test CA/DNS override
 or proxy fallback. Logs/exception capture stay disabled, output is metrics-only,
 and no result site is fetched. It stops on the first degradation, without retry.
 Its first preflight refused changed local stats before any provider dispatch.
+A user-confirmed second preflight passed: one healthy query, then timeout on the
+next first-page fetch. Stopped without retry; both live entrypoints now refuse.
+The one-shot marker is preserved; no cache/ban reset or production change.
 Snapshots used for comparison stay in memory; raw records are not persisted or
-printed. See DDG_WEB_GUARDED_TRIAL.md before another manually authorized preflight.
+printed. See DDG_WEB_GUARDED_TRIAL.md; this completed suite must not be resumed.
 
 Gluetun contacts its configured DNS/health/blocklist/public-IP services; these
 are infrastructure requests, not search strings. DNS-over-TLS uses Cloudflare

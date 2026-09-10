@@ -1,4 +1,4 @@
-"""Approved bounded DDG web trial; invoke only through its preflight wrapper.
+"""Completed bounded DDG web trial; live execution is retired.
 
 No test CA/DNS override, public listener, raw error recording or query cache.
 Default is initialization-only, suitable for network=none validation.
@@ -45,6 +45,8 @@ class MetricsContainer:
 
 
 def main(live=False):
+    if live:
+        raise RuntimeError('Completed trial retired after first-page HTTP timeout')
     logging.disable(logging.CRITICAL)
     os.environ['SEARXNG_SECRET'] = secrets.token_hex(32)
     verify_integration_sources()

@@ -1,5 +1,10 @@
 # Guarded VPN-only DDG Web Trial (2026-09-10)
 
+Status: completed after a user-confirmed second preflight. One healthy fixture,
+then a first-page timeout; stopped with no retry. Live modes are now retired.
+Preparation and the first blocked preflight below are historical; final outcome
+is recorded at the end of this report.
+
 User explicitly approved the next suggested bounded live trial. Scope
 stamos/ddg-web-guarded-trial from main a72c0d4. Production image, engine choices,
 ranking, browser settings and Proton profile must remain unchanged.
@@ -106,3 +111,41 @@ diagnose metadata stability/activity attribution without sending test queries.
 
 Tooling and this blocked outcome accompany final commit/push, main merge and
 scoped branch cleanup. No production deployment or installer/release applies.
+
+### Confirmed Quiet-Window Evaluation
+
+The user explicitly agreed to leave searches idle for a new window. Scope
+stamos/ddg-web-quiet-window from ce6a103; frozen fixture/policy hash and source
+guards unchanged. The 10s settling + 180s quiet/cooldown check passed this time.
+ops-check verified three healthy services, the runtime image manifest, localhost
+privacy headers, VPN namespace/local DNS, HTTPS and distinct host/search egress.
+The trial used the existing VPN namespace with no restart or exit change.
+
+| Fixture | Results | Expected site rank | Total time | Outcome |
+| --- | ---: | ---: | ---: | --- |
+| web-library | 10 | 1 | 1.226s | Accepted |
+| web-air | 0 | none | 2.003s | Timeout; stopped |
+| web-observatory-el | not sent | not evaluated | not evaluated | Remains unseen |
+
+For the healthy fixture, first-page discovery returned HTTP 200 in 0.371s and
+the result API returned HTTP 200 in 0.854s. For the second fixture, the initial
+HTTP request failed with Timeout at 2.002s, before any downstream API or challenge
+follow-up. Three HTTP calls total across two submitted queries, with 20s spacing;
+no retries or remaining fixture dispatch. No live challenge path was exercised.
+
+The first two fixtures are now observed regression evidence, not unseen holdouts.
+The third remains unseen but is not authorization to resume this retired suite.
+The empty ignored one-shot marker is preserved. Both the PowerShell -Live path
+and direct Python --live entrypoint now refuse before networking. Offline startup,
+policy, mock and TLS integration checks remain available.
+
+Decision: keep production unchanged and DDG web opt-in. This is evidence that the
+new adapter can work, not that it is reliable or improves general relevance. A
+first-page timeout persisted despite the new adapter and guarded native-client
+integration. This does not prove the failure's DNS/TLS/network cause or justify
+a longer timeout, cookie persistence, retries or VPN exit rotation. It is not a
+DDG News repair. Preserve the offline tests for genuinely new transport evidence;
+do not continue equivalent live adapter trials or tune on failed fixtures.
+
+Post-trial validation and Git closeout are recorded in IMPLEMENTATION_ROADMAP.md.
+No production deployment, browser configuration change or installer/release.

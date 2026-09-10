@@ -1,5 +1,6 @@
 param([switch]$Live, [ValidateSet('anonexplo/searxng:date-merge-v1','anonexplo/searxng:validation')][string]$Image='anonexplo/searxng:date-merge-v1')
 $ErrorActionPreference = 'Stop'
+if ($Live) { throw 'Completed web trial stopped on first-page HTTP timeout. Live mode is retired; do not retry these fixtures.' }
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $source = Join-Path $root 'build/ddg-web-review/duckduckgo_web.py'
 if (-not (Test-Path -LiteralPath $source)) { throw 'Provision the frozen upstream source explicitly first.' }

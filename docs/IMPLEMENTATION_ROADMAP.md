@@ -23,7 +23,37 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Guarded Web Trial Batch (2026-09-10)
+## Current Confirmed-Quiet Web Trial Outcome (2026-09-10)
+
+- User explicitly confirmed a new quiet window. Fresh scope
+  stamos/ddg-web-quiet-window from clean main ce6a103. Reused unchanged/unseen
+  fixtures frozen at 959c664; no guard, query, engine or VPN changes before trial.
+- The full 10s + 180s quiet/cooldown preflight passed. Local stats stayed stable;
+  production manifest/health/privacy and VPN namespace/DNS/HTTPS/distinct-egress
+  checks passed. Same VPN session, no restart, cache reset or credential changes.
+- web-library: 10 results, expected domain at rank 1, 1.226s; first-page and API
+  calls returned HTTP 200 (0.371s/0.854s). web-air: first-page HTTP timed out in
+  2.002s (2.003s total), zero results, no downstream API/challenge request.
+  Stopped immediately without retry. Third Greek fixture was never sent.
+- First two fixtures are observed regression evidence; third remains unseen.
+  One-shot marker is preserved. Both wrapper -Live and direct runner --live now
+  refuse, including on another PC without the marker. Offline checks remain.
+- Decision: no deployment or default enablement. The new web adapter can return
+  results but does not eliminate intermittent first-page timeouts; no general
+  relevance gain or DDG News repair established. The timing is not a proven
+  DNS/TLS/root cause or evidence for increasing timeouts. See trial report.
+- Full post-trial validate.ps1 -WebCandidate passed: 139 Python test executions,
+  20 negative Compose cases, seven negative identity cases plus equality,
+  isolated managed image build, source/binding checks, native privacy/settings/
+  ranking, blocked direct egress, outage/recovery and temporary-stack cleanup.
+  Both retired live entry points were separately verified to refuse before
+  dispatch (direct Python check used network=none). One-shot marker preserved;
+  all three production services remain healthy, with no production restart.
+- Reviewed metrics-only outcome and retirement changes accompany commit/push,
+  fast-forward main merge and local/remote scoped branch cleanup. No installer
+  or production release applies to this intentionally undeployed experiment.
+
+## Previous Guarded Web Trial Preparation (2026-09-10)
 
 - User approved the suggested small VPN-only web trial. Fresh branch
   stamos/ddg-web-guarded-trial from clean main a72c0d4.
@@ -727,11 +757,13 @@ or cached Docker images are deleted by this migration.
    Native processor/client integration now passes real offline TLS tests for
    option forwarding, cookies, redirects, body bounds, cancellation and cooldowns.
    The separate bounded VPN-only web trial runner and frozen fixtures now exist.
-   Its first preflight stopped on changed local stats before sending any query.
-   Next requires an operator-coordinated four-minute quiet window for a fresh
-   preflight; all three fixtures remain unseen. No automatic repeat or guard
-   weakening. If instability recurs, diagnose metadata/caller attribution before
-   provider evaluation. Existing retired diagnostic live modes stay refused. Keep
+   The confirmed quiet-window trial passed preflight: one healthy web fixture,
+   then a first-page HTTP timeout. It is now retired; do not send the remaining
+   fixture or repeat failed queries. No default enablement or timeout change.
+   Keep the offline reproductions for materially new transport evidence, rather
+   than continuing provider trials with equivalent adapters. Any next browser
+   relevance work should be separately scoped around the working default engines.
+   Existing retired diagnostic live modes stay refused. Keep
    Startpage inactive/disabled; do not adopt its new challenge handling by
    incidental image upgrade.
    Require healthy holdout/topicality evidence before any ranking deployment.
