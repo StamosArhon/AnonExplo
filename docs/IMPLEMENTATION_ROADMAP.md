@@ -23,7 +23,17 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current End-to-End Quality Decision (2026-09-10)
+## Current Local Relevance-Gate Trial (2026-09-10)
+
+- User explicitly approved a local-only reranker experiment for relevance-gated
+  preferred-site boosts. Fresh stamos/local-reranker-trial from f2d6691; previous
+  closed studies remain retired. See LOCAL_RERANKER_TRIAL.md for separate scope.
+- Official hash-verified multilingual model provisioned locally; CPU image built.
+  No private domain list committed, model API, production endpoint, query history
+  or changed browser search. Fixed EN/EL synthetic fixtures and conservative
+  bounded boost policy; offline tests, evaluation and validation pending.
+
+## Previous End-to-End Quality Decision (2026-09-10)
 
 - User explicitly approved one substantial deploy-or-stop quality batch after
   rejecting diminishing-return tweaks. Fresh stamos/search-quality-decision

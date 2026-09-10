@@ -141,6 +141,11 @@
 
 ## Validation And Workflow
 
+- LOCAL_RERANKER_TRIAL.md is an explicitly approved separate model experiment.
+  Provision downloads only in the provisioning step; inference is network=none,
+  local-files-only, no remote code, no production mount or endpoint. Keep private
+  preferred domains out of Git. Model scores are not calibrated probabilities.
+
 - SEARCH_QUALITY_DECISION.md replaces incremental tuning as the current quality
   scope: frozen development/holdout split, two fixed same-response policies,
   explicit snippet grades, deployment gates and no retry/tuning loop on failure.
