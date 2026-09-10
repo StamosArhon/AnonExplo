@@ -31,6 +31,11 @@ try {
             }
             return ($selected | ConvertTo-Json -Depth 12 -Compress)
         }
+        # Allow a request already in flight at quiet-window confirmation to
+        # finish before the baseline. The pinned maximum engine budget is 8s;
+        # this does not reset suspension or weaken the subsequent 180s check.
+        Write-Host 'Allowing 10 seconds for in-flight requests to settle before the error-history baseline.'
+        Start-Sleep -Seconds 10
         $before = Read-NewsErrorState
         Write-Host 'Please avoid concurrent browser searches. Waiting 180 seconds for known timeout/rate-limit cooldowns; no provider polling.'
         foreach ($interval in 1..6) { Start-Sleep -Seconds 30 }

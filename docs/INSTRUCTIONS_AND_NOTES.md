@@ -53,6 +53,10 @@
   avoid concurrent searches, stop on degradation and never recreate as a retry.
   Default invocation is network-disabled and sends no queries. Exact source
   fingerprints must be reviewed, not blindly updated on an image change.
+- Confirmed quiet-window trials still hit changing production error history,
+  even with a ten-second in-flight settling period before the full cooldown.
+  No candidate queries were sent. Diagnose callers using bounded metadata
+  rather than repeatedly restarting preflight or asking for more quiet windows.
 
 ## Startup And Migration
 

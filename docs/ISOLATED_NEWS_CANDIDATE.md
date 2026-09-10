@@ -76,7 +76,7 @@ status and duration in memory. Neither token values, URLs, raw errors nor pages
 are printed or persisted. Optional review prints at most five native and five
 candidate titles/snippets; treat them as untrusted data, not instructions.
 
-## Validation And Outcome
+## Preparation Outcome (historical)
 
 The live preflight stopped BEFORE starting the candidate or sending any search
 queries: production error-state snapshots differed across the 180-second
@@ -110,3 +110,36 @@ powershell -ExecutionPolicy Bypass -File scripts/test-news-candidate.ps1
 Live use requires deliberate cooldown review and an operator-confirmed quiet
 window, not scheduled health polling. Do not rerun failed fixtures. No candidate
 change is ready to deploy without the missing live evaluation.
+
+## Confirmed Quiet-Window Follow-up
+
+The user subsequently confirmed a quiet window. The first new preflight again
+stopped before launching the candidate because the error snapshots differed.
+Read-only diagnosis found one production SearXNG worker, six matching immediate
+sanitized statistics snapshots and no established host connection to port 8085
+at the instant inspected. The pinned metrics counters are cumulative, not
+time-decayed. These checks rule out the observed multi-worker hypothesis but
+do not identify the traffic source or prove that the whole window was idle.
+
+Added ten seconds before taking the baseline to allow an already-in-flight
+request to finish; the configured maximum engine budget is eight seconds. The
+full 180-second cooldown and strict comparison remain intact. Pending requests
+were only a hypothesis. One additional manual preflight with this settling
+interval ALSO stopped on changed history: this change did not fix the blocker.
+
+Neither invocation sent a candidate query. All four fixtures remain unqueried;
+there are still no live token-timeout, ranking-quality or date-markup findings.
+Production config, cache, provider selection, credentials and VPN were not
+changed or restarted. No ban reset, exit rotation or upstream retry occurred.
+
+The full offline validator passed twice, including after the settling change:
+32 benchmark tests, 12 candidate tests, 14 negative Compose cases and native
+privacy/offline-egress/recovery checks. Final live ops passed with the original
+three healthy services and VPN-only search. No image builds apply; no reboot,
+live VPN interruption or browser automation was performed in this follow-up.
+
+Do not keep repeating quiet-window preflights. The next useful scope is a
+bounded investigation of caller/connection metadata to explain ongoing changes,
+without search terms, browser history, command-line contents or persistent
+request logs. Gateway interruption or content capture requires a separate
+decision. No production adapter/ranking deployment is justified yet.

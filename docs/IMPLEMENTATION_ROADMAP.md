@@ -23,7 +23,39 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Isolated News Candidate Scope (2026-09-10)
+## Current Quiet-Window Trial (2026-09-10)
+
+- User confirmed a roughly five-minute quiet window and authorized the bounded
+  live candidate evaluation. Fresh stamos/news-quiet-window-trial branch from
+  clean main b65041a; use the existing frozen fixtures and candidate unchanged.
+- First quiet-window preflight again detected differing error snapshots and
+  sent no candidate queries. Safe diagnosis found one SearXNG worker, six
+  matching back-to-back sanitized snapshots and no currently established host
+  client connection to 8085. Native counters are cumulative, not time-decayed.
+  These checks do not identify who sent earlier queries or prove inactivity.
+- Added a ten-second settling interval before the error-history baseline for
+  requests already in flight at confirmation (pinned max engine budget 8s).
+  The full subsequent 180-second cooldown and strict comparison are unchanged.
+  Pending requests are a possible cause, not an established explanation. One
+  additional manual preflight also stopped on changed error history. The
+  settling change did NOT solve the blocker. No provider query was retried.
+- No production restart, provider change, cache/ban reset, key/exit change or
+  browser edit. Both preflights sent zero candidate queries; all four frozen
+  fixtures remain unqueried. No token/ranking improvement has been demonstrated.
+- Full validator passed before and after the small settling change: 32 benchmark
+  tests, 12 pinned candidate tests, 14 negative Compose cases, native privacy,
+  offline egress and recovery. Image build N/A (no contexts). Final production
+  ops passed: same three healthy services, 8085, VPN-only DNS/egress.
+- Retain the settling interval as preflight hygiene, not a search fix. Stop
+  further preflight attempts pending diagnosis of the changing error history.
+  Next scope: bounded caller/connection metadata investigation without queries,
+  browser history, command-line contents or persistent request logging. Ask
+  before any gateway interruption or tracing that collects request content.
+- Production config/Compose diff is empty. No candidate deployment, live
+  kill-switch/reboot/browser drill or release. Final review and Git closeout
+  follow; the live evaluation remains explicitly blocked, not passed.
+
+## Previous Isolated News Candidate Scope (2026-09-10)
 
 - User approved the isolated adapter/ranking experiment. Fresh branch
   stamos/isolated-news-adapter from clean main cb3e9ed.
@@ -306,11 +338,12 @@ or cached Docker images are deleted by this migration.
 2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
    unchanged after rejecting the newest-first trial. Retain honest limits of
    snippet-level judgements, news freshness and intermittent upstream errors.
-3. Candidate adapter/ranking tools are now built and offline-tested. Live
-   preflight detected changing production error history and sent no queries.
-   Next: an operator-confirmed quiet window for the bounded trial described in
-   ISOLATED_NEWS_CANDIDATE.md. Require healthy cold-query tests and topicality
-   review before deploy. Media, headless models and reboot drills are separate.
+3. Candidate adapter/ranking tools are built and offline-tested, but even the
+   confirmed quiet-window preflights detected changing production error history
+   and sent no queries. Do not keep requesting quiet windows/repeating preflight.
+   Next: identify the cause using bounded caller/connection metadata, without
+   search terms or browser history. Require healthy cold-query results and
+   topicality review before deployment. Media/models/reboot drills are separate.
 
 ## Continuity
 
