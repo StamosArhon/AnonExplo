@@ -23,7 +23,34 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Approved Reliability Batch (2026-09-10)
+## Current Offline Timeout Review (2026-09-10)
+
+- User approved offline client review. Fresh stamos/offline-timeout-semantics
+  from clean main 2243b6b; no new live search, production change or upgrade.
+- Added source-guarded native caller/retry tests and controlled loopback transfers
+  in a network-disabled container, using the existing hardened wrapper with
+  -TimeoutSemantics. Numeric-only output, no production cache/key, no host ports.
+- Reproduced the misleading live counter pattern during a local TLS-handshake
+  stall, both cold and after successful handle use: server accepted TCP but
+  counters show zero TCP/TLS and first-byte time near timeout despite no response.
+  TLS stalling is consistent with the live sample, not proven as its root cause.
+- Confirmed caller-vs-transport budget divergence and lack of explicit caller
+  future cancellation; native transport timeouts retain code/identity. Timeout
+  gets no native Network retry at retries=0, but ConnectionError gets one.
+- Initial retry mocks failed on read-only instance methods; corrected test-only
+  class patch. All 11 new tests passed. See OFFLINE_TIMEOUT_SEMANTICS.md.
+- Full validation passed: 77 Python tests, 20 negative Compose cases, seven
+  negative identity cases plus match, offline source/binding checks, isolated
+  managed build (production tag unchanged), privacy/settings, blocked egress,
+  outage/recovery and cleanup. Live/mixed-mode refusal checks passed. Docker
+  metadata confirms the same three production services remain healthy.
+- Review complete; tests/docs accompany commit/push, fast-forward main merge and
+  scoped branch cleanup. No production timeout/TLS/cancellation change, restart,
+  provider query, installer or release. Live DDG reliability remains unresolved.
+  Next scope: upstream transport source/release review and offline compatibility
+  checks before proposing any guarded image update or fresh live experiment.
+
+## Previous Approved Reliability Batch (2026-09-10)
 
 - User approved four bundled steps: repair image checks/build isolation; obtain
   bounded transport timings; implement only an evidence-supported search fix;
@@ -558,13 +585,12 @@ or cached Docker images are deleted by this migration.
 2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
    unchanged after rejecting the newest-first trial. Retain honest limits of
    snippet-level judgements, news freshness and intermittent upstream errors.
-3. Guarded trial completed to its stop condition: one healthy result, then DDG
-   timeout after a fast token-page response. Do not rerun the failed suite or
-   ship the timeout/ranking candidate. The date repair is implemented/deployed;
-   DDG-only diagnosis now also confirms a token HTTP timeout in a new sample.
-   Correct the separately discovered manifest-identity health-check false alarm
-   in a new approved scope, then consider bounded transport-phase diagnostics
-   with a fresh fixture. No replay of either failed suite.
+3. Date repair and manifest-identity/build-isolation fixes are complete. DDG
+   diagnostics remain retired after their stop conditions. Offline review now
+   reproduces misleading counters during a controlled TLS stall, without proving
+   the live root cause. Next scope should review upstream transport source/release
+   changes and compare offline compatibility before proposing any guarded image
+   update or further live trial. No replay of failed suites or speculative patch.
    Require healthy holdout/topicality evidence before any ranking deployment.
    Media/models/reboot drills remain separate.
 

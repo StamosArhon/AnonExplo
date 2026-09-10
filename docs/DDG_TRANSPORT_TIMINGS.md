@@ -65,6 +65,11 @@ response, deliberate blocking, a bad DNS resolver or a particular network hop.
 This identifies another token-fetch timeout, not its precise underlying cause.
 The successful sample establishes that the same path can work, not reliability.
 
+Follow-up: OFFLINE_TIMEOUT_SEMANTICS.md reproduces this counter pattern with a
+controlled loopback TLS-handshake stall in the same pinned client. TCP was
+accepted and no response was sent. This strengthens the warning against reading
+these failure counters literally; it does not uniquely diagnose the live failure.
+
 Approved batch step three is an explicit no-change decision: these observations
 do not validate a timeout increase, provider swap, retry, HTTP/TLS change or VPN
 rotation. No speculative production search fix is shipped. Existing cooldowns,

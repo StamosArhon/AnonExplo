@@ -1,4 +1,4 @@
-param([switch]$Live, [switch]$Transport, [ValidateSet('anonexplo/searxng:date-merge-v1','anonexplo/searxng:validation')][string]$Image = 'anonexplo/searxng:date-merge-v1')
+param([switch]$Live, [switch]$Transport, [switch]$TimeoutSemantics, [ValidateSet('anonexplo/searxng:date-merge-v1','anonexplo/searxng:validation')][string]$Image = 'anonexplo/searxng:date-merge-v1')
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $root
@@ -6,6 +6,7 @@ try {
     if ($Live) {
         throw 'Both completed diagnostics stopped on token HTTP timeout. Live mode is retired; do not retry these fixtures. Offline checks remain available.'
     }
+    if ($Transport -and $TimeoutSemantics) { throw 'Choose one offline diagnostic mode.' }
     $network = 'none'
     if ($Live -and $Image -ne 'anonexplo/searxng:date-merge-v1') { throw 'Live diagnostics require the verified production image.' }
     $extra = @()
@@ -54,7 +55,8 @@ try {
         '--mount',"type=bind,source=$PSScriptRoot,target=/diagnostic,readonly",
         '--entrypoint','/usr/local/searxng/.venv/bin/python')
     $run += $extra
-    $run += @($image,'/diagnostic/run-ddg-diagnostic.py')
+    $runner = if ($TimeoutSemantics) { '/diagnostic/test_timeout_semantics.py' } else { '/diagnostic/run-ddg-diagnostic.py' }
+    $run += @($image,$runner)
     if ($Transport) { $run += '--transport' }
     if ($Live) { $run += '--live' }
     & docker @run

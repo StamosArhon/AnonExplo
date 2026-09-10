@@ -82,6 +82,12 @@
   diagnostic fixture sets are retired from PowerShell -Live; do not bypass that
   guard with the Python runner. -Transport offline checks preserve source guards,
   numeric-only capture and native argument/return/exception behavior.
+- -TimeoutSemantics runs only mocked caller/retry tests and container-loopback
+  transfers under network=none. Read OFFLINE_TIMEOUT_SEMANTICS.md: the pinned
+  TLS-stall path reports zero TCP completion and nonzero first-byte time despite
+  confirmed TCP acceptance and no server response. Do not infer live network
+  phases from those counters alone. Caller timeout does not explicitly cancel
+  its future; this is not proof of the observed transport timeout's cause.
 
 ## Startup And Migration
 
