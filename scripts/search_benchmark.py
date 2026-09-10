@@ -81,7 +81,14 @@ NEWS_HOLDOUT = (
     ("news-holdout-sea-el", "θαλάσσια προστασία Ελλάδα", "el", None, "news", None,
      "Recent Greek reporting on marine protection in Greece, not general beach tourism."),
 )
-SUITES = {"navigation": FIXTURES, "informational": INFORMATIONAL,
+# Freeze before first evaluation; objective destination coverage, not topicality.
+DEFAULT_AUDIT = (
+    ("default-pathlib", "Python pathlib read_text encoding documentation", "en", "docs.python.org"),
+    ("default-css-grid", "MDN CSS grid auto-fit minmax reference", "en", "developer.mozilla.org"),
+    ("default-library-el", "Εθνική Βιβλιοθήκη της Ελλάδος ηλεκτρονικός κατάλογος", "el", "nlg.gr"),
+    ("default-cadastre-el", "Ελληνικό Κτηματολόγιο ηλεκτρονικές υπηρεσίες", "el", "ktimatologio.gr"),
+)
+SUITES = {"default-audit": DEFAULT_AUDIT, "navigation": FIXTURES, "informational": INFORMATIONAL,
           "news": NEWS, "news-month": NEWS_MONTH,
           "holdout": HOLDOUT, "news-holdout": NEWS_HOLDOUT}
 ENGINE_NAMES = frozenset(("brave", "brave.news", "bing", "duckduckgo", "google", "startpage",
@@ -234,7 +241,20 @@ def metrics(payload, expected_host):
         "top5_domains": len(set(hosts[:5]) - {""}),
         "contributing_engines": len(contributors), "engine_errors": len(failures),
         "engine_result_counts": contributors, "failures": error_metrics(failures),
+        "top5_attribution": top5_attribution(results),
     }
+
+
+def top5_attribution(results):
+    """Counts from one merged response, not independent engine quality/ablation."""
+    counts = {}
+    for result in results[:5]:
+        names = {safe_engine(e) for e in result.get('engines', [])} if isinstance(result, dict) else set()
+        for name in names:
+            bucket = counts.setdefault(name, {'credited': 0, 'sole_credit': 0})
+            bucket['credited'] += 1
+            bucket['sole_credit'] += int(len(names) == 1)
+    return counts
 
 
 def run(port, language_mode, samples, pause=15, suite="navigation", engine=None, review=False, compare_scores=False, start_at=1):
@@ -316,7 +336,7 @@ def run(port, language_mode, samples, pause=15, suite="navigation", engine=None,
                "start_at": start_at,
                "selection": engine or "instance_defaults",
                "mean_seconds": round(sum(r["seconds"] for r in rows) / len(rows), 2)}
-    if suite == "navigation":
+    if suite in ("navigation", "default-audit"):
         summary.update(top5_matches=sum(r["expected_top5"] for r in rows),
                        mean_reciprocal_rank=round(sum(r["reciprocal_rank"] for r in rows) / len(rows), 3))
     print(json.dumps(summary))

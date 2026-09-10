@@ -40,6 +40,10 @@
   before any necessary settings restart; never restart to clear a ban.
 - Holdout fixtures are frozen before evaluation; after inspection they become
   regression cases. Do not tune on them and keep calling them unseen validation.
+- default-audit is a four-fixture official-destination coverage check, not general
+  relevance. Top-five credited/sole-credit counts describe one merged response,
+  not marginal engine quality or the effect of removing an engine. See
+  DEFAULT_ENGINE_COVERAGE.md for evaluation status before any use.
 - CompareScoreOrder replays one response in memory only; no production reranking.
   Degraded samples are excluded. StartAt is deliberate manual suffix selection,
   not permission to retry failing providers or auto-resume after errors.

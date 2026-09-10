@@ -23,7 +23,18 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Confirmed-Quiet Web Trial Outcome (2026-09-10)
+## Current Default-Engine Coverage Batch (2026-09-10)
+
+- Approved follow-up on stamos/default-engine-coverage from clean main 4cc085e.
+  Four fresh EN/EL official-destination fixtures, frozen before querying, and
+  same-response top-five attribution metrics. No snippets, history or result
+  payloads; no production config, weights, routing, timeout or provider changes.
+- Use existing VPN-checked browser benchmark once, 20s pacing and stop on first
+  degradation. No DDG diagnostic, retries, suffix resume or new recipient.
+  This is destination coverage, not a general topicality evaluation or ablation.
+  See DEFAULT_ENGINE_COVERAGE.md. Validation and live evaluation pending.
+
+## Previous Confirmed-Quiet Web Trial Outcome (2026-09-10)
 
 - User explicitly confirmed a new quiet window. Fresh scope
   stamos/ddg-web-quiet-window from clean main ce6a103. Reused unchanged/unseen

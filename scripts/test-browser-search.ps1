@@ -1,6 +1,6 @@
 param(
     [ValidateSet('browser', 'explicit')][string]$LanguageMode = 'browser',
-    [ValidateSet('navigation', 'informational', 'news', 'news-month', 'holdout', 'news-holdout')][string]$Suite = 'navigation',
+    [ValidateSet('default-audit', 'navigation', 'informational', 'news', 'news-month', 'holdout', 'news-holdout')][string]$Suite = 'navigation',
     [ValidateRange(1, 6)][int]$Samples,
     [ValidateRange(1, 6)][int]$StartAt = 1,
     [ValidateSet('brave', 'brave.news', 'bing', 'duckduckgo', 'google', 'startpage', 'mojeek', 'qwant', 'yahoo', 'wikipedia', 'duckduckgo news', 'google news', 'reuters')][string]$Engine,
