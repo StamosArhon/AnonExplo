@@ -84,4 +84,17 @@ only gateway/search, starts preview and verifies the unchanged VPN identity.
   Small validation-only subnets 10.254.250.0/28 and 10.254.250.16/28 resolve the
   exhausted automatic pools on this PC. Existing networks/routes inspected first;
   no global Docker configuration or other project network changed/deleted.
-- Deployment and final end-to-end localhost checks pending.
+- Full expanded validation passed: 99 host tests, 12 historical candidate tests,
+  11 timeout tests, 13 date-repair tests, three preview render/build tests, DOM
+  suite, 20 negative core Compose cases, four preview cases, identity guards,
+  privacy/blocked egress and isolated outage/recovery. Model/transport tests passed.
+- Deployment command was rejected by the safety reviewer before execution:
+  explicit approval requested for briefly replacing live search and gateway.
+  No quiet window, live image build, rollback retag, container replacement or
+  preview service startup ran. Native search remains deployed unchanged.
+- Gateway include uses an optional glob so its existing bind-mounted config
+  remains valid even in an older container without the new preview assets mount.
+  The running gateway's `nginx -t` passes; all three live services remain healthy
+  with unchanged uptimes. All 18 local preferred domains passed input validation.
+- Pending: approved deployment and end-to-end localhost gateway/model checks.
+  Do not tell the user the toggle is available until these are complete.

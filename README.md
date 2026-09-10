@@ -18,7 +18,8 @@ still see the query; a VPN is not a guarantee against provider retention.
 
 ## Start And Check
 
-For the optional local relevance experiment, search normally and click
+The optional preview is implemented but awaits approved deployment on this PC.
+After activation, search normally and click
 **Preferred sources: OFF** above a flat General results list. ON applies the
 local relevance-gated preview; OFF restores the original order instantly, without
 another search. Each new page starts OFF. Failure/timeout keeps native order.

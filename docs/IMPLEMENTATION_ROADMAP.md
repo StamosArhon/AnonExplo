@@ -36,7 +36,18 @@ or cached Docker images are deleted by this migration.
   BROWSER_PREFERENCE_PREVIEW.md. No default relevance improvement claimed.
 - Fixed validation-only subnets after checking Docker allocations/host routes;
   no unrelated network cleanup or global Docker changes. Initial full validation
-  passed again after pool exhaustion; expanded preview tests and deployment pending.
+  passed again after pool exhaustion. Expanded validator passed: 99 host tests,
+  12 candidate/11 timeout/13 date tests, three preview render/build tests, DOM
+  checks, Compose/core and preview negative cases, image guards, privacy,
+  blocked egress and outage/recovery. Six Unix transport tests and real offline
+  model integration passed; relevant promoted, irrelevant unchanged (synthetic).
+- Implementation pushed at 38c2b31. Deployment rejected by safety reviewer
+  before execution due to live search/gateway replacement disruption risk.
+  No production build/restart/model startup or rollback retag occurred. Explicit
+  approval needed for deployment; VPN will stay unchanged, native default OFF.
+  Optional nginx include remains compatible with existing containers lacking
+  preview mounts. Final code/docs reviewed and pushed; branch retained unmerged
+  pending deployment approval and live end-to-end verification. No installer.
 
 ## Current Local Relevance-Gate Trial (2026-09-10)
 
