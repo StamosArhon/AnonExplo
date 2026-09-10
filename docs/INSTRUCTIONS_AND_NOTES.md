@@ -53,10 +53,11 @@
   avoid concurrent searches, stop on degradation and never recreate as a retry.
   Default invocation is network-disabled and sends no queries. Exact source
   fingerprints must be reviewed, not blindly updated on an image change.
-- Confirmed quiet-window trials still hit changing production error history,
-  even with a ten-second in-flight settling period before the full cooldown.
-  No candidate queries were sent. Diagnose callers using bounded metadata
-  rather than repeatedly restarting preflight or asking for more quiet windows.
+- Prior quiet-window preflights hit changing error history, but the subsequent
+  metadata audit found no attributable caller and a stable 180-second window.
+  No candidate queries have been sent. Do not assume a background app or stop
+  one based on earlier statistics alone. Resume the guarded trial when approved;
+  do not repeat caller hunting without new evidence or bypass the stop guard.
 
 ## Startup And Migration
 

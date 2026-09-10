@@ -138,8 +138,38 @@ privacy/offline-egress/recovery checks. Final live ops passed with the original
 three healthy services and VPN-only search. No image builds apply; no reboot,
 live VPN interruption or browser automation was performed in this follow-up.
 
-Do not keep repeating quiet-window preflights. The next useful scope is a
+At that handoff, the recommended next scope was a
 bounded investigation of caller/connection metadata to explain ongoing changes,
 without search terms, browser history, command-line contents or persistent
 request logs. Gateway interruption or content capture requires a separate
 decision. No production adapter/ranking deployment is justified yet.
+
+## Caller Metadata Audit
+
+The subsequently approved metadata audit did not identify a background caller:
+
+- Windows: 104 snapshots over 60 seconds found no clients of loopback 8085.
+- Search namespace: 862 snapshots over 90 seconds found five loopback TIME_WAIT
+  socket states, consistent with health checks. Actual container health commands
+  request root every 30 seconds, not search. No HTTP contents were inspected.
+- Only expected containers belong to the three AnonExplo networks. The host
+  listener is com.docker.backend; live nginx targets the verified VPN namespace.
+  Proxy-bypassed host statistics match the direct in-container aggregate counts.
+- Engine error history stayed unchanged over a 40-second comparison and then
+  a full 180-second window. During the latter, 310 host TCP snapshots found only
+  one PID-0 TIME_WAIT connection, not an attributable application. The audit's
+  own preceding stats read is a plausible origin, not a proven attribution.
+
+These are bounded samples, not a guarantee that no short-lived/internal caller
+ever existed. They cannot identify who caused earlier changes. The earlier
+suggestion of a background application remains unproven; do not stop an app on
+that basis. No queries, browser history, command lines, packets or persistent
+request traces were collected. No production configuration or process changed.
+
+All 44 offline Python tests, 14 negative Compose cases and full native privacy,
+offline-egress/recovery checks passed. No image build contexts exist. The live
+candidate has still sent no query and no ranking/timeout fix is deployed.
+
+The service was quiet for the measured full cooldown-length window. The next
+step is the existing bounded trial when approved, not more caller hunting.
+Keep its stop guard: current quietness does not predict future engine health.

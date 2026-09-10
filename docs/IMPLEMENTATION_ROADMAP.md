@@ -23,7 +23,50 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Quiet-Window Trial (2026-09-10)
+## Current Caller Metadata Audit (2026-09-10)
+
+- User approved bounded caller/connection metadata diagnosis, not process
+  termination, gateway interruption, packet capture or request logging. Fresh
+  stamos/search-caller-audit branch from clean main 340307a.
+- Initial 60-second Windows sample: 104 TCP snapshots, no matching client
+  connections to loopback 8085. A 90-second search-namespace sample: 862
+  snapshots, five distinct loopback TIME_WAIT sockets. Actual Docker health
+  commands request root only every 30 seconds, not /search. Socket observations
+  are consistent with health traffic, not proof of request contents.
+- Only expected containers are on AnonExplo's three networks. Windows listener
+  belongs to com.docker.backend; live nginx targets search-vpn:8080 and SearXNG
+  shares that VPN namespace. Host proxy-bypassed and in-container error counts
+  agree. No additional internal engine checker/scheduler found in this build.
+- Selected engine error history stayed unchanged across a 40-second read-only
+  comparison AND the final 180-second correlation window. The latter sampled
+  310 TCP tables and saw one PID-0 TIME_WAIT socket, consistent with the audit's
+  preceding local stats read but not attributable to any application. No live
+  client was identified on loopback 8085 or the two resolved Docker 8080 targets.
+- No background caller is established. Earlier changing statistics did not
+  justify assuming a specific app or user activity. Sampling cannot reconstruct
+  the past or exclude very short/unobserved connections; no retrospective request
+  logs exist to attribute those changes. Do not mislabel PID 0 as an Idle caller.
+- No search queries, history, command lines or packet contents collected; no
+  persistent request logs or production changes. Only aggregate findings will
+  be committed. Full validator passed: 32 benchmark tests, 12 candidate tests,
+  14 negative Compose cases, native privacy/offline-egress/recovery checks.
+  No managed image builds apply; temporary validation resources cleaned up.
+- Outcome: currently quiet, no process to stop based on evidence. Diagnosis
+  complete with an explicit attribution limit; no software fix or live candidate
+  trial was authorized/performed in this metadata-only scope. Recommend resuming
+  the existing guarded trial, not repeated quiet-window/caller investigations.
+- Final production ops passed with the same three healthy services, 8085 and
+  VPN-only DNS/egress. Only these audit documents changed; no deployment,
+  installer/release, reboot or live VPN-stop drill applies.
+- Git closeout is partially blocked by the automatic safety reviewer: the
+  combined commit/push command was rejected before execution because the remote
+  had not been verified for transmitting project/security notes. Read-only Git
+  config confirms https://github.com/StamosArhon/AnonExplo.git, without embedded
+  credentials. GitHub CLI is unavailable, so private visibility was not verified
+  here. Local commit/review can proceed; ask user approval for the push. Do not
+  claim remote push, main merge or branch cleanup occurred in this audit scope.
+
+## Previous Quiet-Window Trial (2026-09-10)
 
 - User confirmed a roughly five-minute quiet window and authorized the bounded
   live candidate evaluation. Fresh stamos/news-quiet-window-trial branch from
@@ -342,11 +385,11 @@ or cached Docker images are deleted by this migration.
 2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
    unchanged after rejecting the newest-first trial. Retain honest limits of
    snippet-level judgements, news freshness and intermittent upstream errors.
-3. Candidate adapter/ranking tools are built and offline-tested, but even the
-   confirmed quiet-window preflights detected changing production error history
-   and sent no queries. Do not keep requesting quiet windows/repeating preflight.
-   Next: identify the cause using bounded caller/connection metadata, without
-   search terms or browser history. Require healthy cold-query results and
+3. Metadata audit found no attributable background caller and error history was
+   stable for a full 180-second window. Do not disable an app or repeat caller
+   investigations without new evidence. Next: resume the bounded candidate trial
+   with its existing safety guard on a fresh scope branch when approved. Never
+   bypass the guard if activity recurs. Require healthy cold-query results and
    topicality review before deployment. Media/models/reboot drills are separate.
 
 ## Continuity
