@@ -104,8 +104,14 @@
   Provision its exact source explicitly; test-ddg-web-candidate.ps1 and optional
   validate.ps1 -WebCandidate are network-disabled and -Live refuses. It wraps
   upstream request/response with mocks, not the native online processor. Never
-  import it into production or infer tested cookie/cooldown/cancellation behaviour
-  from mocked options; complete native integration offline before a live trial.
+  import it into production or infer real behaviour from those original mocks.
+- DDG_WEB_NATIVE_INTEGRATION.md records the subsequent native processor/client
+  TLS tests. -Integration stays network=none; validate.ps1 -WebCandidate runs both
+  mock and integration suites. Test-only CA/DNS overrides must never reach a live
+  image. The candidate preserves native suspension/error mapping, restricts
+  unsupported filters, caps decompressed bodies and cancels overdue transport.
+  A future bounded trial still needs fresh fixtures/cooldown preflight: isolated
+  process state does not inherit production's suspension history. -Live refuses.
 
 ## Startup And Migration
 

@@ -1,5 +1,9 @@
 # Guarded DDG Web Candidate (2026-09-10)
 
+Historical first-stage record. The subsequent implemented native processor/client
+integration and updated readiness decision are in DDG_WEB_NATIVE_INTEGRATION.md.
+The mock-only limits below describe this initial stage, not the later TLS tests.
+
 Approved batch: implement destination safeguards, test offline, assess live-trial
 readiness. Scope stamos/guarded-ddg-web-candidate from main 637ade0. This is actual
 experiment code, not a production adapter update or a DDG News timeout repair.

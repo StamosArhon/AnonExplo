@@ -119,11 +119,13 @@ class GuardedWeb:
         follow.search_params = response.search_params
         return follow
 
-    def run(self, query, headers=None):
+    def run(self, query, headers=None, budget=6):
         if self.used or not isinstance(query, str) or not query or len(query) >= 500:
             reject()
+        if not isinstance(budget, (int, float)) or not 0 < budget <= 6:
+            reject()
         self.used = True
-        self.deadline = self.clock() + 6
+        self.deadline = self.clock() + budget
         params = {'query': query, 'pageno': 1, 'headers': dict(headers or {}), 'url': None}
         self.module.request(query, params)
         if not params['url']:

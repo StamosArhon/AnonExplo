@@ -34,6 +34,13 @@ shares the existing VPN namespace with a separate tmpfs cache and no listener.
 Its live mode is retired after the failed trial; offline original-image tests
 remain historical characterization. See ISOLATED_NEWS_CANDIDATE.md.
 
+The separate guarded DDG web integration experiment is also not a service or
+production import. Its network=none tests use a non-root container-loopback TLS
+fixture with ephemeral trust/DNS overrides; no host ports, VPN or live cache.
+It exercises native processor cooldowns and the real client while enforcing a
+candidate-only deadline/body/header boundary. See DDG_WEB_NATIVE_INTEGRATION.md;
+no live mode or production adapter installation is added.
+
 ## Configuration
 
 - configs/searxng/settings.yml: engines, timeouts and native privacy defaults.

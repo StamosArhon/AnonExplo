@@ -78,6 +78,12 @@ The [isolated candidate trial](docs/ISOLATED_NEWS_CANDIDATE.md) tests a bounded
 token timeout and News score ordering; its live mode is now retired after a
 failed trial. It did not justify a timeout/ranking deployment.
 
+The [DDG web integration experiment](docs/DDG_WEB_NATIVE_INTEGRATION.md) tests a
+guarded web adapter with the native client/processor over container-loopback TLS.
+It is offline-only, not a deployed News fix. After explicit source provisioning,
+`validate.ps1 -WebCandidate` includes both mock and real-client integration suites;
+`test-ddg-web-candidate.ps1 -Integration` runs the latter alone. `-Live` refuses.
+
 The [publication-date repair](docs/PUBLICATION_DATE_REPAIR.md) preserves a date
 supplied by another engine when duplicate results merge, including native HTML
 date markup. It does not invent missing dates, change ranking or cure timeouts.

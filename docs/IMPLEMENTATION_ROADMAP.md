@@ -23,7 +23,34 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Guarded Web Candidate Batch (2026-09-10)
+## Current Native Web Integration Batch (2026-09-10)
+
+- Approved offline integration batch on stamos/ddg-web-native-integration from
+  clean main 088bfa6. Added candidate-only native processor/client integration;
+  no installed source patches, image changes, provider queries or VPN changes.
+- Actual TLS fixtures demonstrate safe option forwarding, no cookie reuse,
+  redirect refusal, decompressed body bounds, cancellation/connection closure,
+  native error/cooldown handling and preservation across processor replacement.
+  Unsupported filters are declined rather than ignored; no connection retry.
+- 20 integration + 58 host tests pass. Initial fixture CONNECT_TO type mismatch
+  was corrected to supported RESOLVE entries and container-loopback 443; a mock
+  cancellation test's missing arguments were corrected. No guard bypass or
+  production impact. Full validate.ps1 -WebCandidate passed: 132 Python test
+  executions, 20 negative Compose cases, seven negative identity cases plus
+  equality, source/binding checks, isolated managed build with production tag
+  unchanged, privacy/settings/ranking, blocked egress, outage/recovery and cleanup.
+  -Integration -Live refuses; old optional transport-version comparison skipped
+  as unrelated. Read-only Docker metadata confirms three healthy production
+  services with unchanged uptimes; no production restart or provider requests.
+- Previous offline integration gates are now covered; a separately scoped,
+  paced VPN-only first-page web trial with fresh frozen fixtures and cooldown
+  preflight is technically justified. -Live still refuses; no live mode added.
+  See DDG_WEB_NATIVE_INTEGRATION.md for limits and evidence. No relevance gain
+  or DDG News repair claimed. No installer/release or deployment applies.
+- Reviewed tooling/docs accompany commit/push, fast-forward merge to main and
+  local/remote scoped branch cleanup. This offline integration batch is complete.
+
+## Previous Guarded Web Candidate Batch (2026-09-10)
 
 - Approved implementation/offline-test/readiness batch on
   stamos/guarded-ddg-web-candidate from clean main 637ade0.
@@ -668,9 +695,11 @@ or cached Docker images are deleted by this migration.
    probe providers or upgrade simply because a newer version exists.
    Later DDG web commit 765a999 is a distinct candidate, not a News timeout fix:
    its guarded offline executor and synthetic adapter tests are now implemented.
-   Next integrate/test the exact native processor and real transport offline,
-   including option forwarding, session cookies, redirects, cancellation and
-   native cooldown/error mapping, before deciding on any live web trial. Keep
+   Native processor/client integration now passes real offline TLS tests for
+   option forwarding, cookies, redirects, body bounds, cancellation and cooldowns.
+   Next scope may build a bounded VPN-only first-page web trial with fresh frozen
+   fixtures, preceding-cooldown preflight, metrics only and stop-on-degradation.
+   Live remains refused until that separately scoped runner is implemented. Keep
    Startpage inactive/disabled; do not adopt its new challenge handling by
    incidental image upgrade.
    Require healthy holdout/topicality evidence before any ranking deployment.

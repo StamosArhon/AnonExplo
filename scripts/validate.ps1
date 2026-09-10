@@ -56,6 +56,7 @@ try {
     }
     if ($WebCandidate) {
         & (Join-Path $PSScriptRoot 'test-ddg-web-candidate.ps1') -Image 'anonexplo/searxng:validation'
+        & (Join-Path $PSScriptRoot 'test-ddg-web-candidate.ps1') -Integration -Image 'anonexplo/searxng:validation'
     }
     docker compose up -d --wait --wait-timeout 120 host-gateway search-provider
     if ($LASTEXITCODE -ne 0) { throw 'Isolated search stack failed to start.' }

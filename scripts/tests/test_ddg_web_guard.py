@@ -3,7 +3,8 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ddg_web_guard import CandidateRejected, NoCache, challenge_url, checked_url
+from ddg_web_guard import CandidateRejected, GuardedWeb, NoCache, challenge_url, checked_url
+from types import SimpleNamespace
 
 
 def challenge(destination='/d.js?jsa=', body='return num * 3;', operations='jsa = f(jsa);', initial='7'):
@@ -81,6 +82,19 @@ class GuardTests(unittest.TestCase):
         cache = NoCache()
         cache.set('fixture', 'value', expire=7200)
         self.assertIsNone(cache.get('fixture'))
+
+    def test_invalid_budgets(self):
+        for budget in [0, -1, 7, float('inf'), float('nan'), None, '6']:
+            with self.assertRaises(CandidateRejected):
+                GuardedWeb(SimpleNamespace(), None).run('fixture', budget=budget)
+
+    def test_shorter_deadline(self):
+        def request(_query, _params):
+            raise RuntimeError('fixture-stop')
+        candidate = GuardedWeb(SimpleNamespace(request=request), None, clock=lambda: 100)
+        with self.assertRaises(RuntimeError):
+            candidate.run('fixture', budget=.5)
+        self.assertEqual(candidate.deadline, 100.5)
 
 
 if __name__ == '__main__':

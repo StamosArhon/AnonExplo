@@ -99,10 +99,14 @@ only in a non-root network-disabled container. It substitutes a no-op query
 cache and mock transport, restricts requested HTTPS hosts/paths, disables redirect
 options, filters headers and bounds challenge parsing/request counts/deadlines.
 No response JavaScript execution, credentials, production cache or listeners.
-Post-buffer text limits are not streaming limits; mock transport assertions do
-not establish real session-cookie isolation or cancellation. Native cooldown
-integration is not yet implemented. Live mode refuses; do not deploy this helper.
-See GUARDED_DDG_WEB_CANDIDATE.md for limits and next integration gates.
+The subsequent -Integration suite exercises real native client/processor code
+against container-loopback TLS with an ephemeral test CA and test-only DNS
+overrides, no host ports or public networking. It verifies cookie isolation,
+redirect refusal, native cooldowns and cancellation; the integration helper adds
+a decompressed-body callback cap, not a cap on headers/native/OS allocations.
+Logs/exception metrics stay disabled for this experiment. Test CA/DNS overrides
+must never be used for live requests. Live mode refuses; do not deploy these
+helpers. See DDG_WEB_NATIVE_INTEGRATION.md for boundaries and trial prerequisites.
 
 Gluetun contacts its configured DNS/health/blocklist/public-IP services; these
 are infrastructure requests, not search strings. DNS-over-TLS uses Cloudflare
