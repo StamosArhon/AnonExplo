@@ -18,6 +18,7 @@ from search_benchmark import NoRedirect, make_request, metrics, review_text, sco
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_PATH = Path(__file__).with_name('quality_fixtures.json')
 PROFILES = ('native', 'score', 'host-cap')
+LIVE_RETIRED = True  # Completed study stopped on provider degradation; no reruns.
 
 
 def orders(results):
@@ -75,6 +76,8 @@ def emit(value):
 
 
 def run():
+    if LIVE_RETIRED:
+        raise ValueError('Completed assessment retired; preserve unseen holdout')
     if os.environ.get('ANONEXPLO_QUALITY_PREFLIGHT') != 'approved-v1':
         raise ValueError('Use VPN preflight wrapper')
     report_path = ROOT / 'build/quality-assessment-v1.json'

@@ -32,7 +32,26 @@ or cached Docker images are deleted by this migration.
 - Approved bounded public-snippet grading; no persisted result payloads, browser
   history, temporary result cache, runtime model, new provider or configuration
   change. Same-response replay avoids multiple retrieval runs per question.
-  Freeze before first evaluation. Full validation and evaluation pending.
+  Frozen/committed/pushed at b986b7d before evaluation. Preflight passed.
+- Query 12 stopped on Brave error class other (not proven rate limit), 17 partial
+  rows in 0.779s. Eleven healthy development queries were graded; remaining four
+  development and all 16 holdout questions unqueried. Recent intent not reached.
+  No retries, suffix resume, engine overrides, restart or production changes.
+- Partial mean snippet utility: native 0.600, score-only 0.636, host-cap 0.600.
+  Score had four wins/two losses; Greek mean unchanged at 0.480. Neither the
+  +0.10 utility threshold nor full healthy-development gate was met. DO NOT
+  DEPLOY. Incomplete evaluation, not a completed 32-query success or general
+  proof that SearXNG cannot improve. Grades/maps only in SEARCH_QUALITY_GRADES.json.
+- Both new live entrypoints retired; offline tests remain. Close this tuning
+  scope without another parameter/provider experiment. Maintain production;
+  any materially different retrieval approach needs a new explicit decision.
+  Full post-run validate.ps1 passed: 120 Python test executions, 20 negative
+  Compose cases, seven negative identity cases plus equality, isolated image
+  build (production tag unchanged), native privacy/settings/ranking, blocked
+  egress, outage/recovery and cleanup. Persisted grades recompute; both retired
+  entrypoints refuse before networking. Optional unrelated DDG suites skipped.
+  Reviewed report/tooling accompany commit/push, main merge and scoped local/
+  remote cleanup. No release, runtime change or production deployment applies.
 
 ## Previous Default-Engine Coverage Batch (2026-09-10)
 
@@ -779,10 +798,11 @@ or cached Docker images are deleted by this migration.
 2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
    unchanged after rejecting the newest-first trial. Retain honest limits of
    snippet-level judgements, news freshness and intermittent upstream errors.
-   The new default-engine destination audit passed four of four at rank one.
-   Do not repeat domain-hit tests as a substitute for relevance assessment:
-   next topicality work needs fresh rubrics and explicit bounded snippet-review
-   approval. No automatic engine removal or weighting follows from credit counts.
+   The subsequent bounded quality assessment is now closed with DO NOT DEPLOY:
+   query 12 degraded, only 11 development queries graded, small mixed score-order
+   gain and no host-cap gain. Holdouts/recent-information intent remain untested.
+   Do not repeat domain-hit or ranking-tweak studies. Keep current production in
+   maintenance; materially different retrieval work needs an explicit new scope.
 3. Date repair and manifest-identity/build-isolation fixes are complete. DDG
    diagnostics remain retired after their stop conditions. Offline review now
    reproduces misleading counters during a controlled TLS stall, without proving

@@ -83,6 +83,11 @@ guarded web adapter with the native client/processor over container-loopback TLS
 It is offline-only, not a deployed News fix. After explicit source provisioning,
 `validate.ps1 -WebCandidate` includes both mock and real-client integration suites;
 `test-ddg-web-candidate.ps1 -Integration` runs the latter alone. `-Live` refuses.
+The [bounded quality decision](docs/SEARCH_QUALITY_DECISION.md) found no deployable
+ranking improvement: a mixed, small score-order gain on 11 graded questions,
+then a provider error stopped query 12. The holdout and recent-information
+questions remain untested. Production is unchanged; this tuning study is closed.
+
 The completed [default-engine coverage audit](docs/DEFAULT_ENGINE_COVERAGE.md)
 found all four EN/EL official sites at rank one without engine errors. New
 top-five attribution metrics describe contributions, not engine relevance grades;

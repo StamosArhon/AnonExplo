@@ -144,7 +144,10 @@
 - SEARCH_QUALITY_DECISION.md replaces incremental tuning as the current quality
   scope: frozen development/holdout split, two fixed same-response policies,
   explicit snippet grades, deployment gates and no retry/tuning loop on failure.
-  Preserve its one-shot marker and metrics-only output. Never persist payloads.
+  Closed with DO NOT DEPLOY after question 12 degraded: 11 graded, 20 unsent,
+  no holdout evaluation. Both live entrypoints are retired. Preserve its marker
+  and metrics-only grades; no new parameter trial or automatic resume. Never
+  persist payloads. Future structural retrieval work requires a new decision.
 
 - Branch per scope: stamos/<name>; update roadmap, validate, review, commit/push,
   merge only ready work, delete completed branch. No desktop release applies.

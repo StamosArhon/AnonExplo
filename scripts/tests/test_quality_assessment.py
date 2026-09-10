@@ -81,6 +81,7 @@ class QualityTests(unittest.TestCase):
 
     def simulation(self, degraded=False, bad_grade=False):
         with tempfile.TemporaryDirectory() as folder, patch.object(assessment, 'ROOT', Path(folder)), \
+                patch.object(assessment, 'LIVE_RETIRED', False), \
                 patch.dict(assessment.os.environ, {'ANONEXPLO_QUALITY_PREFLIGHT': 'approved-v1'}), \
                 patch.object(assessment.urllib.request, 'build_opener') as factory, \
                 patch('builtins.input', return_value='{}' if bad_grade else '{"grades":[2,2,2,2,2],"facets":[7,7,7,7,7]}'), \
@@ -113,6 +114,24 @@ class QualityTests(unittest.TestCase):
     def test_invalid_grades_stop_without_next_query(self):
         code, report, calls = self.simulation(bad_grade=True)
         self.assertEqual((code, report['status'], calls), (2, 'stopped_internal_or_grading_failure', 2))
+
+    def test_retired_live_run_refuses_before_network(self):
+        with patch.object(assessment.urllib.request, 'build_opener') as opener:
+            with self.assertRaises(ValueError):
+                assessment.run()
+            opener.assert_not_called()
+
+    def test_persisted_grades_recompute_and_no_payload_fields(self):
+        report = json.loads((assessment.ROOT / 'docs/SEARCH_QUALITY_GRADES.json').read_text())
+        self.assertEqual(report['status'], 'stopped_degraded')
+        self.assertEqual(len(report['rows']), 11)
+        for row in report['rows']:
+            self.assertEqual(set(row), {'sample', 'phase', 'intent', 'language', 'seconds',
+                                      'errors', 'results', 'engine_result_counts', 'grades',
+                                      'facets', 'orders', 'quality'})
+            validate_grades({'grades': row['grades'], 'facets': row['facets']}, len(row['grades']))
+            for policy, order in row['orders'].items():
+                self.assertEqual(grade_metrics(order, row['grades'], row['facets']), row['quality'][policy])
 
 
 if __name__ == '__main__':

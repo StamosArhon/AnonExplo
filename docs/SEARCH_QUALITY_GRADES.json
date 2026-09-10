@@ -1,0 +1,833 @@
+{
+  "fixture_sha256": "6c5068c9e341c18d52b6ce75128bcdfb22cd9515028814b79a1664dd859d907c",
+  "status": "stopped_degraded",
+  "rows": [
+    {
+      "sample": "d01",
+      "phase": "development",
+      "intent": "explanation",
+      "language": "en",
+      "seconds": 2.104,
+      "errors": 0,
+      "results": 36,
+      "engine_result_counts": {
+        "brave": 20,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        1,
+        2,
+        2,
+        2,
+        2
+      ],
+      "facets": [
+        2,
+        2,
+        2,
+        2,
+        1
+      ],
+      "orders": {
+        "native": [
+          4,
+          3,
+          1,
+          0,
+          2
+        ],
+        "score": [
+          4,
+          3,
+          1,
+          0,
+          2
+        ],
+        "host-cap": [
+          4,
+          3,
+          1,
+          0,
+          2
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.9,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 4
+        },
+        "score": {
+          "utility": 0.9,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 4
+        },
+        "host-cap": {
+          "utility": 0.9,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 4
+        }
+      }
+    },
+    {
+      "sample": "d02",
+      "phase": "development",
+      "intent": "explanation",
+      "language": "el",
+      "seconds": 1.073,
+      "errors": 0,
+      "results": 36,
+      "engine_result_counts": {
+        "brave": 20,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        1,
+        1,
+        1,
+        0,
+        1
+      ],
+      "facets": [
+        0,
+        4,
+        1,
+        0,
+        4
+      ],
+      "orders": {
+        "native": [
+          4,
+          0,
+          3,
+          2,
+          1
+        ],
+        "score": [
+          4,
+          0,
+          3,
+          2,
+          1
+        ],
+        "host-cap": [
+          4,
+          0,
+          3,
+          2,
+          1
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.4,
+          "coverage": 0.6666666666666666,
+          "unrelated": 1,
+          "full": 0
+        },
+        "score": {
+          "utility": 0.4,
+          "coverage": 0.6666666666666666,
+          "unrelated": 1,
+          "full": 0
+        },
+        "host-cap": {
+          "utility": 0.4,
+          "coverage": 0.6666666666666666,
+          "unrelated": 1,
+          "full": 0
+        }
+      }
+    },
+    {
+      "sample": "d03",
+      "phase": "development",
+      "intent": "technical",
+      "language": "en",
+      "seconds": 1.059,
+      "errors": 0,
+      "results": 32,
+      "engine_result_counts": {
+        "brave": 20,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        1,
+        2,
+        2
+      ],
+      "facets": [
+        6,
+        0,
+        4,
+        0,
+        0,
+        4,
+        4,
+        1
+      ],
+      "orders": {
+        "native": [
+          7,
+          2,
+          3,
+          1,
+          4
+        ],
+        "score": [
+          7,
+          2,
+          6,
+          5,
+          0
+        ],
+        "host-cap": [
+          7,
+          2,
+          3,
+          1,
+          4
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.6,
+          "coverage": 0.6666666666666666,
+          "unrelated": 1,
+          "full": 2
+        },
+        "score": {
+          "utility": 0.9,
+          "coverage": 1,
+          "unrelated": 0,
+          "full": 4
+        },
+        "host-cap": {
+          "utility": 0.6,
+          "coverage": 0.6666666666666666,
+          "unrelated": 1,
+          "full": 2
+        }
+      }
+    },
+    {
+      "sample": "d04",
+      "phase": "development",
+      "intent": "technical",
+      "language": "el",
+      "seconds": 1.014,
+      "errors": 0,
+      "results": 37,
+      "engine_result_counts": {
+        "brave": 20,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "facets": [
+        0,
+        0,
+        2,
+        0,
+        0,
+        0
+      ],
+      "orders": {
+        "native": [
+          4,
+          2,
+          0,
+          3,
+          1
+        ],
+        "score": [
+          4,
+          2,
+          0,
+          5,
+          3
+        ],
+        "host-cap": [
+          4,
+          2,
+          0,
+          3,
+          1
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.1,
+          "coverage": 0.3333333333333333,
+          "unrelated": 4,
+          "full": 0
+        },
+        "score": {
+          "utility": 0.1,
+          "coverage": 0.3333333333333333,
+          "unrelated": 4,
+          "full": 0
+        },
+        "host-cap": {
+          "utility": 0.1,
+          "coverage": 0.3333333333333333,
+          "unrelated": 4,
+          "full": 0
+        }
+      }
+    },
+    {
+      "sample": "d05",
+      "phase": "development",
+      "intent": "resource",
+      "language": "en",
+      "seconds": 1.233,
+      "errors": 0,
+      "results": 34,
+      "engine_result_counts": {
+        "brave": 20,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        0,
+        1,
+        1,
+        1,
+        1,
+        2,
+        1
+      ],
+      "facets": [
+        0,
+        5,
+        5,
+        1,
+        7,
+        7,
+        4
+      ],
+      "orders": {
+        "native": [
+          5,
+          4,
+          1,
+          0,
+          6
+        ],
+        "score": [
+          5,
+          4,
+          3,
+          2,
+          1
+        ],
+        "host-cap": [
+          5,
+          4,
+          1,
+          0,
+          6
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.5,
+          "coverage": 1,
+          "unrelated": 1,
+          "full": 1
+        },
+        "score": {
+          "utility": 0.6,
+          "coverage": 1,
+          "unrelated": 0,
+          "full": 1
+        },
+        "host-cap": {
+          "utility": 0.5,
+          "coverage": 1,
+          "unrelated": 1,
+          "full": 1
+        }
+      }
+    },
+    {
+      "sample": "d06",
+      "phase": "development",
+      "intent": "resource",
+      "language": "el",
+      "seconds": 1.396,
+      "errors": 0,
+      "results": 32,
+      "engine_result_counts": {
+        "brave": 19,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        2,
+        2,
+        1,
+        1,
+        2,
+        1,
+        2,
+        1
+      ],
+      "facets": [
+        5,
+        5,
+        1,
+        6,
+        7,
+        6,
+        7,
+        7
+      ],
+      "orders": {
+        "native": [
+          1,
+          5,
+          6,
+          7,
+          3
+        ],
+        "score": [
+          1,
+          0,
+          2,
+          4,
+          5
+        ],
+        "host-cap": [
+          1,
+          5,
+          6,
+          7,
+          3
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.7,
+          "coverage": 1,
+          "unrelated": 0,
+          "full": 2
+        },
+        "score": {
+          "utility": 0.8,
+          "coverage": 1,
+          "unrelated": 0,
+          "full": 3
+        },
+        "host-cap": {
+          "utility": 0.7,
+          "coverage": 1,
+          "unrelated": 0,
+          "full": 2
+        }
+      }
+    },
+    {
+      "sample": "d07",
+      "phase": "development",
+      "intent": "explanation",
+      "language": "en",
+      "seconds": 1.273,
+      "errors": 0,
+      "results": 28,
+      "engine_result_counts": {
+        "brave": 20,
+        "yahoo": 7,
+        "bing": 2
+      },
+      "grades": [
+        2,
+        2,
+        2,
+        1,
+        2,
+        1,
+        1,
+        2
+      ],
+      "facets": [
+        1,
+        3,
+        3,
+        1,
+        1,
+        0,
+        1,
+        1
+      ],
+      "orders": {
+        "native": [
+          3,
+          2,
+          1,
+          7,
+          4
+        ],
+        "score": [
+          3,
+          0,
+          5,
+          2,
+          6
+        ],
+        "host-cap": [
+          3,
+          2,
+          1,
+          7,
+          4
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.9,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 4
+        },
+        "score": {
+          "utility": 0.7,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 2
+        },
+        "host-cap": {
+          "utility": 0.9,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 4
+        }
+      }
+    },
+    {
+      "sample": "d08",
+      "phase": "development",
+      "intent": "explanation",
+      "language": "el",
+      "seconds": 1.093,
+      "errors": 0,
+      "results": 34,
+      "engine_result_counts": {
+        "brave": 20,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        2,
+        2,
+        1,
+        2,
+        1,
+        1,
+        2,
+        1
+      ],
+      "facets": [
+        3,
+        1,
+        0,
+        3,
+        0,
+        0,
+        1,
+        1
+      ],
+      "orders": {
+        "native": [
+          5,
+          1,
+          6,
+          0,
+          7
+        ],
+        "score": [
+          5,
+          1,
+          2,
+          4,
+          3
+        ],
+        "host-cap": [
+          5,
+          1,
+          6,
+          0,
+          7
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.8,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 3
+        },
+        "score": {
+          "utility": 0.7,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 2
+        },
+        "host-cap": {
+          "utility": 0.8,
+          "coverage": 0.6666666666666666,
+          "unrelated": 0,
+          "full": 3
+        }
+      }
+    },
+    {
+      "sample": "d09",
+      "phase": "development",
+      "intent": "technical",
+      "language": "en",
+      "seconds": 1.222,
+      "errors": 0,
+      "results": 31,
+      "engine_result_counts": {
+        "brave": 19,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        2,
+        2,
+        0,
+        2,
+        0,
+        1
+      ],
+      "facets": [
+        6,
+        3,
+        0,
+        3,
+        0,
+        0
+      ],
+      "orders": {
+        "native": [
+          1,
+          0,
+          5,
+          4,
+          2
+        ],
+        "score": [
+          1,
+          3,
+          0,
+          5,
+          4
+        ],
+        "host-cap": [
+          1,
+          0,
+          5,
+          4,
+          2
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.5,
+          "coverage": 1,
+          "unrelated": 2,
+          "full": 2
+        },
+        "score": {
+          "utility": 0.7,
+          "coverage": 1,
+          "unrelated": 1,
+          "full": 3
+        },
+        "host-cap": {
+          "utility": 0.5,
+          "coverage": 1,
+          "unrelated": 2,
+          "full": 2
+        }
+      }
+    },
+    {
+      "sample": "d10",
+      "phase": "development",
+      "intent": "technical",
+      "language": "el",
+      "seconds": 0.798,
+      "errors": 0,
+      "results": 29,
+      "engine_result_counts": {
+        "brave": 19,
+        "bing": 10
+      },
+      "grades": [
+        1,
+        2,
+        0,
+        0,
+        1,
+        0,
+        2
+      ],
+      "facets": [
+        3,
+        2,
+        0,
+        0,
+        1,
+        0,
+        2
+      ],
+      "orders": {
+        "native": [
+          4,
+          3,
+          0,
+          2,
+          6
+        ],
+        "score": [
+          4,
+          1,
+          3,
+          0,
+          5
+        ],
+        "host-cap": [
+          4,
+          3,
+          0,
+          2,
+          6
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.4,
+          "coverage": 0.6666666666666666,
+          "unrelated": 2,
+          "full": 1
+        },
+        "score": {
+          "utility": 0.4,
+          "coverage": 0.6666666666666666,
+          "unrelated": 2,
+          "full": 1
+        },
+        "host-cap": {
+          "utility": 0.4,
+          "coverage": 0.6666666666666666,
+          "unrelated": 2,
+          "full": 1
+        }
+      }
+    },
+    {
+      "sample": "d11",
+      "phase": "development",
+      "intent": "resource",
+      "language": "en",
+      "seconds": 1.171,
+      "errors": 0,
+      "results": 32,
+      "engine_result_counts": {
+        "brave": 20,
+        "yahoo": 7,
+        "bing": 10
+      },
+      "grades": [
+        2,
+        2,
+        1,
+        2,
+        1
+      ],
+      "facets": [
+        5,
+        2,
+        0,
+        2,
+        3
+      ],
+      "orders": {
+        "native": [
+          3,
+          0,
+          2,
+          4,
+          1
+        ],
+        "score": [
+          3,
+          0,
+          2,
+          4,
+          1
+        ],
+        "host-cap": [
+          3,
+          0,
+          2,
+          4,
+          1
+        ]
+      },
+      "quality": {
+        "native": {
+          "utility": 0.8,
+          "coverage": 1,
+          "unrelated": 0,
+          "full": 3
+        },
+        "score": {
+          "utility": 0.8,
+          "coverage": 1,
+          "unrelated": 0,
+          "full": 3
+        },
+        "host-cap": {
+          "utility": 0.8,
+          "coverage": 1,
+          "unrelated": 0,
+          "full": 3
+        }
+      }
+    }
+  ],
+  "failure": {
+    "sample": "d12",
+    "seconds": 0.779,
+    "results": 17,
+    "failures": [
+      {
+        "engine": "brave",
+        "kind": "other"
+      }
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 param([switch]$LiveReview)
 $ErrorActionPreference = 'Stop'
+if ($LiveReview) { throw 'Completed assessment stopped on provider degradation. Live review is retired; no retry.' }
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $LiveReview) {
     & python (Join-Path $PSScriptRoot 'quality_assessment.py')
