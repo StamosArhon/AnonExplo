@@ -30,4 +30,36 @@ top-five utility decreases. No observed promotions means benefit unproven, not
 success. Target <=2 seconds warm model overhead; no threshold tuning on these
 observations. Once observed these are regression fixtures, not fresh holdouts.
 
-Execution/results: pending. Production integration is outside this test scope.
+## Execution and decision (2026-09-11)
+
+Fixtures/policy frozen and pushed at d2fea33. An initial preflight harness import
+error was fixed at e0489ee before any search or model container; the attempted
+marker had not been created. No fixture or policy changed.
+
+Second preflight passed: three healthy production services, correct image,
+VPN-shared namespace and DNS, working HTTPS, distinct search/host egress,
+expected General recipients, all seven model artifacts verified. Exact existing
+CPU image started with network=none. Model load took 5.793 seconds and a single
+public warm-up pair succeeded. This is startup latency, not real-result inference.
+
+The first fixture (shadow-el-surveillance) returned 17 partial rows and a Brave
+error classified as `other` (not established as a rate limit, timeout or CAPTCHA).
+The test stopped immediately, before scoring or displaying any real result.
+Remaining five fixtures were not sent. No retry, VPN rotation, cooldown reset,
+configuration change or production integration. Disposable worker removed.
+
+Outcome: **inconclusive; do not integrate**. Zero healthy query comparisons,
+zero real-result grades, no measured relevance benefit or real-snippet latency.
+The earlier synthetic trial remains valid only within its original limits.
+The first fixture is attempted, the other five remain unobserved; do not resume
+this batch or call it six successful searches. Live entrypoint is now retired
+and the one-attempt marker retained. Private source preferences remain local
+and ignored, not installed in browser search.
+
+Validation: validate.ps1 passed 94 host tests, 12 historical candidate tests,
+11 timeout tests, 20 negative Compose cases, identity checks and isolated repair
+image build without changing the production tag. Full runtime validation could
+not start: Docker automatic address pools are fully subnetted. No unrelated
+networks were removed. Post-retirement host tests and refusal check are run
+separately. The branch is not fully validated and must remain unmerged pending
+resolution of that independent infrastructure blocker. No release applies.

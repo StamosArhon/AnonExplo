@@ -33,7 +33,16 @@ or cached Docker images are deleted by this migration.
 - validate.ps1 passed 94 host unit tests, 12 historical candidate tests, 11
   timeout tests, Compose/identity checks and isolated image build. Runtime stack
   startup blocked: Docker automatic address pools fully subnetted. No unrelated
-  networks removed; production unchanged. Full validation not passed. Run pending.
+  networks removed; production unchanged. Full validation not passed.
+- Frozen/pushed at d2fea33; pre-query import fix e0489ee. Preflight and offline
+  model warm-up passed, 5.793s load. First fixture returned 17 partial results and
+  Brave error class other. Stopped before real inference or snippet review; five
+  fixtures unsent. No valid comparisons/grades, no benefit or latency conclusion.
+- Live runner retired, marker retained, disposable model removed; three healthy
+  production services preserved. No retries or production integration. Private
+  source list remains ignored/local. Full host tests/refusal checks rerun after
+  retirement. Report/tooling committed and pushed; branch deliberately unmerged
+  because full runtime validation remains blocked. No branch deletion or release.
 
 ## Current Local Relevance-Gate Trial (2026-09-10)
 

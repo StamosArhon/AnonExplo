@@ -1,13 +1,21 @@
 import sys
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from reranker_shadow import checked_domains, checked_scores
+from reranker_shadow import checked_domains, checked_scores, main
 from reranker_shadow_worker import checked_pairs
 
 
 class ShadowTests(unittest.TestCase):
+    def test_retired_before_io(self):
+        with patch('reranker_shadow.verify_model') as verify, patch('reranker_shadow.subprocess.run') as run:
+            with self.assertRaisesRegex(ValueError, 'trial retired'):
+                main(True)
+            verify.assert_not_called()
+            run.assert_not_called()
+
     def test_domains(self):
         self.assertEqual(checked_domains(['example.org']), {'example.org'})
         for value in ([], ['https://example.org'], ['example.org/path'], ['a@b.org'], ['EXAMPLE.org'], ['-a.org']):

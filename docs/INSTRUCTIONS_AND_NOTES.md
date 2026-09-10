@@ -144,6 +144,10 @@
 - RERANKER_SHADOW_TEST.md scopes the requested one-shot real-result comparison.
   Use only frozen public fixtures and ignored local preferences; stdio to a
   network-none model, metrics/grades only on disk. No production integration.
+  Attempt stopped on first Brave error before real inference. Live runner is
+  retired; do not erase the marker, retry or resume. No relevance conclusion.
+  Its branch remains unmerged while full validation is blocked by exhausted
+  Docker automatic network pools; never prune unrelated networks to bypass this.
 
 - LOCAL_RERANKER_TRIAL.md is an explicitly approved separate model experiment.
   Provision downloads only in the provisioning step; inference is network=none,

@@ -18,7 +18,7 @@ from search_benchmark import NoRedirect, error_metrics, review_text
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = 'sha256:a1ecd793732ada795e0f2fb5162b126b748a982ca902a5a7513df946f2b5cb99'
-RETIRED = False
+RETIRED = True
 
 
 def checked_domains(value):
