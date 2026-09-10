@@ -9,6 +9,7 @@ import re
 import subprocess
 import threading
 import time
+import urllib.parse
 import urllib.request
 import uuid
 
@@ -117,7 +118,6 @@ def main(review):
             if number:
                 time.sleep(20)
             # Exact browser-style route, no cookies, engine/category overrides or query expansion.
-            import urllib.parse
             url = 'http://127.0.0.1:8085/search?' + urllib.parse.urlencode({'q': case['query'], 'format': 'json'})
             request = urllib.request.Request(url, headers={'Accept-Language': 'en-US,en;q=0.9',
                                                           'User-Agent': 'AnonExplo-Synthetic-Benchmark/1'})
