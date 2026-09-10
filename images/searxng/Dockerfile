@@ -6,3 +6,7 @@ RUN --network=none /usr/local/searxng/.venv/bin/python /opt/anonexplo/apply_date
     && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/searxng /usr/local/searxng/.venv/bin/python /opt/anonexplo/test_date_merge.py
 
 LABEL org.anonexplo.repair="publication-date-merge-v1"
+
+COPY apply_preview.py test_preview.py /opt/anonexplo/
+RUN --network=none /usr/local/searxng/.venv/bin/python /opt/anonexplo/apply_preview.py \
+    && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/searxng /usr/local/searxng/.venv/bin/python /opt/anonexplo/test_preview.py

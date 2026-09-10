@@ -1,0 +1,50 @@
+# Separate opt-in project: no network, no ports, no dependency of normal search.
+name: anonexplo-preview
+services:
+  reranker:
+    image: sha256:a1ecd793732ada795e0f2fb5162b126b748a982ca902a5a7513df946f2b5cb99
+    pull_policy: never
+    entrypoint: [python, /trial/preview_server.py]
+    network_mode: none
+    user: "65534:65534"
+    read_only: true
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: none
+    mem_limit: 12g
+    cpus: 8
+    pids_limit: 256
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      DO_NOT_TRACK: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HF_HOME: /tmp/hf
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m,mode=1777
+    volumes:
+      - type: bind
+        source: ./data/models/bge-reranker-v2-m3
+        target: /model
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./data/preferences/shadow-domains.json
+        target: /preferences/domains.json
+        read_only: true
+        bind: {create_host_path: false}
+      - ./scripts:/trial:ro
+      - socket:/run/anonexplo-preview
+    healthcheck:
+      test: [CMD, python, -c, "import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(2); s.connect('/run/anonexplo-preview/model.sock'); s.sendall(b'GET /health HTTP/1.0\r\n\r\n'); assert b'200 OK' in s.recv(256)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 60s
+      retries: 3
+volumes:
+  socket:
+    external: true
+    name: anonexplo_preview_socket

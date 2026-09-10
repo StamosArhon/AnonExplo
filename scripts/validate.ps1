@@ -37,6 +37,26 @@ try {
     }
     python -m unittest discover -s scripts/tests -p 'test_*.py'
     if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed.' }
+    node (Join-Path $PSScriptRoot 'test-preview-dom.cjs')
+    if ($LASTEXITCODE -ne 0) { throw 'Preview DOM tests failed.' }
+    . (Join-Path $PSScriptRoot 'preview-policy.ps1')
+    $previewRaw = docker compose -p anonexplo-preview -f docker-compose.preview.yml config --format json
+    if ($LASTEXITCODE) { throw 'Preview Compose config failed.' }
+    $previewConfig = $previewRaw | ConvertFrom-Json
+    Assert-PreviewPolicy $previewConfig
+    foreach ($badField in @('network_mode','user','read_only','logging')) {
+        $bad = $previewRaw | ConvertFrom-Json
+        switch ($badField) {
+            'network_mode' { $bad.services.reranker.network_mode = 'bridge' }
+            'user' { $bad.services.reranker.user = '0:0' }
+            'read_only' { $bad.services.reranker.read_only = $false }
+            'logging' { $bad.services.reranker.logging.driver = 'json-file' }
+        }
+        $rejected = $false
+        try { Assert-PreviewPolicy $bad } catch { $rejected = $true }
+        if (-not $rejected) { throw "Preview policy accepted invalid $badField" }
+    }
+    Write-Host 'PASS: preview isolation policy and four negative cases.'
     & (Join-Path $PSScriptRoot 'test-news-candidate.ps1')
     & (Join-Path $PSScriptRoot 'test-startup-helpers.ps1')
     & (Join-Path $PSScriptRoot 'test-image-identity.ps1')

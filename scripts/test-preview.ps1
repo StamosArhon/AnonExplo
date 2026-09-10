@@ -1,0 +1,4 @@
+$ErrorActionPreference = 'Stop'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+& docker run --rm --pull never --network none --read-only --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges:true --log-driver none --memory 12g --cpus 8 --pids-limit 256 --tmpfs /tmp:rw,noexec,nosuid,size=256m,mode=1777 --tmpfs /run/anonexplo-preview:rw,noexec,nosuid,size=1m,mode=1777 --mount "type=bind,source=$root/data/models/bge-reranker-v2-m3,target=/model,readonly" --mount "type=bind,source=$PSScriptRoot,target=/trial,readonly" --mount "type=bind,source=$PSScriptRoot/preview_test_domains.json,target=/preferences/domains.json,readonly" sha256:a1ecd793732ada795e0f2fb5162b126b748a982ca902a5a7513df946f2b5cb99 /trial/test_preview_socket.py
+if ($LASTEXITCODE) { throw 'Offline preview integration failed.' }

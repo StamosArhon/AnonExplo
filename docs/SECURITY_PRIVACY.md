@@ -58,12 +58,20 @@ for routine diagnosis. Use local status checks and native aggregate engine stats
 
 ## Verification
 
+The separately approved browser preview now exposes local-only opt-in inference
+through the existing gateway, over a tmpfs Unix socket to a network=none model.
+No model port, outbound networking, query history or request logs. Requests are
+bounded, non-JSON/cross-site requests refused, no inference queue, strict UI
+fallback. Private domain preferences remain ignored/local. Native defaults are
+unchanged. See BROWSER_PREFERENCE_PREVIEW.md for exact boundaries and limitations.
+
 The separately approved local reranker experiment downloads pinned, verified
 official model files only during explicit provisioning. Runtime inference is
 network=none with read-only mounts, no ports, no remote code and no production
 cache/VPN credential. Synthetic score metrics only; the private preferred-site
-list is not committed or passed to external services. The model is not connected
-to browser search. See LOCAL_RERANKER_TRIAL.md for measured limits and provenance.
+list is not committed or passed to external services. That initial experiment
+was not connected to browser search; the opt-in preview is separately scoped
+above. See LOCAL_RERANKER_TRIAL.md for measured limits and provenance.
 
 validate.ps1 checks offline Compose policies (including negative regressions),
 the exact service/port topology, native settings/headers, direct-egress blocking

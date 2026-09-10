@@ -2,3 +2,5 @@
 !Dockerfile
 !apply_date_merge.py
 !test_date_merge.py
+!apply_preview.py
+!test_preview.py

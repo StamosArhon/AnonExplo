@@ -23,6 +23,21 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
+## Current Opt-In Browser Preview (2026-09-11)
+
+- User approved activating an opt-in browser comparison after clarifying that
+  offline/shadow tools do not let them test in Brave. Fresh branch
+  stamos/browser-preference-preview from stable main. Previous unmerged shadow
+  branch remains preserved; its first query failed, no real comparisons made.
+- Same-page ON/OFF comparison, first 24 flat default-template results, original
+  order restored without another search. Native ranking/default remains unchanged.
+  Separate network-none model project communicates only over a tmpfs Unix socket.
+  Local preferences stay ignored; no query history or remote model. See
+  BROWSER_PREFERENCE_PREVIEW.md. No default relevance improvement claimed.
+- Fixed validation-only subnets after checking Docker allocations/host routes;
+  no unrelated network cleanup or global Docker changes. Initial full validation
+  passed again after pool exhaustion; expanded preview tests and deployment pending.
+
 ## Current Local Relevance-Gate Trial (2026-09-10)
 
 - User explicitly approved a local-only reranker experiment for relevance-gated

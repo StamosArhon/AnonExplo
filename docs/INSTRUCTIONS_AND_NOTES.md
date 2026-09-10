@@ -8,6 +8,10 @@
 - Future local result refinement can run headlessly. It needs its own relevance/
   latency evaluation and internal-only model boundary, not a new interface.
 - Only three production services: host-gateway, search-provider and search-vpn.
+  Optional browser preview is a separate anonexplo-preview project, network=none
+  with Unix-socket-only communication; not a dependency of normal search.
+  See BROWSER_PREFERENCE_PREVIEW.md. Default OFF on every page, no saved query
+  state; same-page ON/OFF uses returned results without another provider request.
 - Configure browser engines/language in configs/searxng/settings.yml and native
   preferences. Old SEARCH_/MODEL_/GROUNDING_/FETCH_ .env keys are inert; existing
   .env files are preserved rather than rewriting secrets during migration.

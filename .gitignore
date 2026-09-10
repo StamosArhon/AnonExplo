@@ -12,6 +12,7 @@ __pycache__/
 Thumbs.db
 dist/
 build/
+data/preferences/
 node_modules/
 data/models/*
 !data/models/.gitkeep

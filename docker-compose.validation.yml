@@ -6,3 +6,15 @@ services:
       - ./configs/searxng/settings.yml:/etc/searxng/settings.yml:ro
     tmpfs:
       - /var/cache/searxng
+
+# Small isolated ranges verified against this PC's routes/networks; no global
+# Docker pool changes or pruning. Override deliberately if another PC uses them.
+networks:
+  core_internal:
+    ipam:
+      config:
+        - subnet: ${ANONEXPLO_TEST_CORE_SUBNET:-10.254.250.0/28}
+  host_access:
+    ipam:
+      config:
+        - subnet: ${ANONEXPLO_TEST_HOST_SUBNET:-10.254.250.16/28}

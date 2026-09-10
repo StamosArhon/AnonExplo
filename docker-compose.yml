@@ -15,6 +15,8 @@ services:
       - core_internal
     volumes:
       - ./configs/localhost-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./configs/preview:/opt/anonexplo-preview:ro
+      - preview_socket:/run/anonexplo-preview:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -69,6 +71,14 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+
+volumes:
+  preview_socket:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1m,mode=1777
 
 networks:
   host_access:

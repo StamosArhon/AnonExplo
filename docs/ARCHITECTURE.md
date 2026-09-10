@@ -6,7 +6,17 @@ Brave -> 127.0.0.1:8085/search?q=... -> host-gateway -> SearXNG
 (search-provider in search-vpn's namespace) -> Proton WireGuard -> engines.
 
 SearXNG's native UI is the only interface. No chatbot, orchestrator, page fetcher,
-local model or redirector participates in search or exists as a Compose service.
+local model or redirector participates in ordinary search. An explicitly opt-in
+preview can reorder an already rendered result page; it is not the search path.
+
+## Optional Browser Preference Preview
+
+Native results page -> opt-in same-origin POST through gateway -> tmpfs Unix
+socket -> separate network=none CPU reranker -> numeric permutation. Original
+DOM nodes/order are retained in-page for instant OFF/ON comparison, no new search.
+No new listener port or model network, no external inference, no query cache.
+Only flat default-template lists/first 24 rows are eligible. Read
+BROWSER_PREFERENCE_PREVIEW.md for limits, startup and rollback.
 
 ## Boundaries
 
