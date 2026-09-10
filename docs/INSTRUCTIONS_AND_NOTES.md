@@ -10,8 +10,9 @@
 - Only three production services: host-gateway, search-provider and search-vpn.
   Optional browser preview is a separate anonexplo-preview project, network=none
   with Unix-socket-only communication; not a dependency of normal search.
-  See BROWSER_PREFERENCE_PREVIEW.md. Default OFF on every page, no saved query
-  state; same-page ON/OFF uses returned results without another provider request.
+  See AUTOMATIC_PREFERRED_COVERAGE.md for v2: initially OFF, remembers only the
+  choice; ON may send two paced preferred-site queries through SearXNG/VPN.
+  No saved query state; same-page retoggles never resend provider requests.
 - Configure browser engines/language in configs/searxng/settings.yml and native
   preferences. Old SEARCH_/MODEL_/GROUNDING_/FETCH_ .env keys are inert; existing
   .env files are preserved rather than rewriting secrets during migration.

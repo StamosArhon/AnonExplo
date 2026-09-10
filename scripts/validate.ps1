@@ -39,6 +39,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed.' }
     node (Join-Path $PSScriptRoot 'test-preview-dom.cjs')
     if ($LASTEXITCODE -ne 0) { throw 'Preview DOM tests failed.' }
+    node (Join-Path $PSScriptRoot 'test-preview-v2-dom.cjs')
+    if ($LASTEXITCODE -ne 0) { throw 'Automatic coverage DOM tests failed.' }
     . (Join-Path $PSScriptRoot 'preview-policy.ps1')
     $previewRaw = docker compose -p anonexplo-preview -f docker-compose.preview.yml config --format json
     if ($LASTEXITCODE) { throw 'Preview Compose config failed.' }

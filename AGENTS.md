@@ -71,6 +71,9 @@ If a remote is missing or remote operations fail, record that explicitly in the 
   default: same-page toggles, separate network-none model project and Unix socket
   only. Read docs/BROWSER_PREFERENCE_PREVIEW.md before modifying it. Preserve
   native-order fallback, no query persistence, and the existing model/artifact pin.
+  The separately approved v2 scope remembers ON/OFF and adds at most two paced
+  preferred-site searches when ON; see docs/AUTOMATIC_PREFERRED_COVERAGE.md.
+  Preserve disclosure, shared request budget, relevance admission and no retries.
 
 - AnonExplo is a SearXNG browser-search product, not an LLM product. The native
   SearXNG UI at `127.0.0.1:8085` is the user interface; Brave uses

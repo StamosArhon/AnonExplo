@@ -7,12 +7,12 @@ import time
 from pathlib import Path
 
 
-def request(method, body=None, content_type='application/json'):
+def request(method, body=None, content_type='application/json', path='/rank'):
     raw = json.dumps(body).encode() if body is not None else b''
     with socket.socket(socket.AF_UNIX) as conn:
         conn.settimeout(12)
         conn.connect('/run/anonexplo-preview/model.sock')
-        header = f'{method} /rank HTTP/1.0\r\nContent-Type: {content_type}\r\nContent-Length: {len(raw)}\r\n\r\n'.encode()
+        header = f'{method} {path} HTTP/1.0\r\nContent-Type: {content_type}\r\nContent-Length: {len(raw)}\r\n\r\n'.encode()
         conn.sendall(header+raw)
         chunks = []
         while chunk := conn.recv(4096):
@@ -45,6 +45,17 @@ try:
     body['results'][1]['url']='https://elsewhere.example/b'
     code,value=request('POST',body)
     assert code==200 and value['status']=='no_preferred_matches'
+    # Full new request budget, longer authored snippets, no fetched payloads.
+    original = {'url':'https://other.example/a','score':10,'title':'Cake recipes',
+                'content':('Recipes for baking chocolate cakes. '*12)[:400]}
+    relevant = {'url':'https://example.org/b','score':0,'title':'Why the sky is blue',
+                'content':('Rayleigh scattering by air molecules scatters short blue wavelengths more strongly than red light. '*5)[:400]}
+    expanded = {'query':'why is the sky blue Rayleigh scattering', 'native_count':24,
+                'results':[original]*24+[relevant]*4+[dict(original, url='https://example.org/c')]*4}
+    code,value=request('POST',expanded,path='/rank-v2')
+    assert code==200 and value['added']==4 and value['order'][:4]==[24,25,26,27]
+    assert all(i in value['order'] for i in range(24))
+    print(json.dumps({'v2_full_budget':32,'relevant_additions':4,'irrelevant_rejected':4,'seconds':value['seconds']}),flush=True)
     assert {p.name for p in Path('/sys/class/net').iterdir()}=={'lo'}
     print('PASS: real offline model, Unix transport, irrelevant preference, invalid input, no-match and network boundary.',flush=True)
 finally:

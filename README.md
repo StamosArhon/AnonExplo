@@ -10,7 +10,8 @@ Its UI is SearXNG itself, not a chatbot. No LLM is needed for browser search.
 - [Preferences](http://127.0.0.1:8085/preferences): engines, language, categories
   and appearance. Engine/language cookies can override instance defaults.
 - Use `:el` or `:en` in a query for an explicit language choice. No hidden
-  translation, rewriting or multi-query expansion occurs in this browser path.
+  translation occurs. The optional preferred-source mode explicitly adds bounded
+  site-filtered searches when ON; ordinary OFF searches are not expanded.
 
 Only search traffic uses the per-PC Proton WireGuard tunnel. The rest of the PC
 and websites opened from result links use their normal routes. Search providers
@@ -20,9 +21,11 @@ still see the query; a VPN is not a guarantee against provider retention.
 
 The optional preview is active on this PC. Search normally and click
 **Preferred sources: OFF** above a flat General results list. ON applies the
-local relevance-gated preview; OFF restores the original order instantly, without
-another search. Each new page starts OFF. Failure/timeout keeps native order.
-See [preview operation and limits](docs/BROWSER_PREFERENCE_PREVIEW.md).
+local relevance ranking and up to two paced preferred-site searches through the
+VPN. OFF restores the original page instantly. Your choice is remembered; queries
+and results are not saved by this feature. Failures stop extra work without retries.
+Providers see the additional query/site filters; a preferred article is not guaranteed.
+See [operation and limits](docs/AUTOMATIC_PREFERRED_COVERAGE.md).
 
 The dedicated Proton credential is already installed on this PC. Do not replace
 it or print its contents. From the repository root:

@@ -23,7 +23,25 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Opt-In Browser Preview (2026-09-11)
+## Current Automatic Preferred Coverage (2026-09-11)
+
+- Approved scoped branch stamos/automatic-preferred-coverage from a1ea09f. User
+  accepted automatic bounded extra searches when ON, remembered choice and local
+  relevance-first ranking; upstream disclosure explained. See
+  AUTOMATIC_PREFERRED_COVERAGE.md for the superseding v2 contract.
+- First 24 native rows plus at most eight preferred candidates, two paced
+  same-origin/VPN SearXNG searches, shared one-minute allowance, no retries or
+  query persistence. OFF restores the exact native page. Existing model remains
+  network=none; no provider, credential, model download or search/VPN change.
+- 107 host tests, v1/v2 DOM suites, eight Unix transport tests and real offline
+  model pass. Full 32 longer-pair authored fixture: 3.809s, four relevant additions
+  admitted/four irrelevant rejected. Full isolated validator passes including
+  managed image build, unchanged live tag, privacy/egress/outage tests and cleanup.
+- Implementation staged behind the gateway alias/reload; existing live pages
+  remain v1. Deployment/gateway/live verification and Git closeout pending.
+  No broad relevance improvement or guaranteed preferred-site coverage claimed.
+
+## Previous Opt-In Browser Preview (2026-09-11)
 
 - User approved activating an opt-in browser comparison after clarifying that
   offline/shadow tools do not let them test in Brave. Fresh branch

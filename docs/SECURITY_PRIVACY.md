@@ -63,7 +63,11 @@ through the existing gateway, over a tmpfs Unix socket to a network=none model.
 No model port, outbound networking, query history or request logs. Requests are
 bounded, non-JSON/cross-site requests refused, no inference queue, strict UI
 fallback. Private domain preferences remain ignored/local. Native defaults are
-unchanged. See BROWSER_PREFERENCE_PREVIEW.md for exact boundaries and limitations.
+unchanged with the optional mode OFF. V2 remembers only ON/OFF in browser storage;
+ON can send two paced preferred-site queries through existing VPN-routed SearXNG.
+Upstreams see those site filters as well as query text. A shared memory-only
+allowance limits automatic bursts; no retries. See AUTOMATIC_PREFERRED_COVERAGE.md
+for exact bounds, admission rules, cancellation limits and rollback.
 
 The separately approved local reranker experiment downloads pinned, verified
 official model files only during explicit provisioning. Runtime inference is

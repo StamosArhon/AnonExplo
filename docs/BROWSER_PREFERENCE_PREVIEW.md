@@ -1,5 +1,10 @@
 # Browser preferred-source preview
 
+**Current behavior:** the separately approved remembered/automatic v2 is documented
+in [AUTOMATIC_PREFERRED_COVERAGE.md](AUTOMATIC_PREFERRED_COVERAGE.md). It supersedes
+the v1 use/ranking/default and no-extra-query limits below. The remaining text
+records the original v1 implementation and its validation, not current v2 behavior.
+
 User-approved opt-in browser integration, not a claim of measured relevance gains.
 The earlier synthetic model trial passed, while the separate shadow attempt
 stopped on the first Brave error before real inference. Its unmerged branch and

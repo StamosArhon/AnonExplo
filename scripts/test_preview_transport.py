@@ -63,5 +63,19 @@ class Transport(unittest.TestCase):
     def test_health(self):
         self.assertEqual(self.send(b'GET /health HTTP/1.0\r\n\r\n'),(200,{'ready':True}))
 
+    def test_plan_shared_budget(self):
+        header = b'POST /plan HTTP/1.0\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n'
+        self.assertEqual(self.send(header, b'{}')[1]['status'], 'ready')
+        self.assertEqual(self.send(header, b'{}')[1]['status'], 'cooldown')
+        self.assertEqual(self.send(header, b'[]')[0], 400)
+
+    def test_v2_rank(self):
+        raw = json.dumps({'query': 'fixture', 'native_count': 1,
+            'results': [{'url': 'https://example.org', 'title': 'fixture', 'content': 'fixture', 'score': 1}]}).encode()
+        code, value = self.send(f'POST /rank-v2 HTTP/1.0\r\nContent-Type: application/json\r\nContent-Length: {len(raw)}\r\n\r\n'.encode(), raw)
+        self.assertEqual(code, 200)
+        self.assertEqual(value['version'], 2)
+        self.assertEqual(value['order'], [0])
+
 
 if __name__=='__main__': unittest.main()

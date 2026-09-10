@@ -14,6 +14,7 @@ import time
 from http.server import BaseHTTPRequestHandler
 
 from reranker_gate import gated_order, preferred
+from preferred_coverage import CoverageBudget, relevance_order
 
 SOCKET = '/run/anonexplo-preview/model.sock'
 LIMIT = 65536
@@ -29,13 +30,13 @@ def checked_domains(value):
     return set(value)
 
 
-def checked_request(data):
+def checked_request(data, maximum=24):
     if not isinstance(data, dict) or set(data) != {'query', 'results'}:
         raise ValueError('shape')
     q, rows = data['query'], data['results']
     if not isinstance(q, str) or not 1 <= len(q) <= 512:
         raise ValueError('query')
-    if not isinstance(rows, list) or not 1 <= len(rows) <= 24:
+    if not isinstance(rows, list) or not 1 <= len(rows) <= maximum:
         raise ValueError('count')
     for r in rows:
         if not isinstance(r, dict) or set(r) != {'url', 'title', 'content', 'score'}:
@@ -59,6 +60,17 @@ def evaluate(data, domains, score):
     order = gated_order(rows, values, domains)
     promoted = sum(order.index(i) < i for i in native if preferred(rows[i]['url'], domains))
     return {'order': order, 'promoted': promoted, 'status': 'applied' if promoted else 'no_safe_promotions'}
+
+
+def evaluate_v2(data, domains, score):
+    if not isinstance(data, dict) or set(data) != {'query', 'results', 'native_count'}:
+        raise ValueError('shape')
+    q, rows = checked_request({'query': data['query'], 'results': data['results']}, 32)
+    count = data['native_count']
+    if type(count) is not int or not 1 <= count <= min(24, len(rows)) or len(rows)-count > 8:
+        raise ValueError('native count')
+    values = score([[q, r['title'] + ' ' + r['content']] for r in rows])
+    return relevance_order(rows, values, domains, count)
 
 
 def verify_model(directory):
@@ -103,12 +115,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         acquired = False
         try:
-            if self.path != '/rank' or self.headers.get('Content-Type') != 'application/json' or self.headers.get('Transfer-Encoding'):
+            if self.path not in ('/rank', '/rank-v2', '/plan') or self.headers.get('Content-Type') != 'application/json' or self.headers.get('Transfer-Encoding'):
                 self.reply(400, {'status': 'invalid_request'})
                 return
             length = int(self.headers.get('Content-Length', '0'))
             if not 0 < length <= LIMIT:
                 self.reply(413, {'status': 'request_limit'})
+                return
+            if self.path == '/plan':
+                if length != 2 or self.rfile.read(length) != b'{}':
+                    raise ValueError('plan body')
+                self.reply(200, self.server.coverage_budget.plan(self.server.domains))
                 return
             # Reject overload before reading query data; never queue inference.
             acquired = self.server.inference_lock.acquire(blocking=False)
@@ -119,9 +136,10 @@ class Handler(BaseHTTPRequestHandler):
             if len(raw) != length:
                 raise ValueError('short body')
             start = time.monotonic()
-            result = evaluate(json.loads(raw), self.server.domains, self.server.score)
+            fn = evaluate_v2 if self.path == '/rank-v2' else evaluate
+            result = fn(json.loads(raw), self.server.domains, self.server.score)
             elapsed = time.monotonic() - start
-            if elapsed > DEADLINE:
+            if elapsed > (8.0 if self.path == '/rank-v2' else DEADLINE):
                 self.reply(504, {'status': 'deadline'})
             else:
                 result['seconds'] = round(elapsed, 3)
@@ -149,6 +167,7 @@ class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
         if self.address_family is None:
             raise RuntimeError('AF_UNIX required')
         self.slots = threading.BoundedSemaphore(8)
+        self.coverage_budget = CoverageBudget()
         super().__init__(*args, **kwargs)
 
     def process_request(self, request, client_address):
@@ -186,9 +205,12 @@ def main():
         trust_remote_code=False, use_safetensors=True).eval()
 
     def score(pairs):
-        inputs = tokenizer(pairs, padding=True, truncation=True, max_length=512, return_tensors='pt')
+        values = []
         with torch.inference_mode():
-            return torch.sigmoid(model(**inputs).logits.flatten().float()).tolist()
+            for i in range(0, len(pairs), 8):
+                inputs = tokenizer(pairs[i:i+8], padding=True, truncation=True, max_length=512, return_tensors='pt')
+                values.extend(torch.sigmoid(model(**inputs).logits.flatten().float()).tolist())
+        return values
 
     score([['water', 'Water is a liquid.']])
     path = Path(SOCKET)

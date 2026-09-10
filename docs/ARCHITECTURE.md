@@ -7,16 +7,19 @@ Brave -> 127.0.0.1:8085/search?q=... -> host-gateway -> SearXNG
 
 SearXNG's native UI is the only interface. No chatbot, orchestrator, page fetcher,
 local model or redirector participates in ordinary search. An explicitly opt-in
-preview can reorder an already rendered result page; it is not the search path.
+preview can reorder an already rendered result page and, when ON, perform bounded
+preferred-site searches through that same SearXNG/VPN path.
 
 ## Optional Browser Preference Preview
 
 Native results page -> opt-in same-origin POST through gateway -> tmpfs Unix
 socket -> separate network=none CPU reranker -> numeric permutation. Original
-DOM nodes/order are retained in-page for instant OFF/ON comparison, no new search.
+DOM nodes/order are retained in-page for instant OFF/ON comparison. The remembered
+ON choice additionally permits up to two paced same-origin SearXNG searches,
+filtered/deduplicated and admitted by local relevance, no provider retries.
 No new listener port or model network, no external inference, no query cache.
-Only flat default-template lists/first 24 rows are eligible. Read
-BROWSER_PREFERENCE_PREVIEW.md for limits, startup and rollback.
+Only flat default-template lists/first 24 native rows are eligible; at most eight
+extra candidates. Read AUTOMATIC_PREFERRED_COVERAGE.md for limits and rollback.
 
 ## Boundaries
 
