@@ -23,6 +23,18 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
+## Current Local Shadow Test (2026-09-11)
+
+- User requested us to run the real-result comparison. Scoped branch
+  stamos/reranker-shadow-test, six frozen public fixtures, same-response replay,
+  existing frozen relevance gate and provisioned network-none CPU model.
+- Private preferences remain ignored/local; no production changes or result
+  payload files. See RERANKER_SHADOW_TEST.md. Frozen before first search.
+- validate.ps1 passed 94 host unit tests, 12 historical candidate tests, 11
+  timeout tests, Compose/identity checks and isolated image build. Runtime stack
+  startup blocked: Docker automatic address pools fully subnetted. No unrelated
+  networks removed; production unchanged. Full validation not passed. Run pending.
+
 ## Current Local Relevance-Gate Trial (2026-09-10)
 
 - User explicitly approved a local-only reranker experiment for relevance-gated

@@ -1,0 +1,8 @@
+[
+  {"id":"shadow-el-surveillance","query":"υποκλοπές Predator Ελλάδα δημοσιογραφική έρευνα","rubric":"Reporting or investigation about Predator surveillance in Greece, not generic device sales."},
+  {"id":"shadow-en-shipping","query":"Red Sea shipping disruption freight costs investigation","rubric":"Reporting explaining Red Sea disruptions and shipping or freight costs, not generic shipping services."},
+  {"id":"shadow-el-housing","query":"στεγαστική κρίση Ελλάδα ενοίκια βραχυχρόνια μίσθωση έρευνα","rubric":"Greek reporting or analysis linking housing affordability, rents and short-term rentals."},
+  {"id":"shadow-en-platforms","query":"European Union Digital Services Act platform transparency reporting","rubric":"Reporting or authoritative explanation of DSA platform transparency obligations, not unrelated transparency."},
+  {"id":"shadow-en-control","query":"Python sqlite3 parameter substitution placeholders documentation","rubric":"Practical Python sqlite3 parameter binding documentation; generic political or database news is irrelevant."},
+  {"id":"shadow-el-control","query":"πώς καθαρίζουμε το φίλτρο του πλυντηρίου ρούχων","rubric":"Practical Greek instructions for safely cleaning a washing machine filter, not unrelated news."}
+]

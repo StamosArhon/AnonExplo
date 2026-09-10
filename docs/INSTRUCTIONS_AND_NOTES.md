@@ -141,6 +141,10 @@
 
 ## Validation And Workflow
 
+- RERANKER_SHADOW_TEST.md scopes the requested one-shot real-result comparison.
+  Use only frozen public fixtures and ignored local preferences; stdio to a
+  network-none model, metrics/grades only on disk. No production integration.
+
 - LOCAL_RERANKER_TRIAL.md is an explicitly approved separate model experiment.
   Provision downloads only in the provisioning step; inference is network=none,
   local-files-only, no remote code, no production mount or endpoint. Keep private
