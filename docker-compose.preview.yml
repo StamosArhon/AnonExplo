@@ -39,7 +39,12 @@ services:
       - ./scripts:/trial:ro
       - socket:/run/anonexplo-preview
     healthcheck:
-      test: [CMD, python, -c, "import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(2); s.connect('/run/anonexplo-preview/model.sock'); s.sendall(b'GET /health HTTP/1.0\r\n\r\n'); assert b'200 OK' in s.recv(256)"]
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(2); s.connect('/run/anonexplo-preview/model.sock'); s.sendall(b'GET /health HTTP/1.0\r\n\r\n'); assert b'200 OK' in s.recv(256)
       interval: 30s
       timeout: 3s
       start_period: 60s

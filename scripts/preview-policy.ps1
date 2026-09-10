@@ -1,6 +1,8 @@
 function Assert-PreviewPolicy($config) {
     if ($config.name -ne 'anonexplo-preview' -or @($config.services.PSObject.Properties).Count -ne 1) { throw 'Unexpected preview project/services.' }
     $s = $config.services.reranker
+    $s.healthcheck.test[-1] | ConvertTo-Json -Compress | python -c "import json,sys;compile(json.load(sys.stdin),'<preview-healthcheck>','exec')"
+    if ($LASTEXITCODE) { throw 'Preview healthcheck Python syntax invalid.' }
     if ($s.image -ne 'sha256:a1ecd793732ada795e0f2fb5162b126b748a982ca902a5a7513df946f2b5cb99' -or
         $s.pull_policy -ne 'never' -or $s.build -or $s.network_mode -ne 'none' -or $s.networks -or $s.ports -or
         $s.privileged -or $s.cap_add -or -not $s.read_only -or $s.user -ne '65534:65534' -or

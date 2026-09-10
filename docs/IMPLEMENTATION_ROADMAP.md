@@ -47,7 +47,23 @@ or cached Docker images are deleted by this migration.
   approval needed for deployment; VPN will stay unchanged, native default OFF.
   Optional nginx include remains compatible with existing containers lacking
   preview mounts. Final code/docs reviewed and pushed; branch retained unmerged
-  pending deployment approval and live end-to-end verification. No installer.
+  pending deployment approval and live end-to-end verification at that handoff.
+- User subsequently explicitly approved deployment. Full quiet/cooldown passed;
+  rebuilt image equality guard caught Compose's differing project label before
+  any replacement. Identical filesystem layers verified; deployment now promotes
+  the exact validated image and retains strict manifest equality. Healthcheck
+  YAML escapes corrected before startup; resolved Python is syntax-checked.
+- Deployed search/gateway and separate preview; VPN identity unchanged. All four
+  services healthy, model network=none/read-only/no ports/no logs, tmpfs socket.
+  Local gateway synthetic positive/negative gate and request/privacy checks pass;
+  0.161s two-pair positive test, not a broad latency claim. Fresh native HTML smoke
+  found 35 flat default results with scores/script/input. No result payload saved.
+- Full validation passed during cooldown; post-fix resolved health policy, 99
+  host tests/DOM suite and deployed health/gateway/VPN verification passed.
+  Ready for user's same-page ON/OFF comparison at 8085, native default OFF.
+  Docs and deployment checker committed/pushed, reviewed against main and merged;
+  completed preview branch cleaned up. Older unmerged shadow branch preserved.
+  No installer or remote image publication. No general relevance gain claimed.
 
 ## Current Local Relevance-Gate Trial (2026-09-10)
 

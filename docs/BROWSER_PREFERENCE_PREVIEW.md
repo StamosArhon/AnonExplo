@@ -66,7 +66,7 @@ For complete UI rollback, preserve and retag the deployment's
 recreate only search-provider after reviewing cooldowns. Gateway routes can remain
 inert; no VPN recreation, cache/ban reset, browser profile changes or data deletion.
 Use `deploy-preview.ps1` only after both validation scripts pass; it preserves a
-rollback image, waits for quiet, compares the built/validated manifests, replaces
+rollback image, waits for quiet, promotes the exact validated image, compares manifests, replaces
 only gateway/search, starts preview and verifies the unchanged VPN identity.
 
 ## Validation status
@@ -88,13 +88,35 @@ only gateway/search, starts preview and verifies the unchanged VPN identity.
   11 timeout tests, 13 date-repair tests, three preview render/build tests, DOM
   suite, 20 negative core Compose cases, four preview cases, identity guards,
   privacy/blocked egress and isolated outage/recovery. Model/transport tests passed.
-- Deployment command was rejected by the safety reviewer before execution:
+- The first deployment command was rejected by the safety reviewer before execution:
   explicit approval requested for briefly replacing live search and gateway.
   No quiet window, live image build, rollback retag, container replacement or
-  preview service startup ran. Native search remains deployed unchanged.
+  preview service startup ran in that attempt. The user subsequently explicitly
+  approved replacement of the live search and gateway.
 - Gateway include uses an optional glob so its existing bind-mounted config
   remains valid even in an older container without the new preview assets mount.
   The running gateway's `nginx -t` passes; all three live services remain healthy
   with unchanged uptimes. All 18 local preferred domains passed input validation.
-- Pending: approved deployment and end-to-end localhost gateway/model checks.
-  Do not tell the user the toggle is available until these are complete.
+- Approved deployment completed after a successful 180-second quiet/cooldown
+  check. Initial artifact equality check stopped before container replacement:
+  rebuilding with a different Compose project changed only image config labels,
+  not filesystem layers. Fixed deployment to promote the exact validated artifact,
+  retaining strict manifest equality rather than weakening the guard.
+- Corrected a YAML healthcheck escape issue before model startup. The resolved
+  Python health command is now compiled during policy validation/startup.
+- Search/gateway replaced; VPN container identity unchanged. Three core services
+  and the separate preview service healthy. Runtime model network=none, no
+  published ports, read-only root, disabled logs, socket volume confirmed tmpfs.
+  Rollback image retained as before-preference-preview.
+- Deployed gateway smoke passed: JS asset, no-store/no-referrer, method/content/
+  cross-site restrictions, real local promotion (two pairs 0.161s), irrelevant
+  preferred result retained in native order. No URLs fetched or payload files.
+- One fresh public synthetic HTML search returned 35 default-template results,
+  all with native score attributes, correct local script/query input, no grouped
+  layout. Counts/booleans only captured. This proves markup integration, not
+  search relevance improvement or a visual Brave screenshot check.
+- Full isolated validation reran successfully during the cooldown. Subsequent
+  healthcheck correction passed resolved-code/policy checks; 99 host tests and
+  DOM suite reran, and actual deployed health/gateway/VPN checks passed.
+  Git closeout commits/pushes/merges the completed preview branch; old unrelated
+  unmerged shadow-test branch is preserved. No installer or remote image release.

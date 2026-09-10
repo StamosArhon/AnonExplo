@@ -22,8 +22,11 @@ try {
     if ((Read-QuietState) -ne $before) { throw 'Search activity changed; not restarting or automatically repeating.' }
     docker image tag anonexplo/searxng:date-merge-v1 anonexplo/searxng:before-preference-preview
     if ($LASTEXITCODE) { throw 'Cannot preserve rollback image.' }
-    docker compose -f docker-compose.yml build search-provider
-    if ($LASTEXITCODE) { throw 'Production build failed.' }
+    # Compose embeds its project label in image config, so rebuilding under
+    # another project changes the manifest even when filesystem layers match.
+    # Promote the exact validated artifact; never relax manifest equality.
+    docker image tag anonexplo/searxng:validation anonexplo/searxng:date-merge-v1
+    if ($LASTEXITCODE) { throw 'Validated image promotion failed.' }
     . (Join-Path $PSScriptRoot 'image-identity.ps1')
     $candidate = docker image inspect --platform linux/amd64 anonexplo/searxng:validation --format '{{json .Descriptor}}' | ConvertFrom-Json
     $built = docker image inspect --platform linux/amd64 anonexplo/searxng:date-merge-v1 --format '{{json .Descriptor}}' | ConvertFrom-Json
