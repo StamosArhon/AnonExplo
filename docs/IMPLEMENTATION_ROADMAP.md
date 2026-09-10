@@ -59,8 +59,15 @@ or cached Docker images are deleted by this migration.
   namespace, VPN-local DNS and distinct working search egress. Credentials,
   production cache, browser profiles and search settings untouched. No reboot,
   live VPN-stop drill, installer or registry image publication applies here.
-- Implementation/validation/deployment complete; Git review/push/merge/cleanup
-  still pending at this checkpoint. Next work must use a fresh scoped branch.
+- Final deployed-container date regressions passed (13 tests in a separate
+  process, no worker mutation/engine requests); root/preferences/config/stats
+  all returned 200 with no-store/no-referrer. This is deterministic metadata
+  verification, not a new live relevance or reliability benchmark.
+- Implementation 71b8dba committed and pushed. Reviewed all changes against main;
+  whitespace checks passed, no credential files tracked, remote main unchanged.
+  This documentation closeout accompanies the fast-forward main merge and
+  local/remote branch cleanup. No remote blocker. Resume future work from updated
+  main on a fresh branch; the completed repair scope must not be reused.
 - Historical candidate live mode retired immediately; original-image offline
   tests remain historical characterization. Do not retry the failed News suite.
   Next separate scope remains bounded DDG downstream-request diagnosis, not
