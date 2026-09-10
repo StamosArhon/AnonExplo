@@ -48,6 +48,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or $productionImageBefore -ne $productionImageAfter) { throw 'Validation changed the production image tag.' }
     Write-Host 'Built isolated validation image; production image tag unchanged.'
     & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1') -Image 'anonexplo/searxng:validation'
+    & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1') -Transport -Image 'anonexplo/searxng:validation'
     docker compose up -d --wait --wait-timeout 120 host-gateway search-provider
     if ($LASTEXITCODE -ne 0) { throw 'Isolated search stack failed to start.' }
     foreach ($path in @('/','/preferences','/config','/stats')) { Assert-HttpPrivacy $path }

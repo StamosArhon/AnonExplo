@@ -76,6 +76,12 @@
   Read DDG_REQUEST_DIAGNOSIS.md. Its -Live mode is now refused; do not rerun failed
   fixtures. Any new transport observation needs a fresh scoped decision, no
   payload logging, native timeout/retry semantics intact, and normal cooldowns.
+- The approved transport batch observed one healthy DDG News fixture, then another
+  cold-token HTTP timeout at 2s. Counters do not prove the network/root cause;
+  see DDG_TRANSPORT_TIMINGS.md. No production search change was justified. Both
+  diagnostic fixture sets are retired from PowerShell -Live; do not bypass that
+  guard with the Python runner. -Transport offline checks preserve source guards,
+  numeric-only capture and native argument/return/exception behavior.
 
 ## Startup And Migration
 

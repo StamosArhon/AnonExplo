@@ -39,6 +39,32 @@ or cached Docker images are deleted by this migration.
   Cleanup passed. No model/provider/network/settings change. This completed unit
   accompanies the reviewed push/merge/branch cleanup; continue the approved batch
   with transport diagnosis on a fresh branch, without another approval prompt.
+- Step one merged/cleaned as 92202a1. Step two stamos/ddg-transport-timings adds
+  source-guarded, numeric-only transport counters on the native client, with two
+  new frozen fixtures. No timing/network/fingerprint changes. Offline preparation
+  passed 41 host tests, native hook initialization and fake-transfer bindings.
+- Bounded live trace completed: battery returned 23 rows in 1.000s with healthy
+  token/news transfers. Wetlands then timed out during token HTTP in 2.003s;
+  zero rows, one error, no downstream request. Stopped without retry. Short DNS
+  timing but zero TCP/TLS completion counters and contradictory first-byte timing
+  do not establish the precise network/root cause. See DDG_TRANSPORT_TIMINGS.md.
+- Conditional step three: no evidence-supported production search fix identified;
+  deliberately retain native timeouts, cooldowns, providers, routing and ranking.
+  Both completed fixture sets now refuse PowerShell -Live; no further live trial
+  in this batch. Offline instrumentation remains covered by normal validation.
+- Step four: full validation passed: 66 Python tests, 20 negative Compose cases,
+  seven negative identity cases plus positive match, native offline hook/binding
+  checks, isolated image build with production tag unchanged, privacy/settings,
+  blocked egress, outage/recovery and cleanup. Live-mode refusal verified without
+  queries; final live ops passed with three healthy services and VPN isolation.
+  Reviewed diagnostic/docs unit accompanies push, fast-forward merge and scoped
+  branch cleanup. No production deployment/restart or desktop release required.
+- Approved batch complete: operational checker/build isolation fixed; bounded
+  transport diagnosis delivered; conditional search fix deliberately declined;
+  final verification complete. The intermittent upstream issue remains open.
+  Next useful milestone is an offline review of the pinned client's failure-path
+  timing semantics before proposing any further narrowly scoped live experiment;
+  no repeated provider probing or new experiment is authorized by this closeout.
 
 ## Previous DDG Request Diagnosis (2026-09-10)
 

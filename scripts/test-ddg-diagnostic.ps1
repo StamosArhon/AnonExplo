@@ -1,12 +1,13 @@
-param([switch]$Live, [ValidateSet('anonexplo/searxng:date-merge-v1','anonexplo/searxng:validation')][string]$Image = 'anonexplo/searxng:date-merge-v1')
+param([switch]$Live, [switch]$Transport, [ValidateSet('anonexplo/searxng:date-merge-v1','anonexplo/searxng:validation')][string]$Image = 'anonexplo/searxng:date-merge-v1')
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $root
 try {
     if ($Live) {
-        throw 'Completed diagnostic stopped on token HTTP timeout. Do not retry its fixtures; review a separately scoped transport diagnostic first.'
+        throw 'Both completed diagnostics stopped on token HTTP timeout. Live mode is retired; do not retry these fixtures. Offline checks remain available.'
     }
     $network = 'none'
+    if ($Live -and $Image -ne 'anonexplo/searxng:date-merge-v1') { throw 'Live diagnostics require the verified production image.' }
     $extra = @()
     $compose = @('-f','docker-compose.yml','-f','docker-compose.proton-search.yml','--profile','proton-search')
     if ($Live) {
@@ -54,6 +55,7 @@ try {
         '--entrypoint','/usr/local/searxng/.venv/bin/python')
     $run += $extra
     $run += @($image,'/diagnostic/run-ddg-diagnostic.py')
+    if ($Transport) { $run += '--transport' }
     if ($Live) { $run += '--live' }
     & docker @run
     if ($LASTEXITCODE -ne 0) { throw 'Diagnostic stopped or failed; review metadata, do not repeat automatically.' }
