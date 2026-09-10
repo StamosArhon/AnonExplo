@@ -83,6 +83,10 @@ guarded web adapter with the native client/processor over container-loopback TLS
 It is offline-only, not a deployed News fix. After explicit source provisioning,
 `validate.ps1 -WebCandidate` includes both mock and real-client integration suites;
 `test-ddg-web-candidate.ps1 -Integration` runs the latter alone. `-Live` refuses.
+The separate [guarded web trial](docs/DDG_WEB_GUARDED_TRIAL.md) has a VPN-only,
+one-shot path with frozen fixtures and cooldown preflight. Its first preflight
+stopped on changed local stats before any query; coordinate a fresh quiet window,
+never retry automatically. It does not enable a production engine.
 
 The [publication-date repair](docs/PUBLICATION_DATE_REPAIR.md) preserves a date
 supplied by another engine when duplicate results merge, including native HTML

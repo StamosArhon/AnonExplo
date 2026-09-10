@@ -1,7 +1,8 @@
-"""Offline-only native processor/client integration. Not a production import.
+"""Experiment-only native processor/client integration. Not a production import.
 
-The shipped runner has network=none and routes the exact allowed HTTPS hosts to
-an ephemeral container-loopback TLS fixture. No live entrypoint is provided.
+Offline tests use network=none with container-loopback TLS fixtures. The separate
+approved trial wrapper may use existing VPN networking after its preflight; this
+module has no standalone live entrypoint or test CA/DNS override.
 """
 import asyncio
 import concurrent.futures

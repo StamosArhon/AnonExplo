@@ -108,6 +108,16 @@ Logs/exception metrics stay disabled for this experiment. Test CA/DNS overrides
 must never be used for live requests. Live mode refuses; do not deploy these
 helpers. See DDG_WEB_NATIVE_INTEGRATION.md for boundaries and trial prerequisites.
 
+The later separate guarded web trial wrapper has an explicitly gated VPN-only
+path with frozen public fixtures, quiet/cooldown checks and an atomic one-attempt
+marker. It mounts only public settings/source and VPN-local resolver, never the
+VPN credential or production cache; no listener, host port, test CA/DNS override
+or proxy fallback. Logs/exception capture stay disabled, output is metrics-only,
+and no result site is fetched. It stops on the first degradation, without retry.
+Its first preflight refused changed local stats before any provider dispatch.
+Snapshots used for comparison stay in memory; raw records are not persisted or
+printed. See DDG_WEB_GUARDED_TRIAL.md before another manually authorized preflight.
+
 Gluetun contacts its configured DNS/health/blocklist/public-IP services; these
 are infrastructure requests, not search strings. DNS-over-TLS uses Cloudflare
 through the VPN; checks use example.com and api.ipify.org. No zero-third-party-

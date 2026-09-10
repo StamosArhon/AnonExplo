@@ -41,6 +41,12 @@ It exercises native processor cooldowns and the real client while enforcing a
 candidate-only deadline/body/header boundary. See DDG_WEB_NATIVE_INTEGRATION.md;
 no live mode or production adapter installation is added.
 
+The later separate test-ddg-web-trial.ps1 defaults to network=none initialization;
+its explicit approved live path uses only the existing VPN namespace after quiet/
+cooldown and isolation checks. It has no listener, key/cache mount or production
+installation. The first preflight stopped before dispatch; no live query was sent.
+See DDG_WEB_GUARDED_TRIAL.md; never weaken the offline integration test boundary.
+
 ## Configuration
 
 - configs/searxng/settings.yml: engines, timeouts and native privacy defaults.

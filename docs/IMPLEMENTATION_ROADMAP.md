@@ -41,6 +41,16 @@ or cached Docker images are deleted by this migration.
   was repeated after numeric-only call observation was added. Fixtures/policy
   are hash-locked for a pre-evaluation freeze commit; live evaluation pending.
   See DDG_WEB_GUARDED_TRIAL.md. No installer/release applies.
+- Frozen tooling/fixtures committed and pushed at 959c664. The one preflight
+  completed 10s + 180s, then refused changed combined local stats/error state.
+  Stopped before VPN checks/attachment, marker creation or provider dispatch:
+  zero live queries, no fixture observed, no retry. This is not a provider failure.
+- Two subsequent immediate stats reads matched; no attributable caller or exact
+  changed component is established. A fresh operator-coordinated four-minute
+  quiet window is required before another preflight. Do not retry automatically.
+  Tooling is validated; actual live evaluation remains blocked pending that window.
+- Reviewed tooling/docs and blocked outcome accompany final commit/push,
+  fast-forward main merge and local/remote scoped cleanup. Production unchanged.
 
 ## Previous Native Web Integration Batch (2026-09-10)
 
@@ -716,9 +726,12 @@ or cached Docker images are deleted by this migration.
    its guarded offline executor and synthetic adapter tests are now implemented.
    Native processor/client integration now passes real offline TLS tests for
    option forwarding, cookies, redirects, body bounds, cancellation and cooldowns.
-   Next scope may build a bounded VPN-only first-page web trial with fresh frozen
-   fixtures, preceding-cooldown preflight, metrics only and stop-on-degradation.
-   Live remains refused until that separately scoped runner is implemented. Keep
+   The separate bounded VPN-only web trial runner and frozen fixtures now exist.
+   Its first preflight stopped on changed local stats before sending any query.
+   Next requires an operator-coordinated four-minute quiet window for a fresh
+   preflight; all three fixtures remain unseen. No automatic repeat or guard
+   weakening. If instability recurs, diagnose metadata/caller attribution before
+   provider evaluation. Existing retired diagnostic live modes stay refused. Keep
    Startpage inactive/disabled; do not adopt its new challenge handling by
    incidental image upgrade.
    Require healthy holdout/topicality evidence before any ranking deployment.

@@ -112,6 +112,13 @@
   unsupported filters, caps decompressed bodies and cancels overdue transport.
   A future bounded trial still needs fresh fixtures/cooldown preflight: isolated
   process state does not inherit production's suspension history. -Live refuses.
+- The separate test-ddg-web-trial.ps1 is the approved one-shot web trial, not a
+  bypass of older live guards. It defaults to offline startup; -Live requires
+  quiet/cooldown and VPN preflight, frozen fixture hashes and an unused atomic
+  marker. Its first preflight stopped on changed stats before dispatch. Read
+  DDG_WEB_GUARDED_TRIAL.md: all fixtures remain unseen; no automatic retry. Obtain
+  a new four-minute quiet window before retrying preflight, never erase markers
+  or reset native suspension. No provider quality conclusion exists yet.
 
 ## Startup And Migration
 

@@ -1,5 +1,9 @@
 # Offline DDG Web Native Integration (2026-09-10)
 
+Historical integration-stage record. The later separate trial wrapper and its
+blocked preflight outcome are documented in DDG_WEB_GUARDED_TRIAL.md; the offline
+test wrapper remains network-disabled and continues to refuse its -Live flag.
+
 Approved batch on stamos/ddg-web-native-integration from main 088bfa6: implement
 and test native networking/processor integration, fix demonstrated candidate gaps,
 validate and close Git. No production update, live query, account or deployment.

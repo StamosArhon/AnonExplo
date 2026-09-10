@@ -81,3 +81,28 @@ privacy/settings/ranking, blocked egress, outage/recovery and cleanup. Offline
 initialization was repeated after adding numeric-only call observations.
 This code/fixture/policy state is committed before live evaluation; live outcome
 will be appended before branch closeout. No live query has been sent at this stage.
+
+### Attempt Outcome
+
+Fixtures and criteria were committed/pushed at 959c664 before the first preflight.
+The single approved preflight waited the full 10s + 180s, then refused because
+the combined local error-history/aggregate-stats snapshot changed. It stopped
+before ops-check, VPN attachment, one-shot marker creation or provider dispatch.
+**Zero search queries sent; all three fixtures remain unseen.** No automatic
+repeat, provider retry, new exit, restart, cache deletion or timeout change.
+
+Read-only follow-up: two immediate /stats responses were byte-identical (16,709
+characters); DDG web had no reported error entries and News retained three Timeout
+entries. This does not reconstruct the earlier changed snapshot or establish a
+quiet interval. The guard compared combined snapshots and did not attribute the
+change to an engine, caller or browser. Do not blame browser activity as proven,
+or label this a DDG candidate/provider failure. No result-quality finding exists.
+
+The ignored attempt marker is absent because dispatch never began. The runner
+and frozen fixtures remain ready for a manually authorized quiet-window preflight;
+do not rerun automatically in this batch. Ask the operator for approximately four
+minutes without browser searches. If the state changes again despite that window,
+diagnose metadata stability/activity attribution without sending test queries.
+
+Tooling and this blocked outcome accompany final commit/push, main merge and
+scoped branch cleanup. No production deployment or installer/release applies.
