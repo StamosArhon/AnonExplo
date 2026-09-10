@@ -52,8 +52,12 @@ or cached Docker images are deleted by this migration.
   browser history, command-line contents or persistent request logging. Ask
   before any gateway interruption or tracing that collects request content.
 - Production config/Compose diff is empty. No candidate deployment, live
-  kill-switch/reboot/browser drill or release. Final review and Git closeout
-  follow; the live evaluation remains explicitly blocked, not passed.
+  kill-switch/reboot/browser drill or release. The live evaluation remains
+  explicitly blocked, not passed.
+- Implementation/report 6c72467 pushed and reviewed against main; whitespace
+  checks passed. This documentation closeout accompanies the fast-forward main
+  merge and local/remote branch cleanup. No remote blocker; next investigation
+  starts from updated main on a fresh branch. Do not claim the search fix shipped.
 
 ## Previous Isolated News Candidate Scope (2026-09-10)
 
