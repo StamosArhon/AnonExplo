@@ -23,7 +23,18 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Default-Engine Coverage Batch (2026-09-10)
+## Current End-to-End Quality Decision (2026-09-10)
+
+- User explicitly approved one substantial deploy-or-stop quality batch after
+  rejecting diminishing-return tweaks. Fresh stamos/search-quality-decision
+  from ae4bf46. See SEARCH_QUALITY_DECISION.md for 32-question split, fixed two
+  ordering alternatives, snippet rubric, reliability/quality gates and stop rule.
+- Approved bounded public-snippet grading; no persisted result payloads, browser
+  history, temporary result cache, runtime model, new provider or configuration
+  change. Same-response replay avoids multiple retrieval runs per question.
+  Freeze before first evaluation. Full validation and evaluation pending.
+
+## Previous Default-Engine Coverage Batch (2026-09-10)
 
 - Approved follow-up on stamos/default-engine-coverage from clean main 4cc085e.
   Four fresh EN/EL official-destination fixtures, frozen before querying, and

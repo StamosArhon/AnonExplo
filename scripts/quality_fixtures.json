@@ -1,0 +1,230 @@
+{
+  "development": [
+    [
+      "d01",
+      "explanation",
+      "en",
+      "how noise cancelling headphones reduce sound",
+      "Explain microphone sensing, opposite-phase signal and limits for sudden sounds."
+    ],
+    [
+      "d02",
+      "explanation",
+      "el",
+      "γιατί σχηματίζεται δροσιά το πρωί",
+      "Explain cooling to dew point, condensation and surfaces."
+    ],
+    [
+      "d03",
+      "technical",
+      "en",
+      "Python sort list dictionaries multiple keys stable sorting",
+      "Explain key tuples, ascending/descending choices and stability."
+    ],
+    [
+      "d04",
+      "technical",
+      "el",
+      "πώς βρίσκω ποια εφαρμογή χρησιμοποιεί θύρα Windows PowerShell",
+      "Show port-to-PID lookup and process identification; Windows/PowerShell not Linux-only."
+    ],
+    [
+      "d05",
+      "resource",
+      "en",
+      "Firefox export bookmarks HTML official instructions",
+      "Find actionable Firefox bookmark export instructions and HTML format."
+    ],
+    [
+      "d06",
+      "resource",
+      "el",
+      "ψηφιακή βεβαίωση εγγράφου gov gr πώς γίνεται",
+      "Find official service and practical steps for certifying a document digitally."
+    ],
+    [
+      "d07",
+      "explanation",
+      "en",
+      "why salt melts ice freezing point depression limitations",
+      "Explain freezing point depression, brine and temperature limits."
+    ],
+    [
+      "d08",
+      "explanation",
+      "el",
+      "πώς λειτουργεί η αντλία θερμότητας σε σχέση με ηλεκτρική αντίσταση",
+      "Explain moving versus generating heat, efficiency and operating conditions."
+    ],
+    [
+      "d09",
+      "technical",
+      "en",
+      "git restore file from previous commit without changing other files",
+      "Give file-scoped restore, commit reference and working-tree/staging consequences."
+    ],
+    [
+      "d10",
+      "technical",
+      "el",
+      "Excel απόλυτη σχετική αναφορά κελιού σύμβολο δολαρίου",
+      "Explain relative, absolute and mixed references with examples."
+    ],
+    [
+      "d11",
+      "resource",
+      "en",
+      "Wikimedia Commons reuse images attribution license guide",
+      "Find licensing/attribution guidance; distinguish per-file licenses from blanket permission."
+    ],
+    [
+      "d12",
+      "resource",
+      "el",
+      "ΕΜΥ επίσημη πρόγνωση καιρού Ελλάδα",
+      "Find official Greek weather forecasts, locations and forecast access."
+    ],
+    [
+      "d13",
+      "recent",
+      "en",
+      "urban heat island mitigation research 2026",
+      "Recent reporting on urban heat mitigation, measures and evidence; dates within 2026 required for full grade."
+    ],
+    [
+      "d14",
+      "recent",
+      "el",
+      "έρευνα μικροπλαστικά θάλασσα 2026",
+      "Greek recent reporting on marine microplastics research and findings; 2026 date required for full grade."
+    ],
+    [
+      "d15",
+      "recent",
+      "en",
+      "reusable rocket technology research 2026",
+      "Recent reporting on reusable rocket technology, tests and limitations; 2026 date required for full grade."
+    ],
+    [
+      "d16",
+      "recent",
+      "el",
+      "έρευνα αποθήκευση ενέργειας 2026",
+      "Greek recent reporting on energy-storage research, technology and findings; 2026 date required for full grade."
+    ]
+  ],
+  "holdout": [
+    [
+      "h01",
+      "explanation",
+      "en",
+      "why metal feels colder than wood at same temperature",
+      "Explain thermal conductivity, heat flow from skin and equal starting temperature."
+    ],
+    [
+      "h02",
+      "explanation",
+      "el",
+      "γιατί βλέπουμε αστραπή πριν ακούσουμε βροντή",
+      "Explain light/sound speed, distance and timing."
+    ],
+    [
+      "h03",
+      "technical",
+      "en",
+      "Python datetime timezone aware versus naive UTC conversion",
+      "Explain aware/naive distinction, timezone conversion and avoid relabeling local time as UTC."
+    ],
+    [
+      "h04",
+      "technical",
+      "el",
+      "Windows PowerShell υπολογισμός SHA256 αρχείου",
+      "Give Get-FileHash usage, SHA256 selection and checksum comparison."
+    ],
+    [
+      "h05",
+      "resource",
+      "en",
+      "LibreOffice Writer automatic table of contents headings guide",
+      "Find Writer guide for heading styles, inserting and updating table of contents."
+    ],
+    [
+      "h06",
+      "resource",
+      "el",
+      "gov gr έκδοση πιστοποιητικού οικογενειακής κατάστασης",
+      "Find official certificate service, access and issuance steps."
+    ],
+    [
+      "h07",
+      "explanation",
+      "en",
+      "how induction cooktops heat cookware magnetic materials",
+      "Explain magnetic field, induced current and compatible cookware."
+    ],
+    [
+      "h08",
+      "explanation",
+      "el",
+      "πώς λειτουργεί το ουράνιο τόξο διάθλαση ανάκλαση",
+      "Explain refraction, internal reflection and colour separation in droplets."
+    ],
+    [
+      "h09",
+      "technical",
+      "en",
+      "CSS flexbox min width zero text overflow ellipsis",
+      "Explain flex-item minimum sizing, min-width zero and ellipsis prerequisites."
+    ],
+    [
+      "h10",
+      "technical",
+      "el",
+      "Excel COUNTIF COUNTIFS διαφορά πολλαπλά κριτήρια",
+      "Explain single/multiple criteria with formulas and ranges."
+    ],
+    [
+      "h11",
+      "resource",
+      "en",
+      "Internet Archive Wayback Machine save page official help",
+      "Find Save Page Now instructions, public URL entry and capture limitations."
+    ],
+    [
+      "h12",
+      "resource",
+      "el",
+      "Εθνικό Τυπογραφείο αναζήτηση ΦΕΚ οδηγίες",
+      "Find official gazette search and issue/date/number retrieval guidance."
+    ],
+    [
+      "h13",
+      "recent",
+      "en",
+      "perovskite solar cell durability research 2026",
+      "Recent reporting on perovskite durability, stability tests and limitations; 2026 date required for full grade."
+    ],
+    [
+      "h14",
+      "recent",
+      "el",
+      "έρευνα πρόληψη δασικών πυρκαγιών 2026",
+      "Greek recent reporting on wildfire-prevention research, methods and evidence; 2026 date required for full grade."
+    ],
+    [
+      "h15",
+      "recent",
+      "en",
+      "ocean carbon observation research 2026",
+      "Recent reporting on ocean carbon observations, methods and findings; 2026 date required for full grade."
+    ],
+    [
+      "h16",
+      "recent",
+      "el",
+      "έρευνα ανακύκλωση πλαστικών 2026",
+      "Greek recent reporting on plastic-recycling research, methods and limits; 2026 date required for full grade."
+    ]
+  ]
+}

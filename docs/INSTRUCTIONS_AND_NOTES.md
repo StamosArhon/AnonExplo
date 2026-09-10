@@ -141,6 +141,11 @@
 
 ## Validation And Workflow
 
+- SEARCH_QUALITY_DECISION.md replaces incremental tuning as the current quality
+  scope: frozen development/holdout split, two fixed same-response policies,
+  explicit snippet grades, deployment gates and no retry/tuning loop on failure.
+  Preserve its one-shot marker and metrics-only output. Never persist payloads.
+
 - Branch per scope: stamos/<name>; update roadmap, validate, review, commit/push,
   merge only ready work, delete completed branch. No desktop release applies.
 - Bundle approved work into 3-4 steps; continue normal branches without asking
