@@ -32,7 +32,19 @@ or cached Docker images are deleted by this migration.
 - Use existing VPN-checked browser benchmark once, 20s pacing and stop on first
   degradation. No DDG diagnostic, retries, suffix resume or new recipient.
   This is destination coverage, not a general topicality evaluation or ablation.
-  See DEFAULT_ENGINE_COVERAGE.md. Validation and live evaluation pending.
+  See DEFAULT_ENGINE_COVERAGE.md. Fixtures committed/pushed at 46b0a8e before
+  evaluation. VPN/gateway preflight passed; all four expected sites ranked first,
+  33-36 rows, three contributing web engines each, zero errors, mean 1.13s.
+- Across 20 top-five positions, Brave/Yahoo/Bing had 16/8/1 credits and 11/3/1
+  sole credits. These overlapping counts are not relevance grades or ablation.
+  Retain production unchanged, including all defaults and Bing weight 0.35.
+  All four fixtures now observed; no repeated live run or new DDG experiment.
+- Full validate.ps1 passed: 106 Python test executions, 20 negative Compose
+  cases, seven negative identity cases plus equality, isolated managed build
+  with production tag unchanged, native privacy/settings/ranking, blocked egress,
+  outage/recovery and cleanup. Optional unrelated DDG candidate suites skipped.
+  Reviewed tooling/metrics-only report accompany commit/push, main merge and
+  local/remote branch cleanup. No release, production restart or deployment.
 
 ## Previous Confirmed-Quiet Web Trial Outcome (2026-09-10)
 
@@ -756,6 +768,10 @@ or cached Docker images are deleted by this migration.
 2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
    unchanged after rejecting the newest-first trial. Retain honest limits of
    snippet-level judgements, news freshness and intermittent upstream errors.
+   The new default-engine destination audit passed four of four at rank one.
+   Do not repeat domain-hit tests as a substitute for relevance assessment:
+   next topicality work needs fresh rubrics and explicit bounded snippet-review
+   approval. No automatic engine removal or weighting follows from credit counts.
 3. Date repair and manifest-identity/build-isolation fixes are complete. DDG
    diagnostics remain retired after their stop conditions. Offline review now
    reproduces misleading counters during a controlled TLS stall, without proving

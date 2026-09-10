@@ -83,6 +83,11 @@ guarded web adapter with the native client/processor over container-loopback TLS
 It is offline-only, not a deployed News fix. After explicit source provisioning,
 `validate.ps1 -WebCandidate` includes both mock and real-client integration suites;
 `test-ddg-web-candidate.ps1 -Integration` runs the latter alone. `-Live` refuses.
+The completed [default-engine coverage audit](docs/DEFAULT_ENGINE_COVERAGE.md)
+found all four EN/EL official sites at rank one without engine errors. New
+top-five attribution metrics describe contributions, not engine relevance grades;
+production weights remain unchanged.
+
 The separate [guarded web trial](docs/DDG_WEB_GUARDED_TRIAL.md) used a VPN-only,
 one-shot path with frozen fixtures and cooldown preflight. After a blocked first
 preflight, the confirmed quiet-window trial returned one healthy result set then
