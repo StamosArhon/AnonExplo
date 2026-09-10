@@ -86,6 +86,14 @@ Suspension state is process-local:
 review cooldowns before a trial and never recreate it to retry a failed provider.
 Tmpfs disposal is not a guarantee of secure erasure from host memory or swap.
 
+The optional transport-version review also has network=none and no host ports.
+An explicitly provisioned, hash-verified official wheel is mounted read-only and
+extracted to capped /candidate tmpfs with executable mappings for its native
+library. /tmp remains noexec; production never gets this mount or client overlay.
+Exact profile/source and artifact hashes are checked before use. No host package
+installation, runtime download, credential/cache sharing or payload capture.
+See UPSTREAM_TRANSPORT_REVIEW.md; this candidate is not a deployed upgrade.
+
 Gluetun contacts its configured DNS/health/blocklist/public-IP services; these
 are infrastructure requests, not search strings. DNS-over-TLS uses Cloudflare
 through the VPN; checks use example.com and api.ipify.org. No zero-third-party-

@@ -18,17 +18,20 @@ from ddg_diagnostic import Trace, verify_sources
 from ddg_transport import observe_transport
 
 
-def verify_client_sources():
+def verify_client_sources(profile='production'):
     verify_sources()
     for name, expected in {
         'searx.network.network': '230eda36d0632377e91fdbe2f542c2aee544c85c743c3d1f6f8c3d129fa45afe',
         'searx.network.client': '4fe47480cd80169132e56c66ba0122c0beb8bb6af7db08bf8f54ee83b12ecd0e',
-        'curl_cffi.requests.utils': '70336a034312cdaab0ca9d2f1f07606bae727dca3d57b31ae0a0e9c005c80b75',
+        'curl_cffi.requests.utils': {
+            'production': '70336a034312cdaab0ca9d2f1f07606bae727dca3d57b31ae0a0e9c005c80b75',
+            'candidate-0.16.3': 'bb61f6493a70f0524a10d27a74983ef85de92526ad873bc226a55c69ebb749d4',
+        }[profile],
     }.items():
         module = importlib.import_module(name)
         if sha256(Path(module.__file__).read_bytes()).hexdigest() != expected:
             raise RuntimeError('Offline source compatibility changed')
-    with observe_transport(Trace()):
+    with observe_transport(Trace(), profile=profile):
         pass
 
 
@@ -118,11 +121,12 @@ class RetryTests(unittest.IsolatedAsyncioTestCase):
 
 
 class LoopbackTests(unittest.IsolatedAsyncioTestCase):
+    client_profile = 'production'
     async def asyncSetUp(self):
         from searx.network.client import new_client
         self.client = new_client(True, True, True, False, 1, {}, None, 0)
         self.trace = Trace()
-        self.observer = observe_transport(self.trace)
+        self.observer = observe_transport(self.trace, profile=self.client_profile)
         self.observer.__enter__()
         self.tasks = set()
         self.accepted = 0

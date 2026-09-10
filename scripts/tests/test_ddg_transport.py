@@ -5,10 +5,26 @@ from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ddg_transport import INFO_FIELDS, FIXTURES, endpoint_stage, phase_metrics
+from ddg_transport import INFO_FIELDS, FIXTURES, SESSION_PROFILES, endpoint_stage, phase_metrics, verify_session_digest
 
 
 class TransportTests(unittest.TestCase):
+    def test_profile_exact_matches(self):
+        for profile, digest in SESSION_PROFILES.items():
+            verify_session_digest(profile, digest)
+
+    def test_profiles_cannot_cross_match(self):
+        with self.assertRaises(RuntimeError):
+            verify_session_digest('production', SESSION_PROFILES['candidate-0.16.3'])
+        with self.assertRaises(RuntimeError):
+            verify_session_digest('candidate-0.16.3', SESSION_PROFILES['production'])
+
+    def test_unknown_profile_or_source_refused(self):
+        with self.assertRaises(RuntimeError):
+            verify_session_digest('unknown', SESSION_PROFILES['production'])
+        with self.assertRaises(RuntimeError):
+            verify_session_digest('production', '0' * 64)
+
     def test_only_allowlisted_numeric_counters_read(self):
         names = list(INFO_FIELDS.values())
         infos = SimpleNamespace(**{name: name for name in names})

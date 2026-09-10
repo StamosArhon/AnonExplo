@@ -88,6 +88,12 @@
   confirmed TCP acceptance and no server response. Do not infer live network
   phases from those counters alone. Caller timeout does not explicitly cancel
   its future; this is not proof of the observed transport timeout's cause.
+- Read UPSTREAM_TRANSPORT_REVIEW.md before client updates. The reviewed 0.16.3
+  offline candidate reproduces the same counters and is not deployed. Provision
+  its exact glibc wheel separately; -TimeoutSemantics -ClientCandidate and optional
+  validate.ps1 -TransportCandidate never download at runtime or get VPN access.
+  Default guards accept only production sources. Candidate hashes are explicit,
+  not a bypass; executable /candidate tmpfs exists only in that offline container.
 
 ## Startup And Migration
 

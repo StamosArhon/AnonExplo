@@ -1,4 +1,4 @@
-param([switch]$Live, [switch]$Transport, [switch]$TimeoutSemantics, [ValidateSet('anonexplo/searxng:date-merge-v1','anonexplo/searxng:validation')][string]$Image = 'anonexplo/searxng:date-merge-v1')
+param([switch]$Live, [switch]$Transport, [switch]$TimeoutSemantics, [switch]$ClientCandidate, [ValidateSet('anonexplo/searxng:date-merge-v1','anonexplo/searxng:validation')][string]$Image = 'anonexplo/searxng:date-merge-v1')
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $root
@@ -7,9 +7,19 @@ try {
         throw 'Both completed diagnostics stopped on token HTTP timeout. Live mode is retired; do not retry these fixtures. Offline checks remain available.'
     }
     if ($Transport -and $TimeoutSemantics) { throw 'Choose one offline diagnostic mode.' }
+    if ($ClientCandidate -and (-not $TimeoutSemantics -or $Transport)) { throw 'Candidate requires offline timeout semantics only.' }
     $network = 'none'
     if ($Live -and $Image -ne 'anonexplo/searxng:date-merge-v1') { throw 'Live diagnostics require the verified production image.' }
     $extra = @()
+    if ($ClientCandidate) {
+        $wheel = Join-Path $root 'build/transport-review/curl_cffi-0.16.3-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl'
+        if (-not (Test-Path -LiteralPath $wheel)) { throw 'Provision the frozen wheel explicitly with provision-transport-review.ps1 first.' }
+        if ((Get-FileHash -LiteralPath $wheel -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'a875a661e2f9a949be29454880bbb9553307a487c4c08819738298cf5c1622e2') { throw 'Candidate wheel hash mismatch.' }
+        # Native wheel library needs executable mappings; only this disposable
+        # network-none overlay permits them. Standard /tmp remains noexec.
+        $extra = @('--mount',"type=bind,source=$wheel,target=/review/candidate.whl,readonly",
+            '--tmpfs','/candidate:rw,exec,nosuid,size=64m,mode=1777')
+    }
     $compose = @('-f','docker-compose.yml','-f','docker-compose.proton-search.yml','--profile','proton-search')
     if ($Live) {
         function Read-DdgState {
@@ -56,6 +66,7 @@ try {
         '--entrypoint','/usr/local/searxng/.venv/bin/python')
     $run += $extra
     $runner = if ($TimeoutSemantics) { '/diagnostic/test_timeout_semantics.py' } else { '/diagnostic/run-ddg-diagnostic.py' }
+    if ($ClientCandidate) { $runner = '/diagnostic/run-transport-candidate.py' }
     $run += @($image,$runner)
     if ($Transport) { $run += '--transport' }
     if ($Live) { $run += '--live' }

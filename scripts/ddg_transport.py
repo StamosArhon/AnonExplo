@@ -10,6 +10,17 @@ from unittest.mock import patch
 FIXTURES = (('transport-battery', 'sodium ion battery recycling research'),
             ('transport-wetlands', 'Mediterranean wetland restoration research'))
 SESSION_SHA256 = '322ed676e7a9e666858bca7b281b314d47dae8a07902b2f3e705869f88fa7171'
+SESSION_PROFILES = {
+    'production': SESSION_SHA256,
+    'candidate-0.16.3': 'ff3152f6e1c37078c21f9cca11da1adbed8ce7bbb67d88846597df329b940c55',
+}
+
+
+def verify_session_digest(profile, digest):
+    if profile not in SESSION_PROFILES or digest != SESSION_PROFILES[profile]:
+        raise RuntimeError('Transport source changed; review before observing')
+
+
 INFO_FIELDS = {
     'dns_seconds': 'NAMELOOKUP_TIME', 'connect_seconds': 'CONNECT_TIME',
     'tls_seconds': 'APPCONNECT_TIME', 'first_byte_seconds': 'STARTTRANSFER_TIME',
@@ -41,12 +52,11 @@ def endpoint_stage(url):
 
 
 @contextmanager
-def observe_transport(trace):
+def observe_transport(trace, *, profile='production'):
     import curl_cffi.requests.session as session
     from curl_cffi import CurlInfo
     from searx.network.client import AsyncClient
-    if sha256(Path(session.__file__).read_bytes()).hexdigest() != SESSION_SHA256:
-        raise RuntimeError('Transport source changed; review before observing')
+    verify_session_digest(profile, sha256(Path(session.__file__).read_bytes()).hexdigest())
     original_parse = session.AsyncSession._parse_response
     original_request = AsyncClient.request
     stage = ContextVar('ddg_transport_stage', default='other')

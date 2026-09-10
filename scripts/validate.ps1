@@ -1,3 +1,4 @@
+param([switch]$TransportCandidate)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $root
@@ -50,6 +51,9 @@ try {
     & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1') -Image 'anonexplo/searxng:validation'
     & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1') -Transport -Image 'anonexplo/searxng:validation'
     & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1') -TimeoutSemantics -Image 'anonexplo/searxng:validation'
+    if ($TransportCandidate) {
+        & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1') -TimeoutSemantics -ClientCandidate -Image 'anonexplo/searxng:validation'
+    }
     docker compose up -d --wait --wait-timeout 120 host-gateway search-provider
     if ($LASTEXITCODE -ne 0) { throw 'Isolated search stack failed to start.' }
     foreach ($path in @('/','/preferences','/config','/stats')) { Assert-HttpPrivacy $path }

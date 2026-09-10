@@ -23,7 +23,35 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Offline Timeout Review (2026-09-10)
+## Current Upstream Comparison Batch (2026-09-10)
+
+- User requested 2-3 bundled steps. Scope stamos/upstream-transport-review from
+  main c70807d: upstream review, offline candidate comparison, full validation and
+  Git closeout; no routine approval pauses or production/live-query changes.
+- Reviewed curl_cffi 0.16.3, curl-impersonate 2.2.2, curl 8.22 timing changes and
+  SearXNG master ba055b3. SearXNG still pins 0.16.1; recent engine additions do
+  not fix the timeout. The newer Python client still bundles libcurl 8.21.
+- Added explicit hash-pinned provisioning and a disposable offline wheel overlay;
+  production source guards remain strict and separate from reviewed candidate
+  hashes. No runtime installation/download, VPN access, key/cache or host ports.
+  Only the candidate tmpfs allows library executable mappings; /tmp stays noexec.
+- Initial loader setup failed on noexec and then the wrong libc wheel. Verified
+  glibc/x86_64/CPython and selected the correct manylinux artifact; no product
+  restart or provider retry. 44 host tests and 24 candidate tests now pass.
+- Candidate reproduces the same misleading TLS-stall counters; no demonstrated
+  improvement. Retain production unchanged. See UPSTREAM_TRANSPORT_REVIEW.md.
+- Full validate.ps1 -TransportCandidate passed: 80 baseline + 24 candidate Python
+  test executions, 20 negative Compose cases, seven negative identity cases plus
+  equality, source/binding checks, managed isolated build (production tag
+  unchanged), native privacy/settings/ranking, blocked egress, outage/recovery
+  and cleanup. Live/invalid candidate modes refuse. Three production services
+  remain healthy by read-only Docker metadata; no live search tests were sent.
+- Three-step batch complete. Reviewed tooling/docs accompany commit/push,
+  fast-forward main merge and scoped local/remote cleanup. No release/deployment
+  applies. Keep production and the offline reproduction until a relevant upstream
+  fix or separately scoped, materially different candidate warrants evaluation.
+
+## Previous Offline Timeout Review (2026-09-10)
 
 - User approved offline client review. Fresh stamos/offline-timeout-semantics
   from clean main 2243b6b; no new live search, production change or upgrade.
@@ -588,9 +616,10 @@ or cached Docker images are deleted by this migration.
 3. Date repair and manifest-identity/build-isolation fixes are complete. DDG
    diagnostics remain retired after their stop conditions. Offline review now
    reproduces misleading counters during a controlled TLS stall, without proving
-   the live root cause. Next scope should review upstream transport source/release
-   changes and compare offline compatibility before proposing any guarded image
-   update or further live trial. No replay of failed suites or speculative patch.
+   the live root cause. Upstream review and 0.16.3 offline comparison are now
+   complete: same failure-counter behaviour, so no upgrade deployed. Keep the
+   reproducible tests for a future relevant upstream fix; do not repeatedly
+   probe providers or upgrade simply because a newer version exists.
    Require healthy holdout/topicality evidence before any ranking deployment.
    Media/models/reboot drills remain separate.
 
