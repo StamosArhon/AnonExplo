@@ -23,7 +23,50 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Guarded News Trial (2026-09-10)
+## Current Publication-Date Repair (2026-09-10)
+
+- User approved fixing the confirmed duplicate-date loss. Fresh branch
+  stamos/preserve-publication-dates from clean main 15159dd. No ranking/timeout,
+  provider, VPN, browser-profile or legacy-product expansion.
+- Original pinned-image regression fails for all four MainResult/LegacyResult
+  pairings: explicit None is not filled even in same-type defaults_from. Repair
+  only missing dates from incoming datetime; preserve existing dates and all
+  non-date merge/rank fields. Native legacy pubdate class attribute also shadows
+  its dictionary key: one guarded HTML macro item lookup corrects date markup.
+- Added images/searxng: digest-pinned base, exact guards on two upstream files,
+  network-disabled build steps, tiny allowlisted context and 13 native regression
+  tests. Local versioned image replaces the old environment image override.
+  No credentials/cache in build context, source bind mount or runtime patching.
+  Existing gateway/VPN images, capabilities, routes and settings remain unchanged.
+- First original-image probe lacked a temporary writable directory; rerun with
+  tmpfs reproduced all four missing-date failures. Two initial repair builds
+  correctly failed date-display tests, exposing legacy attribute shadowing;
+  native source review led to the guarded template correction, not weakened
+  rendering assertions. Full validator passed after correction and again with
+  the final 13-test JSON-inclusive suite: 57 Python tests total, 18 negative
+  Compose cases, managed image build, native ranking/settings/privacy, offline
+  direct-egress block and outage/recovery. Isolated resources cleaned up.
+  Original-image HTML regression also failed as expected. Historical -Live
+  refusal verified without queries. See PUBLICATION_DATE_REPAIR.md.
+- Deployment preflight reviewed aggregate error classes (timeout/rate-limit,
+  access-denied and generic parse/HTTP failures), allowed in-flight settling and
+  observed unchanged history across the full 180-second cooldown. No CAPTCHA/
+  Cloudflare long-ban class was present; no ban/cache/exit reset or search query.
+  This is not proof of no user activity or guaranteed upstream availability.
+- Deployed by replacing only search-provider from the validated local build.
+  Gateway and VPN container IDs unchanged. Live ops passed: matching local image
+  ID, three healthy services, localhost 8085, native privacy headers, shared VPN
+  namespace, VPN-local DNS and distinct working search egress. Credentials,
+  production cache, browser profiles and search settings untouched. No reboot,
+  live VPN-stop drill, installer or registry image publication applies here.
+- Implementation/validation/deployment complete; Git review/push/merge/cleanup
+  still pending at this checkpoint. Next work must use a fresh scoped branch.
+- Historical candidate live mode retired immediately; original-image offline
+  tests remain historical characterization. Do not retry the failed News suite.
+  Next separate scope remains bounded DDG downstream-request diagnosis, not
+  global timeout increases or ranking deployment. No upstream searches here.
+
+## Previous Guarded News Trial (2026-09-10)
 
 - User approved resuming the existing bounded trial after the caller audit.
   Fresh stamos/guarded-news-trial branch from clean main ac26c25. Preserve the
@@ -430,9 +473,9 @@ or cached Docker images are deleted by this migration.
    snippet-level judgements, news freshness and intermittent upstream errors.
 3. Guarded trial completed to its stop condition: one healthy result, then DDG
    timeout after a fast token-page response. Do not rerun the failed suite or
-   ship the timeout/ranking candidate. Next recommended scope: reproduce/test
-   and repair the verified cross-type publication-date merge loss; investigate
-   DDG's downstream request separately with bounded metadata-only diagnostics.
+   ship the timeout/ranking candidate. The date repair is implemented/deployed;
+   investigate DDG's downstream request separately
+   with bounded metadata-only diagnostics.
    Require healthy holdout/topicality evidence before any ranking deployment.
    Media/models/reboot drills remain separate.
 

@@ -14,6 +14,14 @@ try {
     if (@($running | Where-Object { $_.State -ne 'running' -or $_.Health -ne 'healthy' }).Count) {
         throw 'One or more search services are unhealthy.'
     }
+    $searchId = & docker compose @compose ps -q search-provider
+    if ($LASTEXITCODE -ne 0 -or -not $searchId) { throw 'Search container unavailable.' }
+    $deployedImage = & docker inspect $searchId --format '{{.Image}}'
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect deployed search image.' }
+    $builtImage = & docker image inspect 'anonexplo/searxng:date-merge-v1' --format '{{.Id}}'
+    if ($LASTEXITCODE -ne 0 -or $deployedImage -ne $builtImage) {
+        throw 'Deployed search image differs from the local repair build; validate and deploy it first.'
+    }
     $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$port/" -TimeoutSec 15
     if ($response.Headers['Cache-Control'] -ne 'no-store' -or $response.Headers['Referrer-Policy'] -ne 'no-referrer') {
         throw 'Search privacy headers missing.'

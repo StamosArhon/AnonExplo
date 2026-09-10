@@ -34,7 +34,14 @@ services:
       retries: 5
 
   search-provider:
-    image: ${SEARXNG_IMAGE:-searxng/searxng:latest@sha256:3547509b419cd6a67333d6d68bd1ffad8d46d3669d82e7a7bd538f7b45827432}
+    # Local repair image; base digest and exact source guard live in this context.
+    # Old SEARXNG_IMAGE environment values intentionally cannot bypass the fix.
+    image: anonexplo/searxng:date-merge-v1
+    pull_policy: never
+    build:
+      context: ./images/searxng
+      dockerfile: Dockerfile
+      network: none
     restart: unless-stopped
     environment:
       SEARXNG_SECRET: ${SEARXNG_SECRET:-replace-with-local-random-secret}

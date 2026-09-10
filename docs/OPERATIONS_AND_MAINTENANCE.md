@@ -32,7 +32,7 @@ This briefly interrupts searches; it does not change the PC's default route.
 3. Import with scripts/import-proton-wireguard.ps1 -ConfigPath <downloaded.conf>.
    Never paste the key in commands/chat. Import stores only client key/address
    in restricted, ignored data/proton/wireguard/wg0.conf.
-4. Start with start-proton-search.ps1 and verify with ops-check.ps1.
+4. Validate, start with start-proton-search.ps1 -Build and verify with ops-check.ps1.
 5. Configure the browser for http://127.0.0.1:8085/search?q=%s.
 
 Windows .env selects both Compose files and proton-search; startup also selects
@@ -76,8 +76,9 @@ Git before this branch; do not use old startup instructions in historical docs.
 
 validate.ps1 uses anonexplo-validation on port 18085, internal-only SearXNG and a
 tmpfs cache. It validates policies, scripts, offline helper tests, native UI,
-privacy settings, direct-egress blocking and outage/recovery. No source-built
-services remain; docker compose build reports no services to build.
+privacy settings, direct-egress blocking and outage/recovery. Compose builds the
+guarded SearXNG repair from its pinned base and runs native date regressions at
+build time and again in the isolated runtime. No upstream search queries.
 
 Use test-browser-search.ps1 manually for paced public query fixtures through
 the VPN. It stops on degradation. Never schedule repeated upstream tests or
@@ -88,6 +89,11 @@ collect browser history without an explicit scope.
 Keep image digest pins. Evaluate candidate versions with isolated tests and
 the bounded manual benchmark before updating the live stack. Preserve the
 credential/DNS/network settings and cooldowns. Do not rotate exits as a retry.
+
+Search now uses the local anonexplo/searxng:date-merge-v1 build, not SEARXNG_IMAGE.
+The base digest and source fingerprints live in images/searxng. Do not update
+them blindly: upstream may have fixed these bugs. See PUBLICATION_DATE_REPAIR.md
+for exact scope, deployment and rollback; no custom image is pushed to a registry.
 
 For rollback, use a reviewed Git branch and the prior pinned configuration,
 not git reset --hard. Recreate only required services, verify the port binding

@@ -2,8 +2,13 @@
 
 ## Latest Decision
 
+Historical experiment: live mode is now refused immediately because the failed
+suite must not be retried and production has moved to a separately tested date
+repair. Default offline tests still use the original pinned image. The following
+trial findings are unchanged; see PUBLICATION_DATE_REPAIR.md for later work.
+
 The approved guarded trial passed preflight and sent two fixtures, then stopped
-on DuckDuckGo News timeout. Keep production unchanged. Neither token-page HTTP
+on DuckDuckGo News timeout. Do not deploy its timeout/ranking candidate. Neither token-page HTTP
 fetch took even one second: the four-second token candidate is not demonstrated
 to help. One healthy same-response ranking comparison is promising but too small
 to justify deployment. A separate date-loss bug was reproduced offline below.

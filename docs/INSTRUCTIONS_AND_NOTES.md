@@ -59,8 +59,17 @@
   Do not rerun the failed candidate suite or claim a longer token timeout helps.
   Its first two fixtures are observed, two Greek fixtures remain unseen.
 - Cross-type MainResult/LegacyResult deduplication can lose an available date
-  while preserving both engine names. A source-based in-memory probe reproduced
-  it; a production fix needs separate regression coverage and scoped review.
+  while preserving both engine names. Same-type merges also leave explicit None
+  unchanged in this pin. The guarded images/searxng repair fills only a missing
+  date from an incoming datetime, preserves existing dates and updates pubdate.
+  Native macro item lookup fixes LegacyResult's shadowed pubdate attribute.
+  Read PUBLICATION_DATE_REPAIR.md before image updates or rollback.
+- SEARXNG_IMAGE is intentionally inert; local tag anonexplo/searxng:date-merge-v1
+  comes from a pinned base and two source fingerprints. Validate before deploying;
+  never blindly update guards. No source mounting or runtime monkeypatching.
+- The historical News candidate's -Live mode now refuses immediately. Its failed
+  suite must not be retried; original-image offline tests remain characterization.
+  A new DDG diagnostic needs its own scope, fixtures and compatibility review.
 
 ## Startup And Migration
 
@@ -84,6 +93,7 @@
   It neither mounts the VPN credential nor shares the live search cache.
 - Validate Compose policy including negative fixtures, script syntax, offline
   helper/benchmark tests, native UI/settings/headers and outage/recovery.
-- No custom image build contexts remain. Compose build is checked but reports
-  no services to build; do not pretend deleted application tests/builds ran.
+- Compose build now builds/tests the small SearXNG date repair, with network-none
+  RUN steps and a data-excluding context. No legacy application build is restored.
+  Runtime validation repeats date tests plus existing ranking/privacy checks.
 - ops-check.ps1 verifies the three-service live topology and VPN isolation.

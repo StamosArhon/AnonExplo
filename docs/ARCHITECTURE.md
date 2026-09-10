@@ -15,6 +15,8 @@ local model or redirector participates in search or exists as a Compose service.
   upstream, never a user-supplied hostname. No external outage redirect.
 - search-provider: read-only SearXNG with its own VPN-local resolver mount;
   shares search-vpn's network namespace and publishes no host ports.
+  Built locally from the pinned upstream image with a guarded publication-date
+  merge and date-macro repair (images/searxng). No runtime patch loader.
 - search-vpn: core_internal + egress; Proton WireGuard, encrypted DNS, firewall.
   Only NET_ADMIN is added. Credential file is read-only, not environment metadata.
 - Browser/host traffic and clicked result websites keep their normal networking.
@@ -28,7 +30,8 @@ still requires start-proton-search.ps1 -Recreate.
 The manual News candidate is a disposable experiment process, not a service or
 production import. Offline checks use network=none; an explicitly invoked trial
 shares the existing VPN namespace with a separate tmpfs cache and no listener.
-See ISOLATED_NEWS_CANDIDATE.md for cooldown limitations and deployment gates.
+Its live mode is retired after the failed trial; offline original-image tests
+remain historical characterization. See ISOLATED_NEWS_CANDIDATE.md.
 
 ## Configuration
 
@@ -39,6 +42,8 @@ See ISOLATED_NEWS_CANDIDATE.md for cooldown limitations and deployment gates.
 - configs/localhost-gateway/nginx.proton-search.conf: production reverse proxy.
 - .env: project/port/image/VPN configuration and SearXNG secret only. Old unused
   model/backend keys in pre-existing .env files have no consumers.
+  SEARXNG_IMAGE is also inert: search uses the reviewed local build, not an
+  environment override. Gateway/VPN image overrides still require digest pins.
 - Windows startup task calls a hidden helper that starts the three services.
   No Node daemon or fallback listener is needed.
 

@@ -75,7 +75,12 @@ The [holdout/News investigation](docs/HOLDOUT_AND_NEWS_RANKING.md) explains
 layout grouping, missing news dates and the adapter's separate token timeout.
 No live ranking behavior is changed by the diagnostic replay.
 The [isolated candidate trial](docs/ISOLATED_NEWS_CANDIDATE.md) tests a bounded
-token timeout and News score ordering without modifying the browser service.
+token timeout and News score ordering; its live mode is now retired after a
+failed trial. It did not justify a timeout/ranking deployment.
+
+The [publication-date repair](docs/PUBLICATION_DATE_REPAIR.md) preserves a date
+supplied by another engine when duplicate results merge, including native HTML
+date markup. It does not invent missing dates, change ranking or cure timeouts.
 
 ## Removed Legacy Components
 
@@ -89,8 +94,10 @@ For an older installation, refresh startup with
 `remove-legacy-components.ps1` and `ops-check.ps1`. The base Compose file is
 offline/internal-only; startup requires the VPN overlay, never direct fallback.
 
-No repo-managed image build contexts remain; validation checks pinned images,
-policies and runtime behavior. Any future local model can refine results
+SearXNG uses a small local repair image built from a digest-pinned upstream base;
+gateway and VPN images remain upstream digest pins. Run the full validator
+before deployment; use `start-proton-search.ps1 -Build` for the initial build.
+Any future local model can refine results
 headlessly, but none is needed or installed now.
 
 [Roadmap](docs/IMPLEMENTATION_ROADMAP.md) · [Architecture](docs/ARCHITECTURE.md) ·

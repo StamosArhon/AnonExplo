@@ -38,11 +38,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed.' }
     & (Join-Path $PSScriptRoot 'test-news-candidate.ps1')
     & (Join-Path $PSScriptRoot 'test-startup-helpers.ps1')
-    # No source-built app services remain; retain the build entry point to
-    # automatically cover future repo-managed services when they are introduced.
+    # Build the guarded repair from its pinned base; RUN steps have no network.
     docker compose build
     if ($LASTEXITCODE -ne 0) { throw 'Compose build failed.' }
-    Write-Host 'Image builds: no build contexts remain; all three services use pinned upstream images.'
+    Write-Host 'Built local SearXNG date-merge repair; gateway/VPN remain pinned upstream images.'
     docker compose up -d --wait --wait-timeout 120 host-gateway search-provider
     if ($LASTEXITCODE -ne 0) { throw 'Isolated search stack failed to start.' }
     foreach ($path in @('/','/preferences','/config','/stats')) { Assert-HttpPrivacy $path }
@@ -54,6 +53,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Search privacy settings failed.' }
     Get-Content -Raw (Join-Path $PSScriptRoot 'check-native-ranking.py') | docker compose exec -T search-provider /usr/local/searxng/.venv/bin/python -
     if ($LASTEXITCODE -ne 0) { throw 'Pinned ranking characterization changed; review before updating expectations.' }
+    docker compose exec -T -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/usr/local/searxng search-provider /usr/local/searxng/.venv/bin/python /opt/anonexplo/test_date_merge.py
+    if ($LASTEXITCODE -ne 0) { throw 'Publication-date merge regressions failed.' }
     # No upstream query: direct-IP connection must fail in the offline base.
     @'
 import socket

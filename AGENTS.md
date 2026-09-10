@@ -82,6 +82,9 @@ If a remote is missing or remote operations fail, record that explicitly in the 
 - Future local result refinement may be headless; no separate AnonExplo UI needed.
 - Base Compose is offline/internal-only; production search requires the VPN overlay.
 - Prefer exact dependency versions where practical.
+- Search uses a locally built repair image from images/searxng, with a pinned
+  upstream base and exact source guards. Never bypass guards or restore the old
+  SEARXNG_IMAGE override to skip a repair. Review/remove patches on upstream updates.
 - Use repo-managed scripts for repeatable setup and validation.
 
 ## Useful Commands

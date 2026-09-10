@@ -96,7 +96,16 @@ function Assert-SearchComposePolicy {
         $service = $Config.services.$name
         Assert-ServiceSecurityDefaults $Config $name
         Assert-ServiceHasHealthcheck $Config $name
-        if (-not (Test-DigestPinnedImage $service.image)) { throw "Unpinned image: $name" }
+        if ($name -eq 'search-provider') {
+            if ($service.image -ne 'anonexplo/searxng:date-merge-v1' -or $service.pull_policy -ne 'never' -or
+                -not $service.build -or $service.build.context -notmatch '[/\\]images[/\\]searxng$' -or
+                $service.build.dockerfile -ne 'Dockerfile' -or $service.build.network -ne 'none') {
+                throw 'Search must use the reviewed local repair build with network-disabled steps.'
+            }
+            Assert-SetEquality 'Search build fields' (Get-NamedKeys $service.build) @('context','dockerfile','network')
+        } elseif (-not (Test-DigestPinnedImage $service.image) -or $service.build) {
+            throw "Expected pinned upstream image without build: $name"
+        }
         if ($service.privileged) { throw "Privileged service: $name" }
         if ($name -ne 'search-vpn' -and $service.cap_add) { throw "Unexpected capabilities: $name" }
         if ($name -ne 'host-gateway' -and $service.ports) { throw "Unexpected publication: $name" }

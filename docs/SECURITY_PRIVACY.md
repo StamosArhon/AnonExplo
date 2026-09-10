@@ -20,8 +20,13 @@ media opened in the browser use normal host networking.
 - Gluetun retains its firewall and only NET_ADMIN, /dev/net/tun, read-only root,
   explicit writable runtime mounts and namespace-local control API :8000.
   Existing root identity is required by this pinned image's read-only setup.
-- All service images are digest-pinned; capabilities are dropped and
-  no-new-privileges is required. The gateway runs as uid/gid 101.
+- Gateway/VPN images and the search build's upstream base are digest-pinned.
+  The derived search image is a local versioned tag, not a registry digest pin;
+  exact source guards and build/runtime tests verify its two-file repair. Its
+  tiny allowlisted context excludes credentials/data, build RUN networking is
+  disabled, and no runtime patch/download step is added. Normal base-image
+  resolution can contact Docker's registry, never with search data.
+  Capabilities are dropped; no-new-privileges is required. Gateway uid/gid is 101.
 - No new engine, account/API key, telemetry, CDN or remote NLP service is added.
 - Any future model must be internal-only and separately provisioned/evaluated;
   local result refinement does not require a separate interface.
@@ -73,10 +78,11 @@ The existing DuckDuckGo token cache has secret-hashed query/UA keys and expiring
 token values; it is not plaintext history, nor does expiry guarantee secure
 erasure. This scope did not inspect/cache-dump, delete or add to its design.
 
-The disposable News candidate uses a separate tmpfs cache, never the production
-cache or key. Logs are disabled and stage diagnostics omit tokens, queries and
-URLs. Its default offline test has network=none; an explicit live trial shares
-only VPN networking and opens no listener. Suspension state is process-local:
+The historical News candidate (live mode now refused) uses a separate tmpfs
+cache, never the production cache or key. Logs are disabled and stage diagnostics
+omit tokens, queries and URLs. Its default offline test has network=none; the
+previous explicit live trial shared only VPN networking and opened no listener.
+Suspension state is process-local:
 review cooldowns before a trial and never recreate it to retry a failed provider.
 Tmpfs disposal is not a guarantee of secure erasure from host memory or swap.
 

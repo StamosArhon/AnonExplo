@@ -5,6 +5,9 @@ $image = 'searxng/searxng:latest@sha256:3547509b419cd6a67333d6d68bd1ffad8d46d366
 Push-Location $root
 try {
     if ($ReviewTop5 -and -not $Live) { throw 'ReviewTop5 requires the explicit live trial.' }
+    if ($Live) {
+        throw 'Historical live candidate retired: production now has a date repair. Do not rerun the failed suite; scope and review a new experiment first.'
+    }
     $network = 'none'
     $script = '/experiment/check-news-candidate.py'
     $name = 'anonexplo-news-candidate-offline'
