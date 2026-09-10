@@ -1,5 +1,13 @@
 # Isolated News Adapter And Ranking Trial (2026-09-10)
 
+## Latest Decision
+
+The approved guarded trial passed preflight and sent two fixtures, then stopped
+on DuckDuckGo News timeout. Keep production unchanged. Neither token-page HTTP
+fetch took even one second: the four-second token candidate is not demonstrated
+to help. One healthy same-response ranking comparison is promising but too small
+to justify deployment. A separate date-loss bug was reproduced offline below.
+
 ## Scope And Safety
 
 This is a disposable experiment, not production deployment. Native SearXNG at
@@ -111,7 +119,7 @@ Live use requires deliberate cooldown review and an operator-confirmed quiet
 window, not scheduled health polling. Do not rerun failed fixtures. No candidate
 change is ready to deploy without the missing live evaluation.
 
-## Confirmed Quiet-Window Follow-up
+## Confirmed Quiet-Window Follow-up (historical)
 
 The user subsequently confirmed a quiet window. The first new preflight again
 stopped before launching the candidate because the error snapshots differed.
@@ -144,7 +152,7 @@ without search terms, browser history, command-line contents or persistent
 request logs. Gateway interruption or content capture requires a separate
 decision. No production adapter/ranking deployment is justified yet.
 
-## Caller Metadata Audit
+## Caller Metadata Audit (historical)
 
 The subsequently approved metadata audit did not identify a background caller:
 
@@ -173,3 +181,73 @@ candidate has still sent no query and no ranking/timeout fix is deployed.
 The service was quiet for the measured full cooldown-length window. The next
 step is the existing bounded trial when approved, not more caller hunting.
 Keep its stop guard: current quietness does not predict future engine health.
+
+## Completed Guarded Trial
+
+Branch stamos/guarded-news-trial from ac26c25. User approved resuming; preflight
+and VPN checks passed without weakening cooldowns. No production change or
+restart. The validator was deferred until after the live measurement to avoid
+competing Docker validation load. Requests stayed 20 seconds apart.
+
+| Fixture | Rows | Contributors | Total seconds | Cold token-page HTTP | Outcome |
+| --- | ---: | ---: | ---: | --- | --- |
+| candidate-geothermal | 89 | 3 | 1.49 | 200 in 0.41s | Healthy comparison |
+| candidate-coral | 45 | 2 | 6.00 | 200 in 0.25s | DDG News timeout; stop |
+
+First response engine counts: Brave News 44, DDG News 27, Reuters 20 (overlap
+explains the sum exceeding merged rows). Second response: Brave News 37,
+Reuters 8, no DDG result. Both had measured cache misses in a fresh tmpfs cache.
+The two Greek fixtures were NOT sent. No retry, provider polling, exit change,
+ban reset, article fetch, raw error trace or persisted response/token.
+
+The second failure occurred after the token-page HTTP call returned. No parsed
+token-presence flag/value or downstream HTTP trace was captured, so HTTP 200
+must not be equated with successful token extraction or a conclusively traced
+downstream failure. It does establish that waiting for the token page was not
+the timeout in this sample. Neither sample demonstrates benefit from a 2 -> 4s
+token limit. Do not raise global limits or claim this cures DDG reliability.
+
+### Limited Ranking Review
+
+On geothermal, score-only ordering replaced one top-five member, promoting a
+topically relevant item with publication metadata less than a day old. Native
+top-five dated count 1 -> 2; within-31-day count 0 -> 1. A Reuters result roughly
+1,069 days old remained in both lists. Missing dates were not treated as fresh.
+
+Manual topicality grades (2 direct intent, 1 partial/insufficient, 0 unrelated):
+native 2,1,1,1,1; candidate 2,1,2,1,1. Generic reference/report pages and opinion
+material were treated as partial for the requested current research reporting.
+These are snippet judgements, not factual or publication-date verification.
+Only one healthy English case was reviewed; no broad ranking-quality claim.
+Coral's degraded response was not graded or compared. First two fixtures now
+are observed cases, not unseen evidence for subsequent retuning.
+
+### Publication-Date Findings
+
+The 44 geothermal and 37 coral Brave News nodes had no standard time elements
+or datetime attributes. This does NOT establish that the full HTML has no date
+information; no broader date parser was demonstrated or introduced.
+
+The healthy response also contained Brave/DDG duplicate results with missing
+dates. Pinned source merge_two_main_results copies missing fields through
+defaults_from only when both rows have the same result type. Brave News emits
+LegacyResult; DDG News emits MainResult with publishedDate. A synthetic, purely
+in-memory probe confirmed that merging a dated MainResult into an undated
+LegacyResult preserves both engine names but leaves the date missing. This
+reproduces a metadata-loss path, not the arrival order of every observed row.
+No production merge code was changed. Investigate this as a separate scoped,
+test-covered fix rather than inventing dates or introducing an LLM.
+
+### Closeout
+
+All 44 offline Python tests, 14 negative Compose cases and full native privacy,
+offline-egress/recovery checks passed after the trial. The additional in-memory
+merge probe passed without requests. Production ops confirmed the original three
+healthy services and unchanged localhost/VPN routing. The disposable candidate
+was removed automatically; production cache, keys, images and settings remain.
+No image build contexts or installable release apply; no reboot, live kill-switch
+drill or browser automation ran. No timeout, date or ranking fix is deployed.
+
+Next: a narrowly tested cross-type date-merge repair, with DDG downstream request
+diagnosis separate. Do not rerun this failed suite or deploy the ranking candidate
+on one healthy query.

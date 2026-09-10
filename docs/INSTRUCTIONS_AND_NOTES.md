@@ -53,11 +53,14 @@
   avoid concurrent searches, stop on degradation and never recreate as a retry.
   Default invocation is network-disabled and sends no queries. Exact source
   fingerprints must be reviewed, not blindly updated on an image change.
-- Prior quiet-window preflights hit changing error history, but the subsequent
-  metadata audit found no attributable caller and a stable 180-second window.
-  No candidate queries have been sent. Do not assume a background app or stop
-  one based on earlier statistics alone. Resume the guarded trial when approved;
-  do not repeat caller hunting without new evidence or bypass the stop guard.
+- The metadata audit found no attributable caller. The subsequent approved
+  guarded trial finally passed preflight: one healthy fixture, then DDG timeout
+  after its token-page HTTP returned quickly. Stopped; no production changes.
+  Do not rerun the failed candidate suite or claim a longer token timeout helps.
+  Its first two fixtures are observed, two Greek fixtures remain unseen.
+- Cross-type MainResult/LegacyResult deduplication can lose an available date
+  while preserving both engine names. A source-based in-memory probe reproduced
+  it; a production fix needs separate regression coverage and scoped review.
 
 ## Startup And Migration
 

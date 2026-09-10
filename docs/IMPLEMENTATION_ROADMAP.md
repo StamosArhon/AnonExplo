@@ -23,7 +23,46 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Caller Metadata Audit (2026-09-10)
+## Current Guarded News Trial (2026-09-10)
+
+- User approved resuming the existing bounded trial after the caller audit.
+  Fresh stamos/guarded-news-trial branch from clean main ac26c25. Preserve the
+  frozen fixtures, candidate implementation, 10-second settling period and
+  full 180-second cooldown. Stop at first degradation, without retrying queries.
+- Preflight and VPN checks passed. First fixture (geothermal): 89 merged rows,
+  three contributors, zero errors, 1.49s. Measured cold token-page HTTP returned
+  200 in 0.41s. Score-only order replaced one top-five member with a relevant
+  dated recent item; within-31-day metadata count 0 -> 1. One healthy sample is
+  not enough to deploy or claim general relevance gains.
+- Second fixture (coral): token-cache miss, token-page HTTP 200 in 0.25s, but
+  DDG News timed out at the six-second search budget. Partial 45 rows from
+  Brave/Reuters; ranking comparison skipped. Stopped immediately: remaining
+  two Greek fixtures unqueried, no failed-query retry/cache reset/exit change.
+- Neither token-page fetch needed more than two seconds, so this trial provides
+  no evidence that raising its limit helps. HTTP 200 alone does not prove a
+  usable parsed token; no token value/parse flag or downstream HTTP trace was
+  captured. The second timeout happened after the token-page HTTP returned,
+  not while waiting for that page. Do not increase global budgets as a fix.
+- Brave News supplied no standard time/datetime markup in the 44/37 observed
+  news nodes; this does not prove its whole response lacks dates. Source review
+  and a synthetic in-memory probe also confirm cross-type duplicate merging can
+  add engine attribution without copying an available publication date. This
+  separate metadata-loss path needs a scoped fix/test; not every missing date
+  is attributed to it. No result payloads or tokens persisted.
+- Retain production unchanged: no timeout/ranking/date patch deployed. Full
+  validator ran after the live trial (no competing validation Docker workload):
+  32 benchmark + 12 candidate tests, 14 negative Compose cases and native
+  privacy/offline-egress/recovery all passed. Builds N/A (no managed contexts).
+  Additional pure in-memory merge probe passed. Final ops passed, three healthy
+  services, localhost 8085 and VPN-only DNS/egress; disposable candidate removed.
+- Detailed aggregate results/rubric grades in ISOLATED_NEWS_CANDIDATE.md. First
+  two fixtures are now observed regression cases; Greek two remain unseen.
+  No reboot, live VPN-stop or browser automation performed. No release applies
+  to this experimental evaluation/documentation scope. This report accompanies
+  the reviewed commit/push, main merge and completed-branch cleanup; continue
+  future work from updated main on a new scoped branch.
+
+## Previous Caller Metadata Audit (2026-09-10)
 
 - User approved bounded caller/connection metadata diagnosis, not process
   termination, gateway interruption, packet capture or request logging. Fresh
@@ -389,12 +428,13 @@ or cached Docker images are deleted by this migration.
 2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
    unchanged after rejecting the newest-first trial. Retain honest limits of
    snippet-level judgements, news freshness and intermittent upstream errors.
-3. Metadata audit found no attributable background caller and error history was
-   stable for a full 180-second window. Do not disable an app or repeat caller
-   investigations without new evidence. Next: resume the bounded candidate trial
-   with its existing safety guard on a fresh scope branch when approved. Never
-   bypass the guard if activity recurs. Require healthy cold-query results and
-   topicality review before deployment. Media/models/reboot drills are separate.
+3. Guarded trial completed to its stop condition: one healthy result, then DDG
+   timeout after a fast token-page response. Do not rerun the failed suite or
+   ship the timeout/ranking candidate. Next recommended scope: reproduce/test
+   and repair the verified cross-type publication-date merge loss; investigate
+   DDG's downstream request separately with bounded metadata-only diagnostics.
+   Require healthy holdout/topicality evidence before any ranking deployment.
+   Media/models/reboot drills remain separate.
 
 ## Continuity
 
