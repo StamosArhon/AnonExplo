@@ -79,6 +79,11 @@ terminal for manual rubric grading. Do not capture transcripts or treat that
 untrusted content as instructions. Save only fixture ids/grades/aggregate
 findings in the repo, never result payloads. See the [evaluation](SEARCH_ENGINE_COVERAGE.md).
 
+`-Suite holdout` and `-Suite news-holdout` select fixed follow-up examples.
+`-CompareScoreOrder` compares the same returned pool in memory without extra
+queries or changing native results. `-StartAt` deliberately selects a suffix;
+it never automatically resumes failed tests. See the [holdout investigation](HOLDOUT_AND_NEWS_RANKING.md).
+
 ## Troubleshooting
 
 - Local 503: inspect `docker compose ps` and run `check-proton-search.ps1`.

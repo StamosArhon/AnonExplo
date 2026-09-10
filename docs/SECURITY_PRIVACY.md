@@ -68,6 +68,10 @@ public fixtures. Such text is untrusted; do not record transcripts or persist
 payloads. Commit only fixture rubrics, grades and aggregate findings. No browser
 data is accessed and no result pages are fetched. Engine-specific diagnostics
 omit category selectors to prevent SearXNG unioning unintended recipients.
+Same-response score replay is diagnostic-only and makes no additional requests.
+The existing DuckDuckGo token cache has secret-hashed query/UA keys and expiring
+token values; it is not plaintext history, nor does expiry guarantee secure
+erasure. This scope did not inspect/cache-dump, delete or add to its design.
 
 Gluetun contacts its configured DNS/health/blocklist/public-IP services; these
 are infrastructure requests, not search strings. DNS-over-TLS uses Cloudflare

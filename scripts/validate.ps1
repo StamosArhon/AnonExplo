@@ -51,6 +51,8 @@ try {
         $ports.'8085/tcp'[0].HostIp -ne '127.0.0.1') { throw 'Runtime publication mismatch.' }
     Get-Content -Raw (Join-Path $PSScriptRoot 'check-search-settings.py') | docker compose exec -T search-provider /usr/local/searxng/.venv/bin/python -
     if ($LASTEXITCODE -ne 0) { throw 'Search privacy settings failed.' }
+    Get-Content -Raw (Join-Path $PSScriptRoot 'check-native-ranking.py') | docker compose exec -T search-provider /usr/local/searxng/.venv/bin/python -
+    if ($LASTEXITCODE -ne 0) { throw 'Pinned ranking characterization changed; review before updating expectations.' }
     # No upstream query: direct-IP connection must fail in the offline base.
     @'
 import socket

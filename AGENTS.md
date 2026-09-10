@@ -75,6 +75,8 @@ If a remote is missing or remote operations fail, record that explicitly in the 
 - Benchmark output is metrics-only unless bounded public-fixture review is
   explicitly requested. Persist grades/rubrics, never result payloads. Do not
   combine engine and category selectors: SearXNG unions their recipients.
+- Freeze holdout fixtures before their first evaluation. Once inspected, treat
+  them as regression fixtures, not fresh evidence for subsequent tuning.
 - Configure engines in SearXNG; the legacy chatbot UI, backend, fetcher and model
   runtime have been removed. Do not resurrect them for browser search.
 - Future local result refinement may be headless; no separate AnonExplo UI needed.

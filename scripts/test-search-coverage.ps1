@@ -1,6 +1,6 @@
 param(
     [ValidateNotNullOrEmpty()][string[]]$Engines = @('brave', 'bing', 'yahoo'),
-    [ValidateSet('navigation', 'informational', 'news', 'news-month')][string]$Suite = 'navigation',
+    [ValidateSet('navigation', 'informational', 'news', 'news-month', 'holdout', 'news-holdout')][string]$Suite = 'navigation',
     [ValidateRange(1, 6)][int]$Samples = 3,
     [ValidateRange(1024, 65535)][int]$Port = 8085
 )

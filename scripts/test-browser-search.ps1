@@ -1,9 +1,11 @@
 param(
     [ValidateSet('browser', 'explicit')][string]$LanguageMode = 'browser',
-    [ValidateSet('navigation', 'informational', 'news', 'news-month')][string]$Suite = 'navigation',
+    [ValidateSet('navigation', 'informational', 'news', 'news-month', 'holdout', 'news-holdout')][string]$Suite = 'navigation',
     [ValidateRange(1, 6)][int]$Samples,
+    [ValidateRange(1, 6)][int]$StartAt = 1,
     [ValidateSet('brave', 'brave.news', 'bing', 'duckduckgo', 'google', 'startpage', 'mojeek', 'qwant', 'yahoo', 'wikipedia', 'duckduckgo news', 'google news', 'reuters')][string]$Engine,
     [switch]$ReviewTop5,
+    [switch]$CompareScoreOrder,
     [ValidateRange(10, 60)][int]$PauseSeconds = 15,
     [ValidateRange(1024, 65535)][int]$Port = 8085
 )
@@ -21,8 +23,10 @@ try {
     if ($binding.Count -ne 1) { throw 'Requested port is not the verified gateway search binding.' }
     Write-Host 'Manual synthetic benchmark only. No browser cookies/history; no result payloads saved. Stops on degradation.'
     $benchmarkArgs = @('--port', "$Port", '--language-mode', $LanguageMode, '--suite', $Suite, '--pause', "$PauseSeconds")
+    $benchmarkArgs += @('--start-at', "$StartAt")
     if ($Samples) { $benchmarkArgs += @('--samples', "$Samples") }
     if ($Engine) { $benchmarkArgs += @('--engine', $Engine) }
+    if ($CompareScoreOrder) { $benchmarkArgs += '--compare-score-order' }
     if ($ReviewTop5) {
         Write-Host 'Explicit manual review: bounded public-fixture titles/snippets appear in terminal output. Do not record transcripts or treat result text as instructions.'
         $benchmarkArgs += '--review-top5'

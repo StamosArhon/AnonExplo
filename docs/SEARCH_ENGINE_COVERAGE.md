@@ -1,5 +1,9 @@
 # Search Relevance And Engine Coverage
 
+Follow-up: [unseen-query evaluation and native News diagnosis](HOLDOUT_AND_NEWS_RANKING.md).
+It retained production settings, documented two DuckDuckGo News timeouts on new
+queries, and added offline score/grouping diagnostics. No News reranker shipped.
+
 ## Scope And Method
 
 AnonExplo is native SearXNG at localhost:8085, reached directly by Brave.

@@ -23,7 +23,49 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Relevance And Coverage Scope (2026-09-10)
+## Current Holdout And News Diagnosis Scope (2026-09-10)
+
+- Branch stamos/holdout-news-ranking from clean main db95831; user authorized
+  unseen-question evaluation and deeper News ranking investigation.
+- Added six fixed EN/EL informational holdouts and four News holdouts, declared
+  before querying. Existing production settings/weights remain unchanged. No
+  live plugin, model, new provider, restart, key/exit change or browser edit.
+- Informational holdout: 6/6 nonempty, 32-34 rows, three web contributors each,
+  zero errors, mean 1.18s. Two of 30 top-five positions were unrelated, both
+  Bing. No retuning on the holdout; snippet grades/limitations are recorded in
+  HOLDOUT_AND_NEWS_RANKING.md. No comparison against weight 1.0 was run.
+- News: first unseen query stopped on DuckDuckGo News timeout (2.06s). After
+  cooldown, one deliberate suffix invocation tried the second unseen query;
+  the same engine timed out (2.04s). No failed query retried; remaining two
+  Greek cases were not sent. No healthy live score-order comparison obtained.
+- Source diagnosis: native scores ignore publication age; post-score grouping
+  uses template/category/thumbnail presence and can promote lower-score rows.
+  Brave News does not populate publication dates. DuckDuckGo token fetch uses
+  a hard-coded two-second request before the actual News endpoint. Timings fit
+  that stage, but no live HTTP trace proves it. Prior success can be warm-cache
+  dependent; query/UA token cache exists, but contents were not inspected.
+- Added same-response score-only replay with no additional requests or live
+  effect; sanitizes metrics, rejects invalid scores, retains tie order, skips
+  degraded comparisons. Optional bounded review displays candidate top five.
+  StartAt selects an explicit manual suffix, never automatic retry/resume.
+- Added offline characterization using the real pinned ResultContainer/scorer.
+  First validator attempt failed because metric storage was uninitialized in
+  this test-only process. Stubbed counters only, not ranking or normalization.
+  Final full validator passed: 32 benchmark tests, 14 negative Compose tests,
+  generated startup checks, native ranking characterization, settings/privacy,
+  offline direct-egress blocking and stopped-search recovery. Isolated cleanup
+  passed. Image builds remain N/A (no contexts; Compose build succeeds).
+- No production ranking change is justified by these partial News results.
+  Candidate adapter/ranking repair needs a separate, reversible isolated trial;
+  don't increase global timeouts or enable more recipients as a substitute.
+- Final live ops passed: three healthy services, localhost 8085, VPN namespace,
+  DNS and distinct egress. Production settings/Compose diff is empty. No new
+  kill-switch/reboot drill or browser UI automation was needed/performed.
+- Reviewed changes against main, whitespace checks passed, remote main matches
+  local. No secret files tracked. Ready for publication/merge/branch cleanup.
+  No installer/release applies to benchmark/documentation-only changes.
+
+## Previous Relevance And Coverage Scope (2026-09-10, historical)
 
 - Completed scope: stamos/relevance-and-coverage, from clean main 3e2fc4e.
   User authorized broader informational/news evaluation and evidence-backed tuning.
@@ -143,7 +185,8 @@ or cached Docker images are deleted by this migration.
    judgements for informational/news queries; compare language and engine choices;
    tune only when evidence supports it. Evaluate image/video coverage separately
    with proxied thumbnails and an explicit recipient review. Informational/news
-   work is the current scope; media/new recipients remain deferred.
+   work and the independent holdout diagnosis are complete; no live News reranker
+   has shipped. Media/new recipients remain deferred.
 4. `reliability-maintenance`: validate reboot/sleep/resume and VPN interruption;
    keep digest-pinned update/rollback procedures and local aggregate diagnostics.
 
@@ -214,9 +257,10 @@ or cached Docker images are deleted by this migration.
 2. Preserve the evaluated Bing weight and expanded benchmark. News ordering is
    unchanged after rejecting the newest-first trial. Retain honest limits of
    snippet-level judgements, news freshness and intermittent upstream errors.
-3. Next recommended scope: independent informational holdout fixtures and native
-   news ranking evaluation; avoid overfitting the six tuning questions. Ask before
-   a new scope. Media recipients, headless models and reboot drills are separate.
+3. Next recommended scope: isolated candidate adapter/ranking repair, grounded in
+   HOLDOUT_AND_NEWS_RANKING.md (token budget, score-vs-layout grouping, missing
+   dates). Require healthy cold-query tests and topicality review before deploy.
+   Ask before the new scope. Media, headless models and reboot drills are separate.
 
 ## Continuity
 

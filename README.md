@@ -61,6 +61,9 @@ powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Langua
 # Broader questions; explicit review displays bounded public-fixture snippets.
 powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Suite informational -ReviewTop5
 powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Suite news
+# Fixed independent follow-up cases and same-response ranking diagnostics:
+powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Suite holdout
+powershell -ExecutionPolicy Bypass -File scripts/test-browser-search.ps1 -Suite news-holdout -CompareScoreOrder
 ```
 
 The benchmark reports rank/domain/latency proxies; informational/news relevance
@@ -68,6 +71,9 @@ requires manual rubric grading. Default output has no result text. Expanded
 suites report eligible engines and unsupported time filters. Runs are paced at
 15 seconds and stop on errors or empty results, never bypassing cooldowns.
 See [browser integration](docs/BROWSER_SEARCH_INTEGRATION.md).
+The [holdout/News investigation](docs/HOLDOUT_AND_NEWS_RANKING.md) explains
+layout grouping, missing news dates and the adapter's separate token timeout.
+No live ranking behavior is changed by the diagnostic replay.
 
 ## Removed Legacy Components
 

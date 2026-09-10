@@ -9,6 +9,7 @@ import argparse
 import datetime
 import html
 import json
+import math
 import re
 import sys
 import time
@@ -54,8 +55,35 @@ NEWS_MONTH = (
      "Recent Greek-language science/research reporting, not courses or institutional homepages."),
 )
 NEWS = tuple((*f[:5], None, f[6]) for f in NEWS_MONTH)
+# Frozen before the first live holdout run. Do not tune against these and then
+# continue calling them unseen validation cases; promote them to regression cases.
+HOLDOUT = (
+    ("holdout-leaves", "why do leaves change colour in autumn", "en", None, None, None,
+     "Explains chlorophyll breakdown and other pigments, not just autumn photographs."),
+    ("holdout-compression", "how lossless compression differs from lossy compression", "en", None, None, None,
+     "Explains reversibility, information loss and use cases, not merely a compressor download."),
+    ("holdout-tides", "how the moon causes ocean tides", "en", None, None, None,
+     "Explains lunar gravity and tidal bulges, not horoscopes or tide tables alone."),
+    ("holdout-seasons-el", "γιατί αλλάζουν οι εποχές του χρόνου κλίση της Γης", "el", None, None, None,
+     "Explains Earth's axial tilt and seasonal sunlight in Greek, not distance alone."),
+    ("holdout-bread-el", "πώς φουσκώνει το ψωμί με μαγιά", "el", None, None, None,
+     "Explains yeast fermentation and gas causing dough to rise in Greek; recipes alone are partial."),
+    ("holdout-insulation-el", "πώς λειτουργεί η θερμομόνωση ενός σπιτιού", "el", None, None, None,
+     "Explains reduced heat transfer in Greek, not just a product sales listing."),
+)
+NEWS_HOLDOUT = (
+    ("news-holdout-webb", "James Webb telescope discoveries", "en", None, "news", None,
+     "Current reporting on Webb telescope findings; unrelated telescope shopping is not relevant."),
+    ("news-holdout-batteries", "battery recycling research", "en", None, "news", None,
+     "Current reporting on battery recycling research; general investment pages are not sufficient."),
+    ("news-holdout-rail-el", "σιδηροδρομικές μεταφορές Ελλάδα", "el", None, "news", None,
+     "Recent Greek reporting on rail transport in Greece, not tourism or generic timetables."),
+    ("news-holdout-sea-el", "θαλάσσια προστασία Ελλάδα", "el", None, "news", None,
+     "Recent Greek reporting on marine protection in Greece, not general beach tourism."),
+)
 SUITES = {"navigation": FIXTURES, "informational": INFORMATIONAL,
-          "news": NEWS, "news-month": NEWS_MONTH}
+          "news": NEWS, "news-month": NEWS_MONTH,
+          "holdout": HOLDOUT, "news-holdout": NEWS_HOLDOUT}
 ENGINE_NAMES = frozenset(("brave", "brave.news", "bing", "duckduckgo", "google", "startpage",
                           "mojeek", "qwant", "yahoo", "wikipedia", "duckduckgo news",
                           "google news", "reuters", "arxiv", "pubmed", "crossref"))
@@ -118,6 +146,38 @@ def freshness_metrics(results, now=None):
     return {"top5_dated": dated, "top5_within_31_days": recent, "top5_future_dates": future}
 
 
+def score_order(results):
+    """Diagnostic replay only; do not change live SearXNG or infer missing scores.
+
+    Equal-score items retain their returned order. This cannot reconstruct the
+    pre-grouping tie order, and is NOT a topicality or recency reranker.
+    """
+    if not results or any(not isinstance(r, dict) or isinstance(r.get('score'), bool)
+                          or not isinstance(r.get('score'), (float, int))
+                          or not math.isfinite(r['score']) for r in results):
+        raise ValueError('Missing or invalid native scores')
+    return sorted(range(len(results)), key=lambda i: results[i]['score'], reverse=True)
+
+
+def ranking_diagnostics(results, now=None):
+    order = score_order(results)
+    candidate = [results[i] for i in order]
+    eligible = len(results[:5])
+    # Identities are in-memory positions, never persisted URLs or hashes.
+    return {
+        'score_only_replay': True,
+        'top5_members_replaced': len(set(order[:5]) - set(range(eligible))),
+        'lower_rows_above_top5_min_score': sum(r['score'] > min(x['score'] for x in results[:5]) for r in results[5:]),
+        'native_top5': freshness_metrics(results, now),
+        'score_top5': freshness_metrics(candidate, now),
+        'engine_date_coverage': {
+            e: {'results': len(rows), 'dated': sum(publication_age_days(r, now) is not None for r in rows)}
+            for e in sorted(ENGINE_NAMES)
+            if (rows := [r for r in results if e in r.get('engines', [])])
+        },
+    }, candidate
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         # Do not follow even a local redirect: this benchmark measures /search.
@@ -177,10 +237,12 @@ def metrics(payload, expected_host):
     }
 
 
-def run(port, language_mode, samples, pause=15, suite="navigation", engine=None, review=False):
+def run(port, language_mode, samples, pause=15, suite="navigation", engine=None, review=False, compare_scores=False, start_at=1):
     # Ignore host HTTP_PROXY settings: only the exact loopback endpoint is used.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-    fixtures = SUITES[suite]
+    if not 1 <= start_at <= len(SUITES[suite]):
+        raise ValueError('Start position outside suite')
+    fixtures = SUITES[suite][start_at - 1:]
     if not 1 <= samples <= len(fixtures):
         raise ValueError("Samples exceeds suite size")
     if engine or suite != "navigation":
@@ -227,6 +289,12 @@ def run(port, language_mode, samples, pause=15, suite="navigation", engine=None,
                     row.pop(key)
             if suite.startswith("news"):
                 row.update(freshness_metrics(payload.get("results", [])))
+            comparison = None
+            if compare_scores and not row['engine_errors'] and row['results']:
+                diagnostics, candidate = ranking_diagnostics(payload['results'])
+                row['ranking'] = diagnostics
+                if review:
+                    comparison = top5_review({'results': candidate})
         except Exception:
             print(json.dumps({"sample": fixture[0], "status": "request_failed", "stopped": True}))
             return 2
@@ -234,6 +302,8 @@ def run(port, language_mode, samples, pause=15, suite="navigation", engine=None,
         if review:
             print(json.dumps({"sample": fixture[0], "untrusted_review_only": top5_review(payload),
                               "rubric": fixture[6] if len(fixture) > 6 else "Useful destination for this navigation query."}, ensure_ascii=False), flush=True)
+            if comparison is not None:
+                print(json.dumps({'sample': fixture[0], 'untrusted_score_only_review': comparison}, ensure_ascii=False), flush=True)
         rows.append(row)
         if row["engine_errors"] or not row["results"]:
             # Stop the whole suite; do not repeatedly hit a degraded engine,
@@ -243,6 +313,7 @@ def run(port, language_mode, samples, pause=15, suite="navigation", engine=None,
         if len(rows) < samples:
             time.sleep(pause)
     summary = {"samples": len(rows), "suite": suite, "mode": language_mode,
+               "start_at": start_at,
                "selection": engine or "instance_defaults",
                "mean_seconds": round(sum(r["seconds"] for r in rows) / len(rows), 2)}
     if suite == "navigation":
@@ -260,11 +331,15 @@ if __name__ == "__main__":
     parser.add_argument("--suite", choices=tuple(SUITES), default="navigation")
     parser.add_argument("--engine", choices=sorted(ENGINE_NAMES))
     parser.add_argument("--review-top5", action="store_true", help="Explicitly display bounded public-fixture titles/snippets for manual review; no files written.")
+    parser.add_argument("--compare-score-order", action="store_true", help="Offline comparison on this response only; no extra queries and no production changes.")
     parser.add_argument("--pause", type=int, choices=range(10, 61), default=15, metavar="SECONDS")
     parser.add_argument("--samples", type=int, choices=range(1, 7))
+    parser.add_argument("--start-at", type=int, choices=range(1, 7), default=1,
+                        help="Manually select an untested suffix; never automatically resume after degradation.")
     args = parser.parse_args()
-    samples = args.samples if args.samples is not None else len(SUITES[args.suite])
-    if samples > len(SUITES[args.suite]):
+    remaining = len(SUITES[args.suite]) - args.start_at + 1
+    samples = args.samples if args.samples is not None else remaining
+    if remaining < 1 or not 1 <= samples <= remaining:
         parser.error("--samples exceeds selected suite size")
     raise SystemExit(run(args.port, args.language_mode, samples, pause=args.pause, suite=args.suite,
-                         engine=args.engine, review=args.review_top5))
+                         engine=args.engine, review=args.review_top5, compare_scores=args.compare_score_order, start_at=args.start_at))

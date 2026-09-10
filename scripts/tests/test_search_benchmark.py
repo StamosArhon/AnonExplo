@@ -175,6 +175,68 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(benchmark.run(8085, 'browser', 1), 2)
             self.assertIn('request_failed', str(output.call_args_list))
 
+    def test_holdouts_are_disjoint_and_have_predeclared_rubrics(self):
+        existing = {f[1] for suite in (benchmark.FIXTURES, benchmark.INFORMATIONAL, benchmark.NEWS) for f in suite}
+        cases = benchmark.HOLDOUT + benchmark.NEWS_HOLDOUT
+        self.assertEqual(len({f[1] for f in cases}), 10)
+        self.assertFalse(existing & {f[1] for f in cases})
+        self.assertTrue(all(f[3] is None and f[6] for f in cases))
+        self.assertEqual([f[2] for f in benchmark.HOLDOUT].count('el'), 3)
+
+    def test_score_replay_is_stable_and_does_not_mutate_native_results(self):
+        rows = [{'score': s, 'title': 'SECRET'} for s in (1, .5, .25, 1)]
+        original = list(rows)
+        self.assertEqual(benchmark.score_order(rows), [0, 3, 1, 2])
+        self.assertEqual(rows, original)
+
+    def test_replay_refuses_unknown_nonfinite_or_boolean_scores(self):
+        for score in (None, '1', float('nan'), float('inf'), True):
+            with self.subTest(score=score), self.assertRaises(ValueError):
+                benchmark.score_order([{'score': score}])
+        with self.assertRaises(ValueError):
+            benchmark.score_order([])
+
+    def test_ranking_diagnostics_do_not_emit_content(self):
+        now = datetime.datetime(2026, 9, 10, tzinfo=datetime.timezone.utc)
+        rows = [{'score': s, 'title': 'SECRET', 'url': 'https://SECRET.example', 'engines': ['brave.news'],
+                 'publishedDate': '2026-09-09T00:00:00Z'} for s in (1, .5, .3, .2, .1, .8)]
+        data, candidate = benchmark.ranking_diagnostics(rows, now)
+        self.assertNotIn('SECRET', str(data))
+        self.assertEqual(data['top5_members_replaced'], 1)
+        self.assertEqual(data['lower_rows_above_top5_min_score'], 1)
+        self.assertEqual(data['engine_date_coverage']['brave.news'], {'results': 6, 'dated': 6})
+        self.assertEqual(candidate[1]['score'], .8)
+
+    def test_score_comparison_sends_no_additional_queries(self):
+        with patch.object(benchmark.urllib.request, 'build_opener') as opener, patch('builtins.print') as output:
+            opener.return_value.open.return_value.__enter__.return_value.read.return_value = json.dumps({
+                'results': [{'url': 'https://behance.net', 'score': 1, 'title': 'SECRET'}]}).encode()
+            self.assertEqual(benchmark.run(8085, 'browser', 1, compare_scores=True), 0)
+            self.assertEqual(opener.return_value.open.call_count, 1)
+            self.assertNotIn('SECRET', str(output.call_args_list))
+
+    def test_degraded_run_skips_replay_and_still_stops(self):
+        with patch.object(benchmark.urllib.request, 'build_opener') as opener, patch('builtins.print') as output:
+            opener.return_value.open.return_value.__enter__.return_value.read.return_value = json.dumps({
+                'results': [{'url': 'https://behance.net'}], 'unresponsive_engines': [['brave', 'too many requests']]}).encode()
+            self.assertEqual(benchmark.run(8085, 'browser', 1, compare_scores=True), 2)
+            self.assertIn('rate_limited', str(output.call_args_list))
+            self.assertNotIn('score_only_replay', str(output.call_args_list))
+
+    def test_manual_suffix_does_not_resend_earlier_fixtures(self):
+        with patch.object(benchmark.urllib.request, 'build_opener') as opener, patch('builtins.print'):
+            opener.return_value.open.return_value.__enter__.return_value.read.return_value = b'{"results":[{"url":"https://python.org"}]}'
+            self.assertEqual(benchmark.run(8085, 'browser', 1, start_at=2), 0)
+            request = opener.return_value.open.call_args.args[0]
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query)['q'][0]
+            self.assertEqual(query, benchmark.FIXTURES[1][1])
+            self.assertEqual(opener.return_value.open.call_count, 1)
+
+    def test_suffix_bounds(self):
+        for start, count in ((0, 1), (7, 1), (5, 3)):
+            with self.subTest(start=start, count=count), self.assertRaises(ValueError):
+                benchmark.run(8085, 'browser', count, start_at=start)
+
 
 if __name__ == "__main__":
     unittest.main()

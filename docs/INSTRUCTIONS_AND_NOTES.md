@@ -38,6 +38,15 @@
 - Preserve Bing weight 0.35 pending new evidence; engine remains available.
   Manual benchmark pace is 15 seconds, stop on degradation. Wait out cooldowns
   before any necessary settings restart; never restart to clear a ban.
+- Holdout fixtures are frozen before evaluation; after inspection they become
+  regression cases. Do not tune on them and keep calling them unseen validation.
+- CompareScoreOrder replays one response in memory only; no production reranking.
+  Degraded samples are excluded. StartAt is deliberate manual suffix selection,
+  not permission to retry failing providers or auto-resume after errors.
+- News has native thumbnail/template grouping after scoring, missing Brave News
+  dates and a separate hard-coded DuckDuckGo token timeout. Read
+  HOLDOUT_AND_NEWS_RANKING.md before any adapter/ranking patch; global timeout
+  increases and new providers do not directly address these mechanisms.
 
 ## Startup And Migration
 
