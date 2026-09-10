@@ -95,6 +95,9 @@
 
 - Branch per scope: stamos/<name>; update roadmap, validate, review, commit/push,
   merge only ready work, delete completed branch. No desktop release applies.
+- Bundle approved work into 3-4 steps; continue normal branches without asking
+  between them. Report at batch completion; interrupt only for meaningful blockers,
+  privacy/security tradeoffs, cost or scope expansion. Preserve scoped branches.
 - validate.ps1 uses project anonexplo-validation, port 18085, and tmpfs cache.
   It neither mounts the VPN credential nor shares the live search cache.
 - Validate Compose policy including negative fixtures, script syntax, offline
@@ -103,8 +106,8 @@
   RUN steps and a data-excluding context. No legacy application build is restored.
   Runtime validation repeats date tests plus existing ranking/privacy checks.
 - ops-check.ps1 verifies the three-service live topology and VPN isolation.
-- Known pending checker bug: a cached rebuild can change the OCI index due to
-  provenance while leaving the platform manifest identical. ops-check currently
-  compares the index IDs and can falsely fail. Read DDG_REQUEST_DIAGNOSIS.md;
-  inspect the running ImageManifestDescriptor and built --platform descriptor.
-  Do not redeploy, retag arbitrarily or bypass checks just to hide this warning.
+- ops-check compares exact runtime platform manifests, not the OCI index that
+  changes with provenance. Missing descriptor support fails closed; update Docker
+  deliberately, never fall back to tag-only equality. Offline validation builds
+  use their own tag and verify the production tag is untouched. Build production
+  explicitly after candidate validation when deliberately deploying an update.

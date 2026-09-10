@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'compose-policy.ps1')
 $cases = @(
     @{Name='legacy service'; Vpn=$false; Mutate={param($c) $c.services | Add-Member NoteProperty ui @{} }},
+    @{Name='production tag in validation'; Vpn=$false; Mutate={param($c) $c.services.'search-provider'.image='anonexplo/searxng:date-merge-v1' }},
+    @{Name='validation tag in production'; Vpn=$true; Mutate={param($c) $c.services.'search-provider'.image='anonexplo/searxng:validation' }},
     @{Name='public bind'; Vpn=$false; Mutate={param($c) $c.services.'host-gateway'.ports[0].host_ip='0.0.0.0' }},
     @{Name='legacy port'; Vpn=$false; Mutate={param($c) $c.services.'host-gateway'.ports[0].target=3000 }},
     @{Name='direct base egress'; Vpn=$false; Mutate={param($c) $c.services.'search-provider'.networks | Add-Member NoteProperty egress @{} }},
@@ -26,7 +28,7 @@ foreach ($case in $cases) {
     $copy = $source | ConvertTo-Json -Depth 50 | ConvertFrom-Json
     & $case.Mutate $copy
     $rejected = $false
-    try { Assert-SearchComposePolicy $copy '18085' -Vpn:$case.Vpn } catch { $rejected = $true }
+    try { Assert-SearchComposePolicy $copy '18085' -Vpn:$case.Vpn -Validation:(-not $case.Vpn) } catch { $rejected = $true }
     if (-not $rejected) { throw "Policy accepted regression: $($case.Name)" }
 }
 Write-Host "PASS: $($cases.Count) negative Compose policy tests."

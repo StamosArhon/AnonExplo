@@ -28,7 +28,8 @@ time-filter support, AI, account/API or additional upstream request is claimed.
 
 - Compose builds local tag anonexplo/searxng:date-merge-v1 from images/searxng.
   No registry push/pull of the derived tag. It is a local tag, not an immutable
-  registry digest. ops-check verifies the deployed image ID matches the local tag.
+  registry digest. ops-check verifies the deployed platform manifest matches the
+  local tag's matching platform manifest; provenance-only index changes are irrelevant.
 - Base: searxng/searxng:latest at sha256:
   3547509b419cd6a67333d6d68bd1ffad8d46d3669d82e7a7bd538f7b45827432.
 - Original results.py SHA256:
@@ -63,8 +64,10 @@ See the current roadmap for actual run/deployment status, not assumed completion
 
 ## Deploy And Roll Back
 
-1. Run scripts/validate.ps1; it builds and exercises the candidate without live
-   credentials/cache or production changes. Keep the previous image cached.
+1. Run scripts/validate.ps1; it builds/exercises the separate :validation image
+   without live credentials/cache or production-tag changes. Keep the previous
+   image cached. For a deliberate deployment, then build the production image
+   from the same reviewed context with docker compose build search-provider.
 2. Review prior error classes/cooldowns and avoid concurrent browser searches.
    Never use a deployment restart to clear a provider block. A stable aggregate
    history is not proof that no queries occurred or every upstream block expired.

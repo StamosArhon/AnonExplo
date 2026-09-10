@@ -24,7 +24,7 @@ try {
     $raw = docker compose -f docker-compose.yml -f docker-compose.proton-search.yml --profile proton-search config --format json
     if ($LASTEXITCODE -ne 0) { throw 'VPN Compose config failed.' }
     $vpn = $raw | ConvertFrom-Json
-    Assert-SearchComposePolicy $base '18085'
+    Assert-SearchComposePolicy $base '18085' -Validation
     Assert-SearchComposePolicy $vpn '18085' -Vpn
     & (Join-Path $PSScriptRoot 'test-compose-policy.ps1') -Base $base -Vpn $vpn
     $diskCache = @($base.services.'search-provider'.volumes | Where-Object target -eq '/var/cache/searxng')
@@ -38,11 +38,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed.' }
     & (Join-Path $PSScriptRoot 'test-news-candidate.ps1')
     & (Join-Path $PSScriptRoot 'test-startup-helpers.ps1')
+    & (Join-Path $PSScriptRoot 'test-image-identity.ps1')
+    $productionImageBefore = @(docker image ls --no-trunc --quiet --filter 'reference=anonexplo/searxng:date-merge-v1') -join ','
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot snapshot production image tag.' }
     # Build the guarded repair from its pinned base; RUN steps have no network.
     docker compose build
     if ($LASTEXITCODE -ne 0) { throw 'Compose build failed.' }
-    Write-Host 'Built local SearXNG date-merge repair; gateway/VPN remain pinned upstream images.'
-    & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1')
+    $productionImageAfter = @(docker image ls --no-trunc --quiet --filter 'reference=anonexplo/searxng:date-merge-v1') -join ','
+    if ($LASTEXITCODE -ne 0 -or $productionImageBefore -ne $productionImageAfter) { throw 'Validation changed the production image tag.' }
+    Write-Host 'Built isolated validation image; production image tag unchanged.'
+    & (Join-Path $PSScriptRoot 'test-ddg-diagnostic.ps1') -Image 'anonexplo/searxng:validation'
     docker compose up -d --wait --wait-timeout 120 host-gateway search-provider
     if ($LASTEXITCODE -ne 0) { throw 'Isolated search stack failed to start.' }
     foreach ($path in @('/','/preferences','/config','/stats')) { Assert-HttpPrivacy $path }

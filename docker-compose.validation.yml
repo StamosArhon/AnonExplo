@@ -1,6 +1,7 @@
 # Offline search UI tests only; never mount the live SearXNG cache or VPN key.
 services:
   search-provider:
+    image: anonexplo/searxng:validation
     volumes: !override
       - ./configs/searxng/settings.yml:/etc/searxng/settings.yml:ro
     tmpfs:

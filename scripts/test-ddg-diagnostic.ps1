@@ -1,7 +1,6 @@
-param([switch]$Live)
+param([switch]$Live, [ValidateSet('anonexplo/searxng:date-merge-v1','anonexplo/searxng:validation')][string]$Image = 'anonexplo/searxng:date-merge-v1')
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$image = 'anonexplo/searxng:date-merge-v1'
 Push-Location $root
 try {
     if ($Live) {

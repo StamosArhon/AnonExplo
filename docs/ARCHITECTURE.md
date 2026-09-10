@@ -24,6 +24,7 @@ local model or redirector participates in search or exists as a Compose service.
 Without the overlay, base Compose attaches search only to core_internal, so it
 is offline rather than a direct-egress fallback. Isolated validation uses this
 base plus docker-compose.validation.yml, a tmpfs cache and separate port/project.
+Validation builds use their own image tag, never replacing the production tag.
 Normal startup explicitly selects the Proton overlay. A replaced VPN namespace
 still requires start-proton-search.ps1 -Recreate.
 

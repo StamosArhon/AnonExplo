@@ -16,12 +16,14 @@ try {
     }
     $searchId = & docker compose @compose ps -q search-provider
     if ($LASTEXITCODE -ne 0 -or -not $searchId) { throw 'Search container unavailable.' }
-    $deployedImage = & docker inspect $searchId --format '{{.Image}}'
+    . (Join-Path $PSScriptRoot 'image-identity.ps1')
+    $deployedImage = & docker inspect $searchId --format '{{json .ImageManifestDescriptor}}'
     if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect deployed search image.' }
-    $builtImage = & docker image inspect 'anonexplo/searxng:date-merge-v1' --format '{{.Id}}'
-    if ($LASTEXITCODE -ne 0 -or $deployedImage -ne $builtImage) {
-        throw 'Deployed search image differs from the local repair build; validate and deploy it first.'
-    }
+    $deployedManifest = $deployedImage | ConvertFrom-Json
+    $platform = Get-ManifestPlatform $deployedManifest
+    $builtImage = & docker image inspect --platform $platform 'anonexplo/searxng:date-merge-v1' --format '{{json .Descriptor}}'
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect built platform manifest; current Docker descriptor support is required.' }
+    Assert-SameRuntimeManifest $deployedManifest ($builtImage | ConvertFrom-Json)
     $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$port/" -TimeoutSec 15
     if ($response.Headers['Cache-Control'] -ne 'no-store' -or $response.Headers['Referrer-Policy'] -ne 'no-referrer') {
         throw 'Search privacy headers missing.'

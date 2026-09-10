@@ -79,6 +79,10 @@ tmpfs cache. It validates policies, scripts, offline helper tests, native UI,
 privacy settings, direct-egress blocking and outage/recovery. Compose builds the
 guarded SearXNG repair from its pinned base and runs native date regressions at
 build time and again in the isolated runtime. No upstream search queries.
+Its :validation image tag is separate from production. Deliberate deployment
+requires a subsequent production build from the reviewed context. The live image
+check compares Linux platform manifests, not provenance-sensitive OCI indexes;
+missing Docker descriptor support fails closed rather than trusting a tag name.
 
 Use test-browser-search.ps1 manually for paced public query fixtures through
 the VPN. It stops on degradation. Never schedule repeated upstream tests or

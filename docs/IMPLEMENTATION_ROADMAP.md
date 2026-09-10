@@ -23,7 +23,24 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current DDG Request Diagnosis (2026-09-10)
+## Current Approved Reliability Batch (2026-09-10)
+
+- User approved four bundled steps: repair image checks/build isolation; obtain
+  bounded transport timings; implement only an evidence-supported search fix;
+  validate, deploy proven changes and close Git. No approval pause between normal
+  steps/branches. Escalate real blockers, privacy/security changes, cost or scope.
+- First branch stamos/image-validation-isolation from main 7db138a compares exact
+  Linux platform manifests, rejects missing/invalid/mismatched descriptors, and
+  uses anonexplo/searxng:validation only in the offline validation project.
+  Validator verifies the production tag remains unchanged across builds.
+- Live ops passes without a production restart or retag. Full validation passed:
+  seven negative identity cases, 20 negative Compose cases, 62 Python tests,
+  isolated build (production tag unchanged), native privacy/egress/recovery.
+  Cleanup passed. No model/provider/network/settings change. This completed unit
+  accompanies the reviewed push/merge/branch cleanup; continue the approved batch
+  with transport diagnosis on a fresh branch, without another approval prompt.
+
+## Previous DDG Request Diagnosis (2026-09-10)
 
 - User approved investigating the remaining DDG News timeouts. New scope branch
   stamos/ddg-request-diagnosis from clean main 25a8425. No production fix/change.

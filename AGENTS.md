@@ -34,7 +34,9 @@ For each branch, complete this workflow before stopping:
 7. Compare the branch against `main` and review the diff carefully.
 8. Merge into `main` only when the branch is secure, validated, and genuinely ready.
 9. Delete the completed working branch locally and remotely after merge.
-10. Stop and prompt the user with a short summary, architectural or operational changes, the next recommended milestone, and a direct question asking whether to proceed.
+10. For an approved batch, continue across scoped branches without asking between
+    routine steps. Summarize at batch completion. Ask early only for a genuine
+    blocker, privacy/security tradeoff, new cost or significant scope change.
 
 If a remote is missing or remote operations fail, record that explicitly in the roadmap and do not pretend push, merge, or cleanup happened.
 

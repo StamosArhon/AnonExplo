@@ -80,7 +80,14 @@ function Assert-ServiceSecurityDefaults {
 
 
 function Assert-SearchComposePolicy {
-    param([object]$Config, [string]$Port, [switch]$Vpn)
+    param([object]$Config, [string]$Port, [switch]$Vpn, [switch]$Validation)
+    $searchImage = 'anonexplo/searxng:date-merge-v1'
+    if ($Validation) {
+        if ($Vpn -or $Config.name -ne 'anonexplo-validation' -or $Port -ne '18085') {
+            throw 'Validation image allowed only in the isolated offline validation project.'
+        }
+        $searchImage = 'anonexplo/searxng:validation'
+    }
     $expected = @('host-gateway', 'search-provider')
     if ($Vpn) { $expected += 'search-vpn' }
     Assert-SetEquality 'Search-only service set' (Get-NamedKeys $Config.services) $expected
@@ -97,7 +104,7 @@ function Assert-SearchComposePolicy {
         Assert-ServiceSecurityDefaults $Config $name
         Assert-ServiceHasHealthcheck $Config $name
         if ($name -eq 'search-provider') {
-            if ($service.image -ne 'anonexplo/searxng:date-merge-v1' -or $service.pull_policy -ne 'never' -or
+            if ($service.image -ne $searchImage -or $service.pull_policy -ne 'never' -or
                 -not $service.build -or $service.build.context -notmatch '[/\\]images[/\\]searxng$' -or
                 $service.build.dockerfile -ne 'Dockerfile' -or $service.build.network -ne 'none') {
                 throw 'Search must use the reviewed local repair build with network-disabled steps.'
