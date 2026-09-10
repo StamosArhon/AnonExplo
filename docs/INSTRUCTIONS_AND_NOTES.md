@@ -94,6 +94,11 @@
   validate.ps1 -TransportCandidate never download at runtime or get VPN access.
   Default guards accept only production sources. Candidate hashes are explicit,
   not a bypass; executable /candidate tmpfs exists only in that offline container.
+- NEW_DDG_ADAPTER_REVIEW.md covers later upstream DDG web/Startpage changes.
+  They are not a verified fix for the DDG News token timeout. Keep web opt-in
+  and do not activate new challenge flows through a broad image update. Any web
+  candidate needs explicit allowed-origin/redirect and bounded parsing/budget
+  review for response-derived follow-up URLs before a live trial.
 
 ## Startup And Migration
 

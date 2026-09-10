@@ -23,7 +23,28 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Upstream Comparison Batch (2026-09-10)
+## Current New-Adapter Applicability Review (2026-09-10)
+
+- User requested proceeding after the completed batch. Read-only upstream check
+  found unchanged client releases but new SearXNG revisions 765a999 (DDG web) and
+  42e1d61 (Startpage). Scope stamos/new-ddg-adapter-review from main 3200f4c.
+- Reviewed exact patches and local engine selection. Web is opt-in; News's
+  duckduckgo_extra.py token-fetch path is not repaired by this change. Do not
+  deploy as a News timeout fix or activate Startpage's proof-of-work handling.
+- New DDG web follow-up joins a response-derived URL without a host check in that
+  function. Pure local URL-joining probe confirms absolute/scheme-relative URLs
+  can replace the base origin. This is a review concern, not a demonstrated
+  exploit; no upstream code/challenge executed and no provider queries sent.
+- Next distinct candidate would need offline origin/redirect/parser/budget tests
+  before any web engine trial. Production remains unchanged. See
+  NEW_DDG_ADAPTER_REVIEW.md. Full validator passed: 80 baseline Python tests,
+  20 negative Compose cases, seven negative identity cases plus equality, managed
+  isolated build with production tag unchanged, source/binding/privacy/settings,
+  ranking, blocked egress, outage/recovery and cleanup. Optional old candidate
+  comparison not repeated. Reviewed docs accompany push/main merge/branch cleanup;
+  no deployment or release. This applicability review is complete.
+
+## Previous Upstream Comparison Batch (2026-09-10)
 
 - User requested 2-3 bundled steps. Scope stamos/upstream-transport-review from
   main c70807d: upstream review, offline candidate comparison, full validation and
@@ -620,6 +641,10 @@ or cached Docker images are deleted by this migration.
    complete: same failure-counter behaviour, so no upgrade deployed. Keep the
    reproducible tests for a future relevant upstream fix; do not repeatedly
    probe providers or upgrade simply because a newer version exists.
+   Later DDG web commit 765a999 is a distinct candidate, not a News timeout fix:
+   review/test allowed origins, redirects, bounded challenge parsing and shared
+   request budgets offline before any live web trial. Keep Startpage inactive/
+   disabled; do not adopt its new challenge handling by incidental image upgrade.
    Require healthy holdout/topicality evidence before any ranking deployment.
    Media/models/reboot drills remain separate.
 
