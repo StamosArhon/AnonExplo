@@ -25,7 +25,7 @@ function fixture(options = {}) {
   urls.append(...native);
   const meta = new URL('http://127.0.0.1:8085/search');
   meta.search = new URLSearchParams({q:'public fixture', categories:options.category||'general', pageno:'1', language:'el',time_range:'month',safesearch:'2'});
-  const document = {getElementById:()=>urls,createElement:t=>new Element(t),querySelector:s=>{
+  const document = {head:new Element('head'),documentElement:{classList:{add(){}}},getElementById:()=>urls,createElement:t=>new Element(t),querySelector:s=>{
     if(s==='input[name="q"]') return {value:'public fixture'};
     if(s.startsWith('link[')) return {href:meta.href};
     if(s==='#engines_msg .response-error') return options.nativeError?{}:null;
@@ -62,10 +62,16 @@ function fixture(options = {}) {
     }};
   runInNewContext(source,context);
   return {urls,native,calls,writes,waits,events,button:elements.find(e=>e.tag==='button'),
+    details:elements.find(e=>e.tag==='details'),head:document.head,
     get searches(){return searches;}, async settle(){for(let i=0;i<60;i++)await tick();}};
 }
 (async()=>{
   const f=fixture();assert.equal(f.calls.length,0);
+  assert.equal(f.button.className,'ae-toggle');
+  assert.equal(f.details.children[0].textContent,'How it works & privacy');
+  assert.equal(Boolean(f.details.open),false);
+  assert.ok(f.details.children[1].textContent.includes('Providers see the query and site filters'));
+  assert.equal(f.head.children[0].href,'/anonexplo-search.css');
   await f.button.click();
   assert.equal(f.searches,2);assert.equal(f.calls.filter(c=>c.url.endsWith('rank-v2')).length,2);
   assert.equal(f.urls.children.filter(n=>n.tag==='article').length,28);

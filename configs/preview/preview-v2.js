@@ -4,6 +4,11 @@
   const urls = document.getElementById('urls');
   const input = document.querySelector('input[name="q"]');
   if (!urls || !input) return;
+  const stylesheet = document.createElement('link');
+  stylesheet.rel = 'stylesheet';
+  stylesheet.href = '/anonexplo-search.css';
+  document.head.append(stylesheet);
+  document.documentElement.classList.add('ae-polished');
   const all = [...urls.children];
   if (!all.length || !all.every(n => n.matches('article.result-default'))) return;
   const native = all.slice(0, 24);
@@ -16,15 +21,28 @@
   const key = 'anonexplo.preferredSources.v2';
   const panel = document.createElement('div');
   panel.id = 'ae-preview';
-  panel.style.cssText = 'margin:1rem 0;padding:.8rem;border:1px solid #777;border-radius:.5rem';
+  panel.setAttribute('aria-label', 'Search refinement');
   const button = document.createElement('button');
   button.type = 'button';
+  button.className = 'ae-toggle';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'ae-toolbar';
   const status = document.createElement('span');
+  status.className = 'ae-status';
   status.setAttribute('role', 'status');
-  status.style.marginInlineStart = '.75rem';
+  status.setAttribute('aria-live', 'polite');
+  const details = document.createElement('details');
+  details.className = 'ae-details';
+  const summary = document.createElement('summary');
+  summary.textContent = 'How it works & privacy';
   const explanation = document.createElement('p');
-  explanation.textContent = 'ON: rank locally and search preferred sites too (up to 2 extra searches through your search VPN). Providers see the query and site filters. Only this ON/OFF choice is saved in this browser.';
-  panel.append(button, status, explanation);
+  explanation.textContent = 'ON: rank locally and search preferred sites too (up to 2 extra searches through your search VPN). Providers see the query and site filters. Only this ON/OFF choice is saved in this browser. Turn OFF to restore the original results without another search.';
+  const disclosure = document.createElement('span');
+  disclosure.className = 'ae-disclosure';
+  disclosure.textContent = 'Local ranking · Extra site searches through VPN';
+  toolbar.append(button, disclosure);
+  details.append(summary, explanation);
+  panel.append(toolbar, status, details);
   // Stay inside the native results grid column, not a new grid sibling.
   urls.insertBefore(panel, all[0]);
   let enabled = false, attempted = false, pending = false, cached = null, controller = null;
@@ -46,7 +64,7 @@
   }
   function note(text) {
     if (!cached) return;
-    cached.message = `${cached.summary} ${text} OFF restores the original page.`;
+    cached.message = `${cached.summary} ${text}`;
     display(cached);
   }
   async function request(path, body, signal, search = false) {
@@ -123,7 +141,7 @@
   }
   function nodeFor(row) {
     const article = document.createElement('article');
-    article.className = 'result result-default';
+    article.className = 'result result-default ae-additional';
     const heading = document.createElement('h3');
     const link = document.createElement('a');
     link.href = row.url;
@@ -133,9 +151,17 @@
     const content = document.createElement('p');
     content.className = 'content';
     content.textContent = row.content;
-    const attribution = document.createElement('p');
-    attribution.textContent = `${new URL(row.url).hostname} · Additional preferred-source search`;
-    article.append(heading, content, attribution);
+    const attribution = document.createElement('div');
+    attribution.className = 'ae-source-line';
+    const domain = document.createElement('span');
+    domain.textContent = new URL(row.url).hostname.replace(/^www\./, '');
+    const badge = document.createElement('span');
+    badge.className = 'ae-source-badge';
+    badge.textContent = 'Preferred source';
+    badge.title = 'Found by an additional site search and admitted by local relevance ranking.';
+    attribution.append(domain, badge);
+    if (!row.content.trim()) { content.className += ' empty_element'; content.textContent = 'No description supplied by the search provider.'; }
+    article.append(attribution, heading, content);
     return article;
   }
   async function rank(candidates, nodes, signal, message) {
@@ -145,7 +171,7 @@
         !r.order.every(i => Number.isInteger(i) && i >= 0 && i < nodes.length) ||
         !native.every((_, i) => r.order.includes(i)) || !Number.isInteger(r.added) ||
         r.added !== r.order.filter(i => i >= native.length).length || !Number.isInteger(r.moved)) throw Error('invalid');
-    cached = {order: r.order, nodes, summary: `${r.moved} original result(s) moved · ${r.added} relevant addition(s).`};
+    cached = {order: r.order, nodes, summary: `${r.moved} reordered · ${r.added} added.`};
     note(message);
   }
   async function run() {

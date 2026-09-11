@@ -13,6 +13,9 @@
   See AUTOMATIC_PREFERRED_COVERAGE.md for v2: initially OFF, remembers only the
   choice; ON may send two paced preferred-site queries through SearXNG/VPN.
   No saved query state; same-page retoggles never resend provider requests.
+  Native presentation is polished by configs/preview/search.css and the existing
+  preview script; read SEARCH_LAYOUT_POLISH.md before UI work. Preserve visible
+  extra-query disclosure, expandable privacy and native error diagnostics.
 - Configure browser engines/language in configs/searxng/settings.yml and native
   preferences. Old SEARCH_/MODEL_/GROUNDING_/FETCH_ .env keys are inert; existing
   .env files are preserved rather than rewriting secrets during migration.

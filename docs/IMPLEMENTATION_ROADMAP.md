@@ -23,7 +23,27 @@ refinement may be headless and does not require a separate AnonExplo interface.
 Code before removal remains recoverable at bdb14ad in Git; no local user data
 or cached Docker images are deleted by this migration.
 
-## Current Automatic Preferred Coverage (2026-09-11)
+## Current Search Layout Polish (2026-09-11)
+
+- User explicitly requested product-design-studio for native UI polish. Fresh
+  stamos/search-layout-polish from clean main 9d7dec9. Quiet editorial direction:
+  compact refinement toolbar, expandable privacy, consistent source/title/snippet
+  hierarchy and secondary diagnostics beside/below results. No search behavior,
+  source preferences, model, image, engine or VPN change. See SEARCH_LAYOUT_POLISH.md.
+- Native Jinja/CSS authored fixture rendered in the in-app browser without any
+  provider/model requests. Dark/light, ON/OFF, success/loading/failure, Greek,
+  missing snippets and expanded disclosure inspected. Geometry passes at
+  320/390/768/1440: no horizontal overflow and 44px toggle. Corrected small mobile
+  type and tablet search/settings overlap; keyboard focus/cancellation verified.
+- Full isolated validator and final DOM/disclosure checks pass. Deployed by
+  nginx test/reload only; all four container identities/health unchanged. JS/CSS
+  asset equality, gateway privacy/request controls and existing local-ranker/
+  shared-budget smoke pass. No browser relaunch/profile edit, production search
+  query, model rebenchmark or new dependency. Temporary visual-test tab/server
+  closed and viewport reset. Reviewed commit/push/main merge and scoped cleanup
+  complete the app-workflow batch; unrelated historical branch preserved.
+
+## Previous Automatic Preferred Coverage (2026-09-11)
 
 - Approved scoped branch stamos/automatic-preferred-coverage from a1ea09f. User
   accepted automatic bounded extra searches when ON, remembered choice and local

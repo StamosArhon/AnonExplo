@@ -28,6 +28,8 @@ def main():
     code, raw = request('/anonexplo-preview.js')
     expected = Path(__file__).resolve().parents[1]/'configs/preview/preview-v2.js'
     assert code == 200 and hashlib.sha256(raw).digest() == hashlib.sha256(expected.read_bytes()).digest()
+    code, raw = request('/anonexplo-search.css')
+    assert code == 200 and raw == (expected.parent/'search.css').read_bytes()
     assert request('/')[0] == 200
     for endpoint in ('rank-v2','plan'):
         path='/anonexplo-preview/'+endpoint

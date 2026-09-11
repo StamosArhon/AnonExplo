@@ -26,6 +26,8 @@ VPN. OFF restores the original page instantly. Your choice is remembered; querie
 and results are not saved by this feature. Failures stop extra work without retries.
 Providers see the additional query/site filters; a preferred article is not guaranteed.
 See [operation and limits](docs/AUTOMATIC_PREFERRED_COVERAGE.md).
+The native results layout has a compact refinement toolbar and responsive
+reading column; expand **How it works & privacy** for details.
 
 The dedicated Proton credential is already installed on this PC. Do not replace
 it or print its contents. From the repository root:
